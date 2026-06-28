@@ -9,6 +9,7 @@ PRODUCT_SHIPPING_API_LEVEL := 25
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/etc/fstab.qcom:root/fstab.qcom \
+    $(LOCAL_PATH)/rootdir/ueventd.qcom.rc:root/ueventd.qcom.rc \
     $(LOCAL_PATH)/system.prop:system/system.prop \
     $(LOCAL_PATH)/system/usr/idc/synaptics_dsx.idc:system/usr/idc/synaptics_dsx.idc \
     $(LOCAL_PATH)/system/usr/idc/zte-touchscreen.idc:system/usr/idc/zte-touchscreen.idc \

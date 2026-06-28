@@ -59,5 +59,10 @@ TARGET_RECOVERY_PIXEL_FORMAT := "RGBX_8888"
 RECOVERY_GRAPHICS_USE_LINELENGTH := true
 BOARD_HAS_NO_SELECT_BUTTON := true
 BOARD_USES_MMCUTILS := true
+BOARD_SEPOLICY_DIRS += $(DEVICE_PATH)/sepolicy
+
+# Keep SELinux permissive for the first bring-up pass. Tightening policy can
+# happen once the primary display, touch and WiFi path are verified.
+BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive
 
 -include vendor/zte/fujisan/BoardConfigVendor.mk

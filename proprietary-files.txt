@@ -1,15 +1,70 @@
-# Minimal bring-up blobs.
-# This list is intentionally short for the first boot-oriented pass and will
-# be expanded once the device tree boots far enough to validate subsystems.
+# First boot bring-up blobs.
+# This pass aims to boot a single-screen baseline build with primary touch and
+# WiFi working. Secondary display and hinge-specific components stay deferred.
 
 # Vendor runtime metadata
 vendor/manifest.xml
+vendor/ueventd.rc
+vendor/etc/fstab.qcom
 vendor/etc/init/vndservicemanager.rc
+vendor/etc/init/hw/init.msm.usb.configfs.rc
+vendor/etc/init/hw/init.qcom.factory.rc
+vendor/etc/init/hw/init.qcom.rc
+vendor/etc/init/hw/init.qcom.usb.rc
+vendor/etc/init/hw/init.target.rc
+vendor/etc/init/hw/init.vendor.rc
+vendor/etc/init/hw/init.vendor.usb.rc
+
+# Vendor feature declarations
+vendor/etc/permissions/android.hardware.bluetooth.xml
+vendor/etc/permissions/android.hardware.bluetooth_le.xml
+vendor/etc/permissions/android.hardware.location.gps.xml
+vendor/etc/permissions/android.hardware.opengles.aep.xml
+vendor/etc/permissions/android.hardware.sensor.accelerometer.xml
+vendor/etc/permissions/android.hardware.sensor.compass.xml
+vendor/etc/permissions/android.hardware.sensor.gyroscope.xml
+vendor/etc/permissions/android.hardware.sensor.light.xml
+vendor/etc/permissions/android.hardware.sensor.proximity.xml
+vendor/etc/permissions/android.hardware.sensor.stepcounter.xml
+vendor/etc/permissions/android.hardware.sensor.stepdetector.xml
+vendor/etc/permissions/android.hardware.telephony.cdma.xml
+vendor/etc/permissions/android.hardware.telephony.gsm.xml
+vendor/etc/permissions/android.hardware.touchscreen.multitouch.jazzhand.xml
+vendor/etc/permissions/android.hardware.usb.accessory.xml
+vendor/etc/permissions/android.hardware.usb.host.xml
+vendor/etc/permissions/android.hardware.vulkan.compute-0.xml
+vendor/etc/permissions/android.hardware.vulkan.level-0.xml
+vendor/etc/permissions/android.hardware.vulkan.version-1_0_3.xml
+vendor/etc/permissions/android.hardware.wifi.direct.xml
+vendor/etc/permissions/android.hardware.wifi.passpoint.xml
+vendor/etc/permissions/android.hardware.wifi.xml
+vendor/etc/permissions/android.software.midi.xml
+vendor/etc/permissions/handheld_core_hardware.xml
 
 # Core service executables
 vendor/bin/vndservicemanager
 vendor/bin/cnss-daemon
 vendor/bin/hostapd
+vendor/bin/init.class_main.sh
+vendor/bin/init.crda.sh
+vendor/bin/init.qcom.class_core.sh
+vendor/bin/init.qcom.post_boot.sh
+vendor/bin/init.qcom.sdio.sh
+vendor/bin/init.qcom.sensors.sh
+vendor/bin/init.qcom.sh
+vendor/bin/init.qcom.usb.sh
+vendor/bin/init.vendor.usb.sh
+vendor/bin/ipacm
+vendor/bin/msm_irqbalance
+vendor/bin/netmgrd
+vendor/bin/pm-proxy
+vendor/bin/pm-service
+vendor/bin/qcom-system-daemon
+vendor/bin/rmt_storage
+vendor/bin/sensors.qcom
+vendor/bin/ssr_setup
+vendor/bin/subsystem_ramdump
+vendor/bin/thermal-engine
 
 # Keymaster / gatekeeper
 vendor/etc/init/android.hardware.gatekeeper@1.0-service.rc
@@ -44,6 +99,31 @@ vendor/lib64/hw/hwcomposer.msm8996.so
 vendor/lib64/hw/android.hardware.graphics.allocator@2.0-impl.so
 vendor/lib64/hw/android.hardware.graphics.composer@2.1-impl.so
 vendor/lib64/hw/android.hardware.graphics.mapper@2.0-impl.so
+vendor/lib64/egl/eglSubDriverAndroid.so
+vendor/lib64/egl/libEGL_adreno.so
+vendor/lib64/egl/libGLESv1_CM_adreno.so
+vendor/lib64/egl/libGLESv2_adreno.so
+vendor/lib64/egl/libQTapGLES.so
+vendor/lib64/egl/libq3dtools_adreno.so
+vendor/lib64/egl/libq3dtools_esx.so
+vendor/lib64/libCB.so
+vendor/lib64/libOpenCL.so
+vendor/lib64/libRSDriver_adreno.so
+vendor/lib64/libadreno_utils.so
+vendor/lib64/libdrmutils.so
+vendor/lib64/libgpu_tonemapper.so
+vendor/lib64/libgrallocutils.so
+vendor/lib64/libllvm-glnext.so
+vendor/lib64/libqdMetaData.so
+vendor/lib64/libqdutils.so
+vendor/lib64/libqservice.so
+vendor/lib64/librs_adreno.so
+vendor/lib64/librs_adreno_sha1.so
+vendor/lib64/libsdm-color.so
+vendor/lib64/libsdm-disp-vndapis.so
+vendor/lib64/libsdmcore.so
+vendor/lib64/libsdmextension.so
+vendor/lib64/libsdmutils.so
 
 # Core hardware services
 vendor/etc/init/android.hardware.health@1.0-service.rc
@@ -92,7 +172,17 @@ vendor/etc/init/android.hardware.bluetooth@1.0-service-qti.rc
 vendor/etc/init/android.hardware.wifi@1.0-service.rc
 vendor/bin/hw/android.hardware.bluetooth@1.0-service-qti
 vendor/bin/hw/android.hardware.wifi@1.0-service
+vendor/bin/hw/wpa_supplicant
 vendor/lib64/hw/android.hardware.bluetooth@1.0-impl-qti.so
+vendor/lib64/libcld80211.so
+vendor/lib64/libkeystore-engine-wifi-hidl.so
+vendor/lib64/libkeystore-wifi-hidl.so
+vendor/lib64/liblowi_wifihal.so
+vendor/lib64/libnetmgr.so
+vendor/lib64/libwifi-hal-qcom.so
+vendor/lib64/libwifi-hal.so
+vendor/lib64/libwpa_client.so
+vendor/lib64/libxtwifi_ulp_adaptor.so
 vendor/etc/wifi/WCNSS_qcom_cfg.ini
 vendor/etc/wifi/wpa_supplicant.conf
 vendor/etc/wifi/wpa_supplicant_overlay.conf
