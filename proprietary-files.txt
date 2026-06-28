@@ -14,6 +14,9 @@ vendor/etc/init/hw/init.qcom.usb.rc
 vendor/etc/init/hw/init.target.rc
 vendor/etc/init/hw/init.vendor.rc
 vendor/etc/init/hw/init.vendor.usb.rc
+vendor/etc/init/com.qualcomm.qti.wifidisplayhal@1.0-service.rc
+vendor/etc/init/vendor.display.color@1.0-service.rc
+vendor/etc/init/vendor.zte.covolution.assertdisplay.vendorad@1.0-service.rc
 
 # Vendor feature declarations
 vendor/etc/permissions/android.hardware.bluetooth.xml
@@ -55,6 +58,7 @@ vendor/bin/init.qcom.sh
 vendor/bin/init.qcom.usb.sh
 vendor/bin/init.vendor.usb.sh
 vendor/bin/ipacm
+vendor/bin/irsc_util
 vendor/bin/msm_irqbalance
 vendor/bin/netmgrd
 vendor/bin/pm-proxy
@@ -65,6 +69,7 @@ vendor/bin/sensors.qcom
 vendor/bin/ssr_setup
 vendor/bin/subsystem_ramdump
 vendor/bin/thermal-engine
+vendor/bin/wifidisplayhalservice
 
 # Keymaster / gatekeeper
 vendor/etc/init/android.hardware.gatekeeper@1.0-service.rc
@@ -106,6 +111,9 @@ vendor/lib64/egl/libGLESv2_adreno.so
 vendor/lib64/egl/libQTapGLES.so
 vendor/lib64/egl/libq3dtools_adreno.so
 vendor/lib64/egl/libq3dtools_esx.so
+vendor/lib64/com.qualcomm.qti.wifidisplayhal@1.0-halimpl.so
+vendor/lib64/com.qualcomm.qti.wifidisplayhal@1.0-impl.so
+vendor/lib64/com.qualcomm.qti.wifidisplayhal@1.0_vendor.so
 vendor/lib64/libCB.so
 vendor/lib64/libOpenCL.so
 vendor/lib64/libRSDriver_adreno.so
@@ -124,6 +132,10 @@ vendor/lib64/libsdm-disp-vndapis.so
 vendor/lib64/libsdmcore.so
 vendor/lib64/libsdmextension.so
 vendor/lib64/libsdmutils.so
+vendor/lib64/vendor.display.color@1.0_vendor.so
+vendor/lib64/vendor.zte.covolution.assertdisplay.vendorad@1.0_vendor.so
+vendor/bin/hw/vendor.display.color@1.0-service
+vendor/bin/hw/vendor.zte.covolution.assertdisplay.vendorad@1.0-service
 
 # Core hardware services
 vendor/etc/init/android.hardware.health@1.0-service.rc
@@ -164,8 +176,14 @@ vendor/lib64/hw/android.hardware.audio@2.0-impl.so
 vendor/lib64/hw/android.hardware.audio.effect@2.0-impl.so
 vendor/etc/audio/audio_policy_configuration.xml
 vendor/etc/audio_platform_info.xml
+vendor/etc/media_codecs.xml
+vendor/etc/media_codecs_performance.xml
+vendor/etc/media_codecs_vendor_audio.xml
 vendor/etc/mixer_paths_tasha.xml
+vendor/etc/msm_irqbalance.conf
+vendor/etc/sec_config
 vendor/etc/sound_trigger_platform_info.xml
+vendor/etc/thermal-engine.conf
 
 # Bluetooth / WiFi
 vendor/etc/init/android.hardware.bluetooth@1.0-service-qti.rc
