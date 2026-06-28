@@ -1,4 +1,4 @@
-LOCAL_DIR := $(call my-dir)
+LOCAL_DIR := device/zte/fujisan
 
 PRODUCT_MAKEFILES := \
     $(LOCAL_DIR)/lineage_fujisan.mk

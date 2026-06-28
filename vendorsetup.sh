@@ -1,1 +1,3 @@
+add_lunch_combo lineage_fujisan-eng
 add_lunch_combo lineage_fujisan-userdebug
+add_lunch_combo lineage_fujisan-user
