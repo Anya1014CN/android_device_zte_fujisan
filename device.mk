@@ -42,6 +42,12 @@ PRODUCT_PROPERTY_OVERRIDES += \
     ro.hardware=qcom \
     ro.sf.lcd_density=480
 
+# Stock boot and recovery images carry a small DER boot signature trailer.
+# The locked bootloader accepts custom-signed images in yellow state, but
+# still rejects completely unsigned boot images.
+PRODUCT_SUPPORTS_BOOT_SIGNER := true
+PRODUCT_VERITY_SIGNING_KEY := build/target/product/security/verity
+
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
     ro.adb.secure=0 \
     persist.sys.usb.config=mtp,adb
