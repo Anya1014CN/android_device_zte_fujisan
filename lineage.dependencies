@@ -1,0 +1,14 @@
+[
+  {
+    "repository": "Anya1014CN/android_kernel_zte_fujisan",
+    "target_path": "kernel/zte/fujisan",
+    "branch": "lineage-15.1",
+    "remote": "github"
+  },
+  {
+    "repository": "Anya1014CN/android_vendor_zte_fujisan",
+    "target_path": "vendor/zte/fujisan",
+    "branch": "lineage-15.1",
+    "remote": "github"
+  }
+]
