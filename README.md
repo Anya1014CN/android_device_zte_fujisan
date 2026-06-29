@@ -22,6 +22,9 @@ Image signing notes:
 - For LineageOS bring-up this means `boot.img` must be boot-signed just like
   `recovery.img`. The product makefile therefore inherits `verity.mk` and
   enables the boot signer at the product level, not only inside `device.mk`.
+- LineageOS 15.1 / Android 8.1 only auto-enables parts of `verity.mk` for
+  `user` and `userdebug`. Since bring-up here uses `eng`, the product makefile
+  also forces the required verity / boot-signer product variables explicitly.
 - `system.img` is different: it is a sparse ext4 image with no appended boot
   signature trailer. `/system` verification belongs to dm-verity / verified
   boot policy, not the boot-image signer path.
