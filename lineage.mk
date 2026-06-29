@@ -1,5 +1,6 @@
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
+$(call inherit-product, $(SRC_TARGET_DIR)/product/verity.mk)
 
 ifneq ($(wildcard vendor/cm/config/common_full_phone.mk),)
 $(call inherit-product, vendor/cm/config/common_full_phone.mk)
@@ -20,3 +21,6 @@ PRODUCT_BUILD_PROP_OVERRIDES += \
     PRIVATE_BUILD_DESC="P996A26-user 8.1.0 OPM1.171019.026 20190218.120220 release-keys"
 
 BUILD_FINGERPRINT := ZTE/P996A26/fujisan:8.1.0/OPM1.171019.026/20190218.120220:user/release-keys
+
+PRODUCT_SUPPORTS_BOOT_SIGNER := true
+PRODUCT_VERITY_SIGNING_KEY := build/target/product/security/verity

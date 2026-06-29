@@ -19,8 +19,9 @@ Image signing notes:
   `boot` and `1326` bytes for `recovery`.
 - The live device reports `ro.boot.flash.locked=1`,
   `ro.boot.verifiedbootstate=yellow`, and `ro.boot.veritymode=enforcing`.
-- For LineageOS bring-up this means `boot.img` should be boot-signed just like
-  `recovery.img`, so the device tree enables `PRODUCT_SUPPORTS_BOOT_SIGNER`.
+- For LineageOS bring-up this means `boot.img` must be boot-signed just like
+  `recovery.img`. The product makefile therefore inherits `verity.mk` and
+  enables the boot signer at the product level, not only inside `device.mk`.
 - `system.img` is different: it is a sparse ext4 image with no appended boot
   signature trailer. `/system` verification belongs to dm-verity / verified
   boot policy, not the boot-image signer path.
