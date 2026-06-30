@@ -8,6 +8,10 @@ PRODUCT_AAPT_PREF_CONFIG := xxhdpi
 PRODUCT_SHIPPING_API_LEVEL := 25
 
 PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/rootdir/firmware/.placeholder:root/firmware/.placeholder \
+    $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:root/bt_firmware/.placeholder \
+    $(LOCAL_PATH)/rootdir/dsp/.placeholder:root/dsp/.placeholder \
+    $(LOCAL_PATH)/rootdir/persist/.placeholder:root/persist/.placeholder \
     $(LOCAL_PATH)/rootdir/etc/fstab.qcom:root/fstab.qcom \
     $(LOCAL_PATH)/rootdir/ueventd.qcom.rc:root/ueventd.qcom.rc \
     $(LOCAL_PATH)/system.prop:system/system.prop \
