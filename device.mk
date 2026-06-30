@@ -12,6 +12,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:root/bt_firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/dsp/.placeholder:root/dsp/.placeholder \
     $(LOCAL_PATH)/rootdir/persist/.placeholder:root/persist/.placeholder \
+    $(LOCAL_PATH)/rootdir/init.qcom.rc:root/init.qcom.rc \
     $(LOCAL_PATH)/rootdir/stock-root/default.prop:root/default.prop \
     $(LOCAL_PATH)/rootdir/stock-root/init.rc:root/init.rc \
     $(LOCAL_PATH)/rootdir/stock-root/init.recovery.qcom.rc:root/init.recovery.qcom.rc \
