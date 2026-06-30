@@ -3,9 +3,15 @@ set -eu
 
 ROOT="${1:-$PWD}"
 TARGET="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/qdMetaData.cpp"
+GRALLOC_MK="$ROOT/hardware/qcom/display-caf/msm8996/libgralloc/Android.mk"
 
 if [ ! -f "$TARGET" ]; then
   echo "Missing target file: $TARGET" >&2
+  exit 1
+fi
+
+if [ ! -f "$GRALLOC_MK" ]; then
+  echo "Missing target file: $GRALLOC_MK" >&2
   exit 1
 fi
 
@@ -44,4 +50,26 @@ if applied == 0:
 
 path.write_text(updated)
 print(f"Applied {applied} qdMetaData.cpp replacements to {path}")
+PY
+
+python3 - "$GRALLOC_MK" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+old = 'LOCAL_SHARED_LIBRARIES        := $(common_libs) libmemalloc libqdMetaData'
+new = 'LOCAL_SHARED_LIBRARIES        := $(common_libs) libmemalloc libqdMetaData libqdutils'
+
+if new in text:
+    print(f"libqdutils already linked in {path}")
+    sys.exit(0)
+
+if old not in text:
+    print(f"Did not find expected gralloc link line in {path}", file=sys.stderr)
+    sys.exit(1)
+
+path.write_text(text.replace(old, new, 1))
+print(f"Linked libqdutils into gralloc module in {path}")
 PY
