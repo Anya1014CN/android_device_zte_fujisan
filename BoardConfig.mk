@@ -32,20 +32,20 @@ BOARD_KERNEL_PAGESIZE := 4096
 BOARD_KERNEL_CMDLINE := console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x237 ehci-hcd.park=3 lpm_levels.sleep_disabled=1 cma=32M@0-0xffffffff
 BOARD_MKBOOTIMG_ARGS := --ramdisk_offset 0x01000000 --tags_offset 0x00000100
 BOARD_FLASH_BLOCK_SIZE := 262144
-FUJISAN_PREBUILT_KERNEL ?=
-ifeq ($(FUJISAN_PREBUILT_KERNEL),)
-TARGET_KERNEL_SOURCE := kernel/zte/fujisan
-TARGET_KERNEL_CONFIG := msm-perf_fujisan_defconfig
-TARGET_KERNEL_ARCH := arm64
-else
-ifeq ($(wildcard $(FUJISAN_PREBUILT_KERNEL)),)
-$(error FUJISAN_PREBUILT_KERNEL does not exist: $(FUJISAN_PREBUILT_KERNEL))
+PREBUILT_KERNEL ?= false
+FUJISAN_PREBUILT_KERNEL_PATH ?= $(DEVICE_PATH)/prebuilt-kernel/Image.gz-dtb.stock
+ifeq ($(PREBUILT_KERNEL),true)
+ifeq ($(wildcard $(FUJISAN_PREBUILT_KERNEL_PATH)),)
+$(error FUJISAN_PREBUILT_KERNEL_PATH does not exist: $(FUJISAN_PREBUILT_KERNEL_PATH))
 endif
-$(info Using forced prebuilt kernel: $(FUJISAN_PREBUILT_KERNEL))
-TARGET_PREBUILT_KERNEL := $(FUJISAN_PREBUILT_KERNEL)
+TARGET_PREBUILT_KERNEL := $(FUJISAN_PREBUILT_KERNEL_PATH)
 TARGET_KERNEL_SOURCE :=
 TARGET_KERNEL_CONFIG :=
 TARGET_KERNEL_VERSION :=
+TARGET_KERNEL_ARCH := arm64
+else
+TARGET_KERNEL_SOURCE := kernel/zte/fujisan
+TARGET_KERNEL_CONFIG := msm-perf_fujisan_defconfig
 TARGET_KERNEL_ARCH := arm64
 endif
 

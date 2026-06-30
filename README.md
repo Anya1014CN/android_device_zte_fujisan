@@ -32,10 +32,14 @@ Image signing notes:
 Kernel bring-up notes:
 - The default path builds `Image.gz-dtb` from `kernel/zte/fujisan`.
 - For fast A/B diagnosis the device tree also supports a prebuilt kernel path.
-- To use a prebuilt kernel for `bootimage`, export
-  `FUJISAN_PREBUILT_KERNEL=/absolute/path/to/Image.gz-dtb` before running the
-  build. In this mode the device tree forces `TARGET_PREBUILT_KERNEL`, clears
-  the source-kernel path variables, and errors out if the file does not exist.
+- To force a prebuilt kernel for `bootimage`, export
+  `PREBUILT_KERNEL=true` before running the build.
+- The default prebuilt path is
+  `device/zte/fujisan/prebuilt-kernel/Image.gz-dtb.stock`.
+- To override that file, also export
+  `FUJISAN_PREBUILT_KERNEL_PATH=/absolute/path/to/Image.gz-dtb`.
+- In prebuilt mode the device tree forces `TARGET_PREBUILT_KERNEL`, clears the
+  source-kernel path variables, and errors out if the file does not exist.
   This keeps the current ramdisk and signing flow, and only swaps the kernel
   payload inside `boot.img`.
 - This is useful for separating kernel regressions from ramdisk / userspace
