@@ -12,6 +12,8 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:root/bt_firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/dsp/.placeholder:root/dsp/.placeholder \
     $(LOCAL_PATH)/rootdir/persist/.placeholder:root/persist/.placeholder \
+    $(LOCAL_PATH)/rootdir/sbin/jnl.ko:root/sbin/jnl.ko \
+    $(LOCAL_PATH)/rootdir/sbin/ufsd.ko:root/sbin/ufsd.ko \
     $(LOCAL_PATH)/rootdir/etc/fstab.qcom:root/fstab.qcom \
     $(LOCAL_PATH)/rootdir/ueventd.qcom.rc:root/ueventd.qcom.rc \
     $(LOCAL_PATH)/system.prop:system/system.prop \
