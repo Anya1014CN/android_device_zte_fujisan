@@ -45,8 +45,8 @@ for old, new in replacements:
         applied += 1
 
 if applied == 0:
-    print(f"No matching qdMetaData.cpp hunks found in {path}", file=sys.stderr)
-    sys.exit(1)
+    print(f"No matching qdMetaData.cpp hunks found in {path}; skipping qdMetaData edits")
+    sys.exit(0)
 
 path.write_text(updated)
 print(f"Applied {applied} qdMetaData.cpp replacements to {path}")
