@@ -48,8 +48,9 @@ Kernel bring-up notes:
 Display CAF patch notes:
 - Keep temporary bring-up fixes for `hardware/qcom/display-caf/msm8996` under
   `device/zte/fujisan/patches/display-caf/msm8996/`.
-- Apply them from the Lineage source root with:
-  `git -C hardware/qcom/display-caf/msm8996 apply --reject --whitespace=nowarn ~/los15.1/device/zte/fujisan/patches/display-caf/msm8996/*.patch`
-- `--reject` is intentional here: this tree can drift slightly between sync
-  snapshots, and partial hunk failures are easier to inspect than `git am`
-  aborting on mismatched blob metadata.
+- Apply the current qdMetaData compatibility fix from the Lineage source root
+  with:
+  `sh ~/los15.1/device/zte/fujisan/patches/display-caf/msm8996/apply.sh ~/los15.1`
+- This uses exact string replacements instead of `git am` / `git apply`
+  because this public bring-up tree can drift across sync snapshots while still
+  keeping the same source semantics.
