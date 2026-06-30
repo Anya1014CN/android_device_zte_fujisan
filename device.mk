@@ -12,6 +12,14 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:root/bt_firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/dsp/.placeholder:root/dsp/.placeholder \
     $(LOCAL_PATH)/rootdir/persist/.placeholder:root/persist/.placeholder \
+    $(LOCAL_PATH)/rootdir/stock-root/ueventd.rc:root/ueventd.rc \
+    $(LOCAL_PATH)/rootdir/stock-root/init.usb.configfs.rc:root/init.usb.configfs.rc \
+    $(LOCAL_PATH)/rootdir/stock-root/nonplat_file_contexts:root/nonplat_file_contexts \
+    $(LOCAL_PATH)/rootdir/stock-root/nonplat_hwservice_contexts:root/nonplat_hwservice_contexts \
+    $(LOCAL_PATH)/rootdir/stock-root/nonplat_property_contexts:root/nonplat_property_contexts \
+    $(LOCAL_PATH)/rootdir/stock-root/nonplat_service_contexts:root/nonplat_service_contexts \
+    $(LOCAL_PATH)/rootdir/stock-root/plat_service_contexts:root/plat_service_contexts \
+    $(LOCAL_PATH)/rootdir/stock-root/sepolicy:root/sepolicy \
     $(LOCAL_PATH)/rootdir/sbin/jnl.ko:root/sbin/jnl.ko \
     $(LOCAL_PATH)/rootdir/sbin/ufsd.ko:root/sbin/ufsd.ko \
     $(LOCAL_PATH)/rootdir/etc/fstab.qcom:root/fstab.qcom \
