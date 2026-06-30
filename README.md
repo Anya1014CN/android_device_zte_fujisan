@@ -44,3 +44,12 @@ Kernel bring-up notes:
   payload inside `boot.img`.
 - This is useful for separating kernel regressions from ramdisk / userspace
   issues when a newer boot image reboots before Android is reachable.
+
+Display CAF patch notes:
+- Keep temporary bring-up fixes for `hardware/qcom/display-caf/msm8996` under
+  `device/zte/fujisan/patches/display-caf/msm8996/`.
+- Apply them from the Lineage source root with:
+  `git -C hardware/qcom/display-caf/msm8996 apply --reject --whitespace=nowarn ~/los15.1/device/zte/fujisan/patches/display-caf/msm8996/*.patch`
+- `--reject` is intentional here: this tree can drift slightly between sync
+  snapshots, and partial hunk failures are easier to inspect than `git am`
+  aborting on mismatched blob metadata.
