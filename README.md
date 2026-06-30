@@ -28,3 +28,13 @@ Image signing notes:
 - `system.img` is different: it is a sparse ext4 image with no appended boot
   signature trailer. `/system` verification belongs to dm-verity / verified
   boot policy, not the boot-image signer path.
+
+Kernel bring-up notes:
+- The default path builds `Image.gz-dtb` from `kernel/zte/fujisan`.
+- For fast A/B diagnosis the device tree also supports a prebuilt kernel path.
+- To use a prebuilt kernel for `bootimage`, export
+  `FUJISAN_PREBUILT_KERNEL=/absolute/path/to/Image.gz-dtb` before running the
+  build. This keeps the current ramdisk and signing flow, and only swaps the
+  kernel payload inside `boot.img`.
+- This is useful for separating kernel regressions from ramdisk / userspace
+  issues when a newer boot image reboots before Android is reachable.
