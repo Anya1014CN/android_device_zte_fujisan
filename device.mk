@@ -44,7 +44,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
 
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
     ro.adb.secure=0 \
-    persist.sys.usb.config=mtp,adb
+    persist.sys.usb.config=adb
 
 # Single-screen bring-up first. Secondary display, hinge and companion touch
 # routing will be enabled after the primary panel build is stable.
