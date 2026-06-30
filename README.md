@@ -44,3 +44,15 @@ Kernel bring-up notes:
   payload inside `boot.img`.
 - This is useful for separating kernel regressions from ramdisk / userspace
   issues when a newer boot image reboots before Android is reachable.
+
+Display CAF patch notes:
+- The synced `hardware/qcom/display-caf/msm8996` tree can require local
+  compatibility patches against the exact LineageOS 15.1 platform snapshot.
+- Store those patches under `device/zte/fujisan/patches/display-caf/msm8996/`
+  and apply them from the Lineage source root before building.
+- Current required patch set:
+  `device/zte/fujisan/patches/display-caf/msm8996/0001-fix-qdmetadata-private-handle-id-logging.patch`
+- Apply it with:
+  `git -C hardware/qcom/display-caf/msm8996 am device/zte/fujisan/patches/display-caf/msm8996/*.patch`
+- If `git am` is not desired on a throwaway build tree, use:
+  `git -C hardware/qcom/display-caf/msm8996 apply device/zte/fujisan/patches/display-caf/msm8996/*.patch`
