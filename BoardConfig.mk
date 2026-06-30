@@ -38,7 +38,15 @@ TARGET_KERNEL_SOURCE := kernel/zte/fujisan
 TARGET_KERNEL_CONFIG := msm-perf_fujisan_defconfig
 TARGET_KERNEL_ARCH := arm64
 else
+ifeq ($(wildcard $(FUJISAN_PREBUILT_KERNEL)),)
+$(error FUJISAN_PREBUILT_KERNEL does not exist: $(FUJISAN_PREBUILT_KERNEL))
+endif
+$(info Using forced prebuilt kernel: $(FUJISAN_PREBUILT_KERNEL))
 TARGET_PREBUILT_KERNEL := $(FUJISAN_PREBUILT_KERNEL)
+TARGET_KERNEL_SOURCE :=
+TARGET_KERNEL_CONFIG :=
+TARGET_KERNEL_VERSION :=
+TARGET_KERNEL_ARCH := arm64
 endif
 
 # Partitions
