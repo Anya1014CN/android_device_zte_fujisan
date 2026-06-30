@@ -8,13 +8,13 @@ private_handle_t definition that has no id member. The failing references
 are only used in error logging, so remove them instead of guessing a
 replacement field.
 ---
- msm8996/libqdutils/qdMetaData.cpp | 8 ++++----
+ libqdutils/qdMetaData.cpp | 8 ++++----
  1 file changed, 4 insertions(+), 4 deletions(-)
 
-diff --git a/msm8996/libqdutils/qdMetaData.cpp b/msm8996/libqdutils/qdMetaData.cpp
+diff --git a/libqdutils/qdMetaData.cpp b/libqdutils/qdMetaData.cpp
 index 13e61bb..97026d4 100644
---- a/msm8996/libqdutils/qdMetaData.cpp
-+++ b/msm8996/libqdutils/qdMetaData.cpp
+--- a/libqdutils/qdMetaData.cpp
++++ b/libqdutils/qdMetaData.cpp
 @@ -38,12 +38,12 @@ int validateAndMap(private_handle_t *handle)
  {
     if (NULL == handle) {
