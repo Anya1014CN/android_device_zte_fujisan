@@ -868,7 +868,7 @@ on property:persist.sys.lcd.cabc=*
     write /sys/lcd_sys/cabc/lcd_cabc ${persist.sys.lcd.cabc}
 
 service flash_recovery /system/bin/install-recovery.sh
-    class main
+    disabled
     oneshot
 
 # ZTE_YJ_20130221 begin
