@@ -168,6 +168,7 @@ vendor/lib64/com.qualcomm.qti.dpm.api@1.0_vendor.so
 vendor/lib64/com.qualcomm.qti.ant@1.0_vendor.so
 vendor/lib64/com.quicinc.cne.constants@1.0.so
 vendor/lib64/com.quicinc.cne.api@1.0.so
+vendor/lib64/com.quicinc.cne.server@2.0.so
 vendor/lib64/com.qualcomm.qti.bluetooth_audio@1.0_vendor.so
 vendor/lib64/com.qualcomm.qti.wifidisplayhal@1.0-halimpl.so
 vendor/lib64/com.qualcomm.qti.wifidisplayhal@1.0-impl.so
@@ -179,9 +180,11 @@ vendor/lib64/libadreno_utils.so
 vendor/lib64/libcneapiclient.so
 vendor/lib64/libcne.so
 vendor/lib64/libconfigdb.so
+vendor/lib64/libdiag_system.so
 vendor/lib64/libdisp-aba.so
 vendor/lib64/libdpmqmihal.so
 vendor/lib64/libdsutils.so
+vendor/lib64/libdrm.so
 vendor/lib64/libdrmutils.so
 vendor/lib64/libdsi_netctrl.so
 vendor/lib64/libgps.utils.so
@@ -200,6 +203,7 @@ vendor/lib64/liblowi_client.so
 vendor/lib64/libllvm-glnext.so
 vendor/lib64/libmdmdetect.so
 vendor/lib64/libmmcamera_dbg.so
+vendor/lib64/libnfnetlink.so
 vendor/lib64/liboffloadhal.so
 vendor/lib64/libperipheral_client.so
 vendor/lib64/libqdMetaData.so
@@ -214,6 +218,7 @@ vendor/lib64/libqmi_common_so.so
 vendor/lib64/libqmi_csi.so
 vendor/lib64/libqmi_encdec.so
 vendor/lib64/libqmiservices.so
+vendor/lib64/libqdi.so
 vendor/lib64/libqservice.so
 vendor/lib64/libqvop-service.so
 vendor/lib64/librmnetctl.so
@@ -229,7 +234,9 @@ vendor/lib64/libsensor1.so
 vendor/lib64/libsmemlog.so
 vendor/lib64/libthermalioctl.so
 vendor/lib64/libtinyxml.so
+vendor/lib64/libxml.so
 vendor/lib64/libxml2.so
+vendor/lib64/libadsp_default_listener.so
 vendor/lib/libgpustats.so
 vendor/lib/android.hidl.base@1.0.so
 vendor/lib/android.hardware.tetheroffload.config@1.0.so
@@ -237,6 +244,7 @@ vendor/lib/com.qualcomm.qti.dpm.api@1.0_vendor.so
 vendor/lib/com.qualcomm.qti.ant@1.0_vendor.so
 vendor/lib/com.quicinc.cne.constants@1.0.so
 vendor/lib/com.quicinc.cne.api@1.0.so
+vendor/lib/com.quicinc.cne.server@2.0.so
 vendor/lib/com.qualcomm.qti.bluetooth_audio@1.0_vendor.so
 vendor/lib/libCB.so
 vendor/lib/libImgmovie_solid.so
@@ -245,9 +253,11 @@ vendor/lib/libcneapiclient.so
 vendor/lib/libcne.so
 vendor/lib/libconfigdb.so
 vendor/lib/libdiag.so
+vendor/lib/libdiag_system.so
 vendor/lib/libdisp-aba.so
 vendor/lib/libdpmqmihal.so
 vendor/lib/libdsutils.so
+vendor/lib/libdrm.so
 vendor/lib/libdsi_netctrl.so
 vendor/lib/libgps.utils.so
 vendor/lib/libgsl.so
@@ -263,6 +273,7 @@ vendor/lib/libmmcamera_dbg.so
 vendor/lib/libmmcamera2_iface_modules.so
 vendor/lib/libmmcamera2_isp_modules.so
 vendor/lib/libmmcamera2_mct.so
+vendor/lib/libmmcamera2_sensor_modules.so
 vendor/lib/libmmcamera2_stats_modules.so
 vendor/lib/libperipheral_client.so
 vendor/lib/libqcmaputils.so
@@ -275,6 +286,7 @@ vendor/lib/libqmi_common_so.so
 vendor/lib/libqmi_csi.so
 vendor/lib/libqmi_encdec.so
 vendor/lib/libqmiservices.so
+vendor/lib/libqdi.so
 vendor/lib/libqservice.so
 vendor/lib/libqvop-service.so
 vendor/lib/librmnetctl.so
@@ -285,7 +297,9 @@ vendor/lib/libsensor1.so
 vendor/lib/libsmemlog.so
 vendor/lib/libtinyxml.so
 vendor/lib/libtsvideoprocess.so
+vendor/lib/libxml.so
 vendor/lib/libxml2.so
+vendor/lib/libadsp_default_listener.so
 vendor/lib/vendor.display.config@1.0_vendor.so
 vendor/lib/vendor.qti.hardware.fm@1.0_vendor.so
 vendor/lib/vendor.qti.hardware.qdutils_disp@1.0_vendor.so
