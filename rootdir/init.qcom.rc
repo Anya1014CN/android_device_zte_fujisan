@@ -1,1 +1,11 @@
 import /vendor/etc/init/hw/init.vendor.rc
+
+service fujisan-bootlog /system/vendor/bin/los-bootlog.sh
+    class main
+    user root
+    group root log readproc system
+    disabled
+    oneshot
+
+on post-fs-data
+    start fujisan-bootlog
