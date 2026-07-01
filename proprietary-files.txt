@@ -90,6 +90,7 @@ vendor/bin/power_off_alarm
 vendor/bin/qcom-system-daemon
 vendor/bin/qti
 vendor/bin/rmt_storage
+vendor/bin/sh
 vendor/bin/time_daemon
 vendor/bin/tftp_server
 vendor/bin/wcnss_filter

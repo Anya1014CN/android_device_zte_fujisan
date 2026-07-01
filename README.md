@@ -45,6 +45,17 @@ Kernel bring-up notes:
 - This is useful for separating kernel regressions from ramdisk / userspace
   issues when a newer boot image reboots before Android is reachable.
 
+SELinux bring-up notes:
+- The first LOS system/vendor image reached early userspace but left repeated
+  `execute_no_trans` denials in pstore for stock vendor daemons such as
+  `qseecomd`, `rmt_storage`, `pm-service`, `mm-pp-dpps`, and several HAL
+  services. Those files were labeled as generic `vendor_file` in the generated
+  system image instead of their stock exec types.
+- Keep `androidboot.selinux=permissive` in the boot cmdline while the stock
+  proprietary service labels are moved into source policy. This is a temporary
+  bring-up switch so the next build can expose missing blobs / linker failures
+  after init gets past the first SELinux wall.
+
 Display CAF patch notes:
 - Keep temporary bring-up fixes for `hardware/qcom/display-caf/msm8996` under
   `device/zte/fujisan/patches/display-caf/msm8996/`.
