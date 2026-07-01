@@ -67,9 +67,20 @@ PRODUCT_PROPERTY_OVERRIDES += \
     ro.hardware=qcom \
     ro.sf.lcd_density=480
 
+# Keep the boot ramdisk default properties close to stock while bring-up still
+# uses an eng lunch target. Recovery ADB remains available separately; system
+# boot should not advertise an always-on insecure adb configuration.
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
-    ro.adb.secure=0 \
-    persist.sys.usb.config=adb
+    ro.secure=1 \
+    security.perf_harden=1 \
+    ro.adb.secure=1 \
+    ro.allow.mock.location=0 \
+    ro.debuggable=0 \
+    ro.oem_unlock_supported=true \
+    pm.dexopt.first-boot=quicken \
+    pm.dexopt.boot=verify \
+    ro.logdumpd.enabled=0 \
+    persist.sys.usb.config=none
 
 # Single-screen bring-up first. Secondary display, hinge and companion touch
 # routing will be enabled after the primary panel build is stable.
