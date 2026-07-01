@@ -241,6 +241,7 @@ vendor/lib64/libsdm-disp-vndapis.so
 vendor/lib64/libsdmcore.so
 vendor/lib64/libsdmextension.so
 vendor/lib64/libsdmutils.so
+vendor/lib64/libscalar.so
 vendor/lib64/libsensor1.so
 vendor/lib64/libsmemlog.so
 vendor/lib64/libthermalioctl.so
@@ -304,6 +305,7 @@ vendor/lib/librmnetctl.so
 vendor/lib/libsdm-diag.so
 vendor/lib/libsdm-disp-vndapis.so
 vendor/lib/libsdmutils.so
+vendor/lib/libscalar.so
 vendor/lib/libsensor1.so
 vendor/lib/libsmemlog.so
 vendor/lib/libtinyxml.so
