@@ -145,6 +145,8 @@ vendor/etc/init/vendor.qti.hardware.qdutils_disp@1.0-service-qti.rc
 vendor/bin/hw/android.hardware.graphics.allocator@2.0-service
 vendor/bin/hw/android.hardware.graphics.composer@2.1-service
 vendor/bin/hw/vendor.qti.hardware.qdutils_disp@1.0-service-qti
+vendor/bin/init.fujisan.display.sh
+vendor/etc/init/init.fujisan.display.rc
 vendor/bin/los-bootlog.sh
 vendor/etc/init/los-bootlog.rc
 vendor/lib64/hw/gralloc.msm8996.so
