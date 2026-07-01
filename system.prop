@@ -1,6 +1,7 @@
 persist.radio.multisim.config=dsds
 persist.data.iwlan.enable=true
 persist.data.mode=concurrent
+persist.sys.force_sw_gles=1
 qcom.bluetooth.soc=rome
 ro.board.platform=msm8996
 ro.build.product=fujisan
