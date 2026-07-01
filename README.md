@@ -55,6 +55,10 @@ SELinux bring-up notes:
   proprietary service labels are moved into source policy. This is a temporary
   bring-up switch so the next build can expose missing blobs / linker failures
   after init gets past the first SELinux wall.
+- The next pstore pass showed `android.hardware.keymaster@3.0-impl.so` failing
+  to dlopen `libkeymaster_staging.so`. Stock keeps that library under
+  `/system/lib64`, but the vendor keymaster HAL needs a copy in
+  `/system/vendor/lib64` for the vendor linker namespace.
 
 Display CAF patch notes:
 - Keep temporary bring-up fixes for `hardware/qcom/display-caf/msm8996` under

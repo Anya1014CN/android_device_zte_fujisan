@@ -128,6 +128,7 @@ vendor/lib64/libdrmfs.so
 vendor/lib64/libdrmtime.so
 vendor/lib64/libkeymasterdeviceutils.so
 vendor/lib64/libkeymasterprovision.so
+system/lib64/libkeymaster_staging.so:vendor/lib64/libkeymaster_staging.so
 vendor/lib64/libkeymasterutils.so
 vendor/lib64/librpmb.so
 vendor/lib64/libssd.so
