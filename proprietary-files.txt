@@ -46,11 +46,26 @@ vendor/etc/permissions/handheld_core_hardware.xml
 
 # Core service executables
 vendor/bin/vndservicemanager
+vendor/bin/ATFWD-daemon
 vendor/bin/cnss-daemon
+vendor/bin/cnss_diag
+vendor/bin/cnd
+vendor/bin/dpmQmiMgr
+vendor/bin/diag_mdlog
+vendor/bin/energy-awareness
+vendor/bin/event_record_softlink.sh
+vendor/bin/gamed
 vendor/bin/hostapd
+vendor/bin/hvdcp_opti
+vendor/bin/ims_rtp_daemon
+vendor/bin/imsdatadaemon
+vendor/bin/imsqmidaemon
+vendor/bin/imsrcsd
 vendor/bin/init.class_main.sh
 vendor/bin/init.crda.sh
 vendor/bin/init.qcom.class_core.sh
+vendor/bin/init.qcom.crashdata.sh
+vendor/bin/init.qcom.early_boot.sh
 vendor/bin/init.qcom.post_boot.sh
 vendor/bin/init.qcom.sdio.sh
 vendor/bin/init.qcom.sensors.sh
@@ -58,18 +73,47 @@ vendor/bin/init.qcom.sh
 vendor/bin/init.qcom.usb.sh
 vendor/bin/init.vendor.usb.sh
 vendor/bin/ipacm
+vendor/bin/ipacm-diag
 vendor/bin/irsc_util
+vendor/bin/LKCore
+vendor/bin/loc_launcher
+vendor/bin/mlid
 vendor/bin/msm_irqbalance
+vendor/bin/mm-pp-dpps
+vendor/bin/mm-qcamera-daemon
+vendor/bin/mmi
 vendor/bin/netmgrd
 vendor/bin/pm-proxy
 vendor/bin/pm-service
+vendor/bin/port-bridge
+vendor/bin/power_off_alarm
 vendor/bin/qcom-system-daemon
+vendor/bin/qti
 vendor/bin/rmt_storage
+vendor/bin/time_daemon
+vendor/bin/tftp_server
+vendor/bin/wcnss_filter
+vendor/bin/wigighalsvc
+vendor/bin/wigignpt
 vendor/bin/sensors.qcom
 vendor/bin/ssr_setup
+vendor/bin/ssr_diag
 vendor/bin/subsystem_ramdump
 vendor/bin/thermal-engine
 vendor/bin/wifidisplayhalservice
+vendor/bin/copypartnerapp
+vendor/bin/qvop-daemon
+vendor/bin/hw/rild
+
+# Init-referenced system-side helpers
+system/bin/app6939
+system/bin/bt_logger
+system/bin/diag_socket_log.sh
+system/bin/drmserver
+system/bin/dun-server
+system/bin/fgchargerdumper
+system/bin/tloc_daemon
+system/bin/usbconfig
 
 # Keymaster / gatekeeper
 vendor/etc/init/android.hardware.gatekeeper@1.0-service.rc
@@ -205,8 +249,14 @@ vendor/lib64/libwifi-hal.so
 vendor/lib64/libwpa_client.so
 vendor/lib64/libxtwifi_ulp_adaptor.so
 vendor/etc/wifi/WCNSS_qcom_cfg.ini
+vendor/etc/wifi/aoa_cldb_falcon.bin
+vendor/etc/wifi/aoa_cldb_swl14.bin
+vendor/etc/wifi/wigig_p2p_supplicant.conf
+vendor/etc/wifi/wigig_supplicant.conf
 vendor/etc/wifi/wpa_supplicant.conf
 vendor/etc/wifi/wpa_supplicant_overlay.conf
 vendor/etc/wifi/p2p_supplicant_overlay.conf
 # Touchscreen input config
+system/usr/idc/goodix-touchscreen.idc
 system/usr/idc/synaptics_dsx.idc
+system/usr/keylayout/synaptics_dsx.kl
