@@ -473,6 +473,7 @@ vendor/etc/sound_trigger_platform_info.xml
 vendor/etc/thermal-engine.conf
 vendor/etc/usb_audio_policy_configuration.xml
 vendor/lib/libaudio_log_utils.so
+vendor/lib/libdlbdsservice.so
 vendor/lib/libdlbmemoryservice.so
 vendor/lib/libdlbdapstorage.so
 vendor/lib/libeffects.so
@@ -480,6 +481,7 @@ vendor/lib/libmmcamera_isp_linearization40.so
 vendor/lib/libnbaio_mono.so
 vendor/lib/libqti-perfd-client.so
 vendor/lib/libtinycompress_vendor.so
+vendor/lib64/libdlbdsservice.so
 vendor/lib64/libdlbmemoryservice.so
 vendor/lib/vendor.dolby.hardware.dms@1.0.so
 vendor/lib/vendor.dolby.hardware.dms@1.0-impl.so

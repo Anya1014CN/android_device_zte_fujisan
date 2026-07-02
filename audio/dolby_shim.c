@@ -6,3 +6,5 @@
  */
 __attribute__((visibility("default"))) int32_t dolby_status = 0;
 __attribute__((visibility("default"))) int32_t gAllowUseHiFiSession = 0;
+__attribute__((visibility("default"))) int32_t gUseAkmSpeaker = 0;
+__attribute__((visibility("default"))) uint32_t hal_log_mask = 0;
