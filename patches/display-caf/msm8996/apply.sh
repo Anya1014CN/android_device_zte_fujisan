@@ -5,6 +5,7 @@ ROOT="${1:-$PWD}"
 TARGET="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/qdMetaData.cpp"
 DISPLAY_CONFIG_H="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/display_config.h"
 GRALLOC_MK="$ROOT/hardware/qcom/display-caf/msm8996/libgralloc/Android.mk"
+LIGHTS_PRV_CPP="$ROOT/hardware/qcom/display-caf/msm8996/liblight/lights_prv.cpp"
 SDM_CORE_MK="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/core/Android.mk"
 
 if [ ! -f "$TARGET" ]; then
@@ -19,6 +20,11 @@ fi
 
 if [ ! -f "$GRALLOC_MK" ]; then
   echo "Missing target file: $GRALLOC_MK" >&2
+  exit 1
+fi
+
+if [ ! -f "$LIGHTS_PRV_CPP" ]; then
+  echo "Missing target file: $LIGHTS_PRV_CPP" >&2
   exit 1
 fi
 
@@ -107,6 +113,62 @@ if old not in text:
 
 path.write_text(text.replace(old, new, 1))
 print(f"Linked libqdutils into gralloc module in {path}")
+PY
+
+python3 - "$LIGHTS_PRV_CPP" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+old = '''#include <hardware/hwcomposer_defs.h>
+#include "disp_color_apis.h"
+#include "lights_prv.h"
+
+/******************************************************************************/
+static DISPAPI_HANDLE g_ctx;
+
+/**
+ * device methods
+ */
+
+void set_brightness_ext_init(void)
+{
+   disp_api_init((DISPAPI_HANDLE*) &g_ctx, 0);
+}
+
+int set_brightness_ext_level(int level)
+{
+    int err = disp_api_set_panel_brightness_level_ext(g_ctx, HWC_DISPLAY_PRIMARY,
+                                                 level, 0);
+
+    return err;
+}
+'''
+
+new = '''#include "lights_prv.h"
+
+void set_brightness_ext_init(void)
+{
+}
+
+int set_brightness_ext_level(int level)
+{
+    (void) level;
+    return 0;
+}
+'''
+
+if old not in text:
+    if '#include "disp_color_apis.h"' not in text:
+        print(f"liblight color API compatibility already updated in {path}")
+        sys.exit(0)
+    print(f"Did not find expected lights_prv.cpp contents in {path}", file=sys.stderr)
+    sys.exit(1)
+
+path.write_text(text.replace(old, new, 1))
+print(f"Replaced liblight proprietary color API usage in {path}")
 PY
 
 python3 - "$SDM_CORE_MK" <<'PY'
