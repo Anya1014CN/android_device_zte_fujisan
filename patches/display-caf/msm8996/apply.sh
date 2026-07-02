@@ -3,11 +3,17 @@ set -eu
 
 ROOT="${1:-$PWD}"
 TARGET="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/qdMetaData.cpp"
+DISPLAY_CONFIG_H="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/display_config.h"
 GRALLOC_MK="$ROOT/hardware/qcom/display-caf/msm8996/libgralloc/Android.mk"
 SDM_CORE_MK="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/core/Android.mk"
 
 if [ ! -f "$TARGET" ]; then
   echo "Missing target file: $TARGET" >&2
+  exit 1
+fi
+
+if [ ! -f "$DISPLAY_CONFIG_H" ]; then
+  echo "Missing target file: $DISPLAY_CONFIG_H" >&2
   exit 1
 fi
 
@@ -56,6 +62,29 @@ if applied == 0:
 
 path.write_text(updated)
 print(f"Applied {applied} qdMetaData.cpp replacements to {path}")
+PY
+
+python3 - "$DISPLAY_CONFIG_H" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+old = '''#ifdef QTI_BSP
+    DISPLAY_TERTIARY = HWC_DISPLAY_TERTIARY,
+#endif
+'''
+
+if old not in text:
+    if 'DISPLAY_TERTIARY = HWC_DISPLAY_TERTIARY' in text:
+        print(f"Did not find expected tertiary display block in {path}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Tertiary display compatibility already updated in {path}")
+    sys.exit(0)
+
+path.write_text(text.replace(old, '', 1))
+print(f"Removed unsupported HWC_DISPLAY_TERTIARY reference in {path}")
 PY
 
 python3 - "$GRALLOC_MK" <<'PY'
