@@ -14,9 +14,12 @@ vendor/etc/init/hw/init.qcom.usb.rc
 vendor/etc/init/hw/init.target.rc
 vendor/etc/init/hw/init.vendor.rc
 vendor/etc/init/hw/init.vendor.usb.rc
+vendor/etc/init/android.hardware.camera.provider@2.4-service.rc
 vendor/etc/init/com.qualcomm.qti.wifidisplayhal@1.0-service.rc
 vendor/etc/init/vendor.display.color@1.0-service.rc
 vendor/etc/init/vendor.zte.covolution.assertdisplay.vendorad@1.0-service.rc
+vendor/etc/data/dsi_config.xml
+vendor/etc/data/netmgr_config.xml
 
 # Vendor feature declarations
 vendor/etc/permissions/android.hardware.bluetooth.xml
@@ -121,6 +124,7 @@ vendor/bin/wifidisplayhalservice
 vendor/bin/copypartnerapp
 vendor/bin/qvop-daemon
 vendor/bin/hw/rild
+vendor/bin/hw/android.hardware.camera.provider@2.4-service
 
 # Init-referenced system-side helpers
 system/bin/app6939
@@ -429,6 +433,7 @@ vendor/lib/hw/audio.primary.msm8996.so
 vendor/lib/hw/audio.r_submix.default.so
 vendor/lib/hw/audio.usb.default.so
 vendor/lib/hw/sound_trigger.primary.msm8996.so
+vendor/lib/hw/android.hardware.soundtrigger@2.0-impl.so
 vendor/lib/hw/android.hardware.audio@2.0-impl.so
 vendor/lib/hw/android.hardware.audio.effect@2.0-impl.so
 vendor/lib64/hw/audio.primary.msm8996.so
