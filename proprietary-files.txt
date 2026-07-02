@@ -217,6 +217,10 @@ vendor/lib/libqdutils.so
 vendor/lib/libsdmcore.so
 vendor/lib/librs_adreno.so
 vendor/lib/librs_adreno_sha1.so
+vendor/lib/libsdedrm.so
+vendor/lib/libsdm-color.so
+vendor/lib/libsdmextension.so
+vendor/lib/libtzdrmgenprov.so
 vendor/lib64/libcneapiclient.so
 vendor/lib64/libcne.so
 vendor/lib64/libconfigdb.so
