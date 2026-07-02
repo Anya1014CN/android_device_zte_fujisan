@@ -73,3 +73,6 @@ Display CAF patch notes:
 - Current scripted fixes:
   remove invalid `private_handle_t::id` logging from `libqdutils/qdMetaData.cpp`
   and link `libqdutils` into `libgralloc` so `CalcFps` resolves at link time.
+  The script also gates `sdm/libs/core` DRM sources behind
+  `TARGET_USES_DRM_SDM := true` so msm8996 bring-up does not pull
+  `drm/sde_drm.h` by default.
