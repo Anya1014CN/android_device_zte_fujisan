@@ -56,6 +56,7 @@ PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.wifi.xml:system/etc/permissions/android.hardware.wifi.xml
 
 PRODUCT_PACKAGES += \
+    libdolbyshim \
     libion
 
 DEVICE_PACKAGE_OVERLAYS += \

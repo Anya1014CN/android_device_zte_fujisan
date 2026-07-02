@@ -426,10 +426,15 @@ vendor/etc/sensors/sensor_def_qcomdev.conf
 # Audio
 vendor/etc/init/android.hardware.audio@2.0-service.rc
 vendor/bin/hw/android.hardware.audio@2.0-service
+vendor/bin/hw/vendor.dolby.hardware.dms@1.0-service
 system/lib/libtfa9890.so:vendor/lib/libtfa9890.so
 system/lib64/libtfa9890.so:vendor/lib64/libtfa9890.so
 system/lib/libaudioroute.so
 system/lib64/libaudioroute.so
+system/lib/soundfx/libswdap.so
+system/lib64/soundfx/libswdap.so
+system/framework/dolby_dax.jar
+system/etc/dolby/dax-default.xml
 vendor/lib/hw/audio.primary.default.so
 vendor/lib/hw/audio.primary.msm8996.so
 vendor/lib/hw/audio.r_submix.default.so
@@ -449,7 +454,9 @@ vendor/etc/audio_policy_configuration.xml
 vendor/etc/audio_policy_volumes.xml
 vendor/etc/audio_platform_info.xml
 vendor/etc/default_volume_tables.xml
+vendor/etc/init/vendor.dolby.hardware.dms@1.0-service.rc
 vendor/etc/izat.conf
+vendor/etc/media_codecs_dolby.xml
 vendor/etc/media_codecs.xml
 vendor/etc/media_codecs_google_audio.xml
 vendor/etc/media_codecs_google_telephony.xml
@@ -466,12 +473,18 @@ vendor/etc/sound_trigger_platform_info.xml
 vendor/etc/thermal-engine.conf
 vendor/etc/usb_audio_policy_configuration.xml
 vendor/lib/libaudio_log_utils.so
+vendor/lib/libdlbdapstorage.so
 vendor/lib/libeffects.so
 vendor/lib/libmmcamera_isp_linearization40.so
 vendor/lib/libnbaio_mono.so
 vendor/lib/libqti-perfd-client.so
 vendor/lib/libtinycompress_vendor.so
+vendor/lib/vendor.dolby.hardware.dms@1.0.so
+vendor/lib/vendor.dolby.hardware.dms@1.0-impl.so
+vendor/lib64/libdlbdapstorage.so
 vendor/lib64/libqti-perfd-client.so
+vendor/lib64/vendor.dolby.hardware.dms@1.0.so
+vendor/lib64/vendor.dolby.hardware.dms@1.0-impl.so
 
 # Bluetooth / WiFi
 vendor/etc/init/android.hardware.bluetooth@1.0-service-qti.rc
