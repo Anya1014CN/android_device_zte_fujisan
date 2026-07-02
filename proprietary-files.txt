@@ -209,9 +209,12 @@ vendor/lib/libdrmfs.so
 vendor/lib/libdrmtime.so
 vendor/lib/libdrmutils.so
 vendor/lib/libgpu_tonemapper.so
+vendor/lib/libgrallocutils.so
+vendor/lib/libllvm-qgl.so
 vendor/lib/libllvm-glnext.so
 vendor/lib/libqdMetaData.so
 vendor/lib/libqdutils.so
+vendor/lib/libsdmcore.so
 vendor/lib/librs_adreno.so
 vendor/lib/librs_adreno_sha1.so
 vendor/lib64/libcneapiclient.so
