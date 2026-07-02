@@ -1,1 +1,7 @@
-# First-pass bring-up policy placeholder.
+/(vendor|system/vendor)/bin/cnss-daemon                 u:object_r:wcnss_service_exec:s0
+/(vendor|system/vendor)/bin/cnss_diag                   u:object_r:wcnss_service_exec:s0
+/(vendor|system/vendor)/bin/hostapd                     u:object_r:hostapd_exec:s0
+/(vendor|system/vendor)/bin/hostapd_cli                 u:object_r:hostapd_exec:s0
+/(vendor|system/vendor)/bin/wcnss_filter                u:object_r:wcnss_filter_exec:s0
+/(vendor|system/vendor)/bin/init\.qcom\.sdio\.sh        u:object_r:qti_init_shell_exec:s0
+/(vendor|system/vendor)/bin/hw/wpa_supplicant           u:object_r:hal_wifi_supplicant_default_exec:s0
