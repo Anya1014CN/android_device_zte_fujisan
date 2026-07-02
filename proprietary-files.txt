@@ -91,6 +91,8 @@ vendor/bin/init.qcom.sensors.sh
 vendor/bin/init.qcom.sh
 vendor/bin/init.qcom.usb.sh
 vendor/bin/init.vendor.usb.sh
+vendor/lib/modules/wlan.ko
+vendor/lib/modules/qca_cld/qca_cld_wlan.ko
 vendor/bin/ipacm
 vendor/bin/ipacm-diag
 vendor/bin/irsc_util
