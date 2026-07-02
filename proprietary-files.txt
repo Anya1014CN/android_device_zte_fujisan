@@ -58,6 +58,7 @@ vendor/firmware/a530v1_pm4.fw
 vendor/firmware/a530v2_seq.fw2
 vendor/firmware/a530v3_gpmu.fw2
 vendor/firmware/a530v3_seq.fw2
+vendor/firmware/cpp_firmware_v1_10_0.fw
 
 # Core service executables
 vendor/bin/vndservicemanager
@@ -141,11 +142,14 @@ vendor/lib64/libQSEEComAPI.so
 vendor/lib64/libdiag.so
 vendor/lib64/libdrmfs.so
 vendor/lib64/libdrmtime.so
+vendor/lib64/libGPreqcancel.so
 vendor/lib64/libkeymasterdeviceutils.so
 vendor/lib64/libkeymasterprovision.so
 vendor/lib64/libkeymaster_staging.so
 vendor/lib64/libkeymasterutils.so
+vendor/lib64/libqisl.so
 vendor/lib64/librpmb.so
+vendor/lib64/libsecureui.so
 vendor/lib64/libssd.so
 vendor/lib64/libtime_genoff.so
 vendor/lib64/hw/android.hardware.gatekeeper@1.0-impl.so
@@ -253,6 +257,7 @@ vendor/lib64/liblowi_client.so
 vendor/lib64/libllvm-glnext.so
 vendor/lib64/libmdmdetect.so
 vendor/lib64/libmmcamera_dbg.so
+vendor/lib64/libmmcamera2_frame_algorithm.so
 vendor/lib64/libnfnetlink.so
 vendor/lib64/liboffloadhal.so
 vendor/lib64/libperipheral_client.so
@@ -300,6 +305,7 @@ vendor/lib/com.qualcomm.qti.bluetooth_audio@1.0_vendor.so
 vendor/lib/libCB.so
 vendor/lib/libImgmovie_solid.so
 vendor/lib/libQSEEComAPI.so
+vendor/lib/libGPreqcancel.so
 vendor/lib/libcneapiclient.so
 vendor/lib/libcne.so
 vendor/lib/libconfigdb.so
@@ -321,11 +327,13 @@ vendor/lib/libloc_stub.so
 vendor/lib/liblowi_client.so
 vendor/lib/libmdmdetect.so
 vendor/lib/libmmcamera_dbg.so
+vendor/lib/libmmcamera2_frame_algorithm.so
 vendor/lib/libmmcamera2_iface_modules.so
 vendor/lib/libmmcamera2_isp_modules.so
 vendor/lib/libmmcamera2_mct.so
 vendor/lib/libmmcamera2_sensor_modules.so
 vendor/lib/libmmcamera2_stats_modules.so
+vendor/lib/libqisl.so
 vendor/lib/libperipheral_client.so
 vendor/lib/libqcmaputils.so
 vendor/lib/libqmi.so
@@ -339,6 +347,7 @@ vendor/lib/libqmi_encdec.so
 vendor/lib/libqmiservices.so
 vendor/lib/libqdi.so
 vendor/lib/libqservice.so
+vendor/lib/libsecureui.so
 vendor/lib/libqvop-service.so
 vendor/lib/librmnetctl.so
 vendor/lib/libsdm-diag.so
@@ -401,6 +410,10 @@ vendor/lib64/hw/android.hardware.power@1.0-impl.so
 vendor/lib64/hw/android.hardware.sensors@1.0-impl.so
 vendor/lib64/hw/android.hardware.thermal@1.0-impl.so
 vendor/lib64/hw/android.hardware.vibrator@1.0-impl.so
+vendor/lib/sensors.hallSensor.so
+vendor/lib/sensors.ssc.so
+vendor/lib64/sensors.hallSensor.so
+vendor/lib64/sensors.ssc.so
 vendor/etc/sensors/hals.conf
 vendor/etc/sensors/sensor_def_qcomdev.conf
 
@@ -409,6 +422,8 @@ vendor/etc/init/android.hardware.audio@2.0-service.rc
 vendor/bin/hw/android.hardware.audio@2.0-service
 system/lib/libtfa9890.so:vendor/lib/libtfa9890.so
 system/lib64/libtfa9890.so:vendor/lib64/libtfa9890.so
+system/lib/libaudioroute.so
+system/lib64/libaudioroute.so
 vendor/lib/hw/audio.primary.default.so
 vendor/lib/hw/audio.primary.msm8996.so
 vendor/lib/hw/audio.r_submix.default.so
@@ -447,7 +462,9 @@ vendor/lib/libaudio_log_utils.so
 vendor/lib/libeffects.so
 vendor/lib/libmmcamera_isp_linearization40.so
 vendor/lib/libnbaio_mono.so
+vendor/lib/libqti-perfd-client.so
 vendor/lib/libtinycompress_vendor.so
+vendor/lib64/libqti-perfd-client.so
 
 # Bluetooth / WiFi
 vendor/etc/init/android.hardware.bluetooth@1.0-service-qti.rc
@@ -519,15 +536,26 @@ vendor/lib64/vendor.qti.imsrtpservice@1.0_vendor.so
 vendor/lib/lib-dplmedia.so
 vendor/lib64/lib-dplmedia.so
 vendor/lib/libactuator_interface.so
+vendor/lib/libC2D2.so
 vendor/lib/libmmcamera2_c2d_module.so
 vendor/lib/libmmcamera2_cpp_module.so
 vendor/lib/libmmcamera_eztune_module.so
 vendor/lib/libmmcamera_imglib.so
 vendor/lib/libmmcamera_ppbase_module.so
+vendor/lib/libmmcamera_faceproc2.so
+vendor/lib/libmmcamera_isp_clamp_video40.so
+vendor/lib/libmmcamera_isp_color_xform_video46.so
+vendor/lib/libmmcamera_isp_fovcrop_video46.so
+vendor/lib/libmmcamera_isp_scaler_video46.so
+vendor/lib/libmmcamera_isp_sub_module.so
+vendor/lib/libmmcamera_llvd.so
+vendor/lib/libmmcamera_paaf_lib.so
 vendor/lib/libmmosal_proprietary.so
 vendor/lib64/libmmosal_proprietary.so
 vendor/lib/libperfgluelayer.so
 vendor/lib64/libperfgluelayer.so
+vendor/lib/libmmcamera_quadracfa.so
+vendor/lib/libremosaic_daemon.so
 vendor/lib/libqti-util.so
 vendor/lib64/libqti-util.so
 vendor/lib/libwfdcommonutils_proprietary.so
