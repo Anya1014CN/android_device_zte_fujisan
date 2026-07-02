@@ -5,3 +5,4 @@
  * in the process namespace before the HAL is dlopen()'d.
  */
 __attribute__((visibility("default"))) int32_t dolby_status = 0;
+__attribute__((visibility("default"))) int32_t gAllowUseHiFiSession = 0;
