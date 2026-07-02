@@ -221,6 +221,12 @@ vendor/lib/libsdedrm.so
 vendor/lib/libsdm-color.so
 vendor/lib/libsdmextension.so
 vendor/lib/libtzdrmgenprov.so
+vendor/lib/libllvm-qcom.so
+vendor/lib/libmm-qdcm.so
+vendor/lib/libqdp.so
+vendor/lib/com.qualcomm.qti.wifidisplayhal@1.0-impl.so
+vendor/lib/vendor.display.color@1.0_vendor.so
+vendor/lib/vendor.zte.covolution.assertdisplay.vendorad@1.0_vendor.so
 vendor/lib64/libcneapiclient.so
 vendor/lib64/libcne.so
 vendor/lib64/libconfigdb.so
