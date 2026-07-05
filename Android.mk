@@ -8,20 +8,17 @@ FUJISAN_KERNEL_HEADERS := $(FUJISAN_KERNEL_OUT)/usr
 FUJISAN_KERNEL_ARCH := $(if $(TARGET_KERNEL_ARCH),$(TARGET_KERNEL_ARCH),arm64)
 FUJISAN_KERNEL_CROSS_COMPILE := $(if $(TARGET_KERNEL_CROSS_COMPILE_PREFIX),$(TARGET_KERNEL_CROSS_COMPILE_PREFIX),aarch64-linux-android-)
 
-# LOS 15.1's qcom display stack rewrites old KERNEL_OBJ header dependencies to
-# INSTALLED_KERNEL_HEADERS. When we force a prebuilt boot kernel, that target is
-# otherwise missing, so generate the exported headers from source explicitly.
-ifeq ($(PREBUILT_KERNEL),true)
-INSTALLED_KERNEL_HEADERS := $(FUJISAN_KERNEL_HEADERS)
-
+# LOS 15.1's qcom display stack can depend on the literal
+# INSTALLED_KERNEL_HEADERS target even when the boot image comes from a prebuilt
+# kernel. Keep that target available in all build modes and generate exported
+# headers from source when needed.
 .PHONY: INSTALLED_KERNEL_HEADERS
-INSTALLED_KERNEL_HEADERS: $(INSTALLED_KERNEL_HEADERS)
+INSTALLED_KERNEL_HEADERS: $(FUJISAN_KERNEL_HEADERS)
 
-$(INSTALLED_KERNEL_HEADERS):
+$(FUJISAN_KERNEL_HEADERS):
 	mkdir -p $(FUJISAN_KERNEL_OUT)
 	$(MAKE) -C $(FUJISAN_KERNEL_SOURCE) O=$(FUJISAN_KERNEL_OUT) ARCH=$(FUJISAN_KERNEL_ARCH) CROSS_COMPILE=$(FUJISAN_KERNEL_CROSS_COMPILE) $(FUJISAN_KERNEL_CONFIG)
 	$(MAKE) -C $(FUJISAN_KERNEL_SOURCE) O=$(FUJISAN_KERNEL_OUT) ARCH=$(FUJISAN_KERNEL_ARCH) CROSS_COMPILE=$(FUJISAN_KERNEL_CROSS_COMPILE) headers_install
-endif
 
 include $(call all-makefiles-under,$(LOCAL_PATH))
 endif
