@@ -76,3 +76,13 @@ Display CAF patch notes:
   The script also gates `sdm/libs/core` DRM sources behind
   `TARGET_USES_DRM_SDM := true` so msm8996 bring-up does not pull
   `drm/sde_drm.h` by default.
+
+Framework patch notes:
+- `vendorsetup.sh` auto-applies the device-carried compatibility patches once
+  per shell session when the matching source files exist in the Lineage source
+  tree.
+- The current `frameworks/base` patch defers keyguard panel expansion until
+  `CollapsedStatusBarFragment` has attached the `PhoneStatusBarView` to the
+  notification panel. On this device, secure lockscreen boot was racing ahead
+  of that fragment attach and crashing `SystemUI` in
+  `PanelView.notifyBarPanelExpansionChanged()`.
