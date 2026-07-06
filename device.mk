@@ -78,6 +78,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
     ro.adb.secure=1 \
     ro.allow.mock.location=0 \
     ro.debuggable=0 \
+    ro.frp.pst=/dev/block/bootdevice/by-name/frp \
     ro.oem_unlock_supported=false \
     pm.dexopt.first-boot=quicken \
     pm.dexopt.boot=verify \
