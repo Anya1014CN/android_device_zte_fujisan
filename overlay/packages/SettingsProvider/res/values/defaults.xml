@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="def_captive_portal_http_url" translatable="false">http://cp.cloudflare.com/generate_204</string>
+    <string name="def_captive_portal_https_url" translatable="false">https://cp.cloudflare.com/generate_204</string>
+    <string name="def_captive_portal_fallback_url" translatable="false">http://www.qualcomm.cn/generate_204</string>
+</resources>
