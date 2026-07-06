@@ -1,1 +1,6 @@
-# First-pass bring-up policy placeholder.
+# Label bring-up additions that are not covered by the generic platform
+# file_contexts so the built system image carries executable contexts directly.
+/(vendor|system/vendor)/bin/hw/vendor\.qti\.gnss@1\.0-service      u:object_r:hal_gnss_qti_exec:s0
+/(vendor|system/vendor)/bin/hw/vendor\.qti\.gnss@1\.1-service      u:object_r:hal_gnss_qti_exec:s0
+/(vendor|system/vendor)/bin/hw/vendor\.qti\.gnss@1\.2-service      u:object_r:hal_gnss_qti_exec:s0
+/(vendor|system/vendor)/bin/hw/android\.hardware\.gnss@1\.0-service-qti u:object_r:hal_gnss_qti_exec:s0
