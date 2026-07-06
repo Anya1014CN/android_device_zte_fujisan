@@ -165,6 +165,8 @@ vendor/lib64/hw/android.hardware.gnss@1.0-impl-qti.so
 vendor/lib64/vendor.qti.gnss@1.0_vendor.so
 vendor/lib64/libgnss.so
 vendor/lib64/libgnsspps.so
+vendor/lib64/libDRPlugin.so
+vendor/lib64/libevent_observer.so
 vendor/lib64/libizat_core.so
 vendor/lib64/libizat_client_api.so
 vendor/lib64/libloc_externalDr.so
@@ -183,6 +185,8 @@ vendor/lib/hw/android.hardware.gnss@1.0-impl-qti.so
 vendor/lib/vendor.qti.gnss@1.0_vendor.so
 vendor/lib/libgnss.so
 vendor/lib/libgnsspps.so
+vendor/lib/libDRPlugin.so
+vendor/lib/libevent_observer.so
 vendor/lib/libizat_core.so
 vendor/lib/libizat_client_api.so
 vendor/lib/libloc_externalDr.so
