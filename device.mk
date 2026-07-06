@@ -41,7 +41,22 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/usr/idc/zte-touchscreen.idc:system/usr/idc/zte-touchscreen.idc \
     $(LOCAL_PATH)/system/usr/keylayout/gpio-keys.kl:system/usr/keylayout/gpio-keys.kl \
     $(LOCAL_PATH)/system/usr/keylayout/qpnp_pon.kl:system/usr/keylayout/qpnp_pon.kl \
-    $(LOCAL_PATH)/system/usr/keylayout/synaptics_dsx.kl:system/usr/keylayout/synaptics_dsx.kl
+    $(LOCAL_PATH)/system/usr/keylayout/synaptics_dsx.kl:system/usr/keylayout/synaptics_dsx.kl \
+    $(LOCAL_PATH)/system/etc/camera/baby1.mp4:system/etc/camera/baby1.mp4 \
+    $(LOCAL_PATH)/system/etc/camera/baby2.mp4:system/etc/camera/baby2.mp4 \
+    $(LOCAL_PATH)/system/etc/camera/blackboard.rgb:system/etc/camera/blackboard.rgb \
+    $(LOCAL_PATH)/system/etc/camera/children.zip:system/etc/camera/children.zip \
+    $(LOCAL_PATH)/system/etc/camera/cool_background.rgb:system/etc/camera/cool_background.rgb \
+    $(LOCAL_PATH)/system/etc/camera/cool_map.rgb:system/etc/camera/cool_map.rgb \
+    $(LOCAL_PATH)/system/etc/camera/lomo_map.rgb:system/etc/camera/lomo_map.rgb \
+    $(LOCAL_PATH)/system/etc/camera/overlay_map.rgb:system/etc/camera/overlay_map.rgb \
+    $(LOCAL_PATH)/system/etc/permissions/privapp-permissions-camera.xml:system/etc/permissions/privapp-permissions-camera.xml \
+    $(LOCAL_PATH)/system/etc/camera/vd/VD_blurness_parameter.dat:system/etc/camera/vd/VD_blurness_parameter.dat \
+    $(LOCAL_PATH)/system/framework/com.qualcomm.qti.camera.jar:system/framework/com.qualcomm.qti.camera.jar \
+    $(LOCAL_PATH)/system/lib/libdualcameraddm.so:system/lib/libdualcameraddm.so \
+    $(LOCAL_PATH)/system/lib/libjni_dualcamera.so:system/lib/libjni_dualcamera.so \
+    $(LOCAL_PATH)/system/etc/camera/vignette_map.rgb:system/etc/camera/vignette_map.rgb \
+    $(LOCAL_PATH)/system/etc/camera/warm_map.rgb:system/etc/camera/warm_map.rgb
 
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.bluetooth.xml:system/etc/permissions/android.hardware.bluetooth.xml \
