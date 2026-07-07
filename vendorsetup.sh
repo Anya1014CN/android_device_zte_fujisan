@@ -38,6 +38,9 @@ if [ "${FUJISAN_PATCH_ROOT-}" != "$_fujisan_source_root" ]; then
         "$_fujisan_device_dir/patches/display-caf/msm8996/apply.sh" \
         "hardware/qcom/display-caf/msm8996/libqdutils/qdMetaData.cpp"
     _fujisan_apply_patch \
+        "$_fujisan_device_dir/patches/frameworks-base/local-display-adapter/apply.sh" \
+        "frameworks/base/services/core/java/com/android/server/display/LocalDisplayAdapter.java"
+    _fujisan_apply_patch \
         "$_fujisan_device_dir/patches/frameworks-base/systemui-keyguard/apply.sh" \
         "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java"
 fi

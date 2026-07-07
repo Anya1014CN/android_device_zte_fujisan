@@ -81,6 +81,11 @@ Framework patch notes:
 - `vendorsetup.sh` auto-applies the device-carried compatibility patches once
   per shell session when the matching source files exist in the Lineage source
   tree.
+- The current `frameworks/base` display patch forces the first valid config onto
+  the secondary local panel when the stock vendor HWC reports display `1`
+  without an active config during boot. Without this, Lineage's
+  `LocalDisplayAdapter` logs `No active config found for display device 1` and
+  drops the entire second panel before any dual-screen mode logic can run.
 - The current `frameworks/base` patch defers keyguard panel expansion until
   `CollapsedStatusBarFragment` has attached the `PhoneStatusBarView` to the
   notification panel. On this device, secure lockscreen boot was racing ahead
