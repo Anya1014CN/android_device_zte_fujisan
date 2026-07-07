@@ -71,6 +71,7 @@ PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.wifi.xml:system/etc/permissions/android.hardware.wifi.xml
 
 PRODUCT_PACKAGES += \
+    android.hardware.biometrics.fingerprint@2.1 \
     libdolbyshim \
     libion
 

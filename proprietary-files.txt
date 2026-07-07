@@ -468,6 +468,7 @@ vendor/bin/hw/vendor.display.color@1.0-service
 vendor/bin/hw/vendor.zte.covolution.assertdisplay.vendorad@1.0-service
 
 # Core hardware services
+vendor/etc/init/android.hardware.biometrics.fingerprint@2.1-service.rc
 vendor/etc/init/android.hardware.health@1.0-service.rc
 vendor/etc/init/android.hardware.light@2.0-service.rc
 vendor/etc/init/android.hardware.memtrack@1.0-service.rc
@@ -475,6 +476,7 @@ vendor/etc/init/android.hardware.power@1.0-service.rc
 vendor/etc/init/android.hardware.sensors@1.0-service.rc
 vendor/etc/init/android.hardware.thermal@1.0-service.rc
 vendor/etc/init/android.hardware.vibrator@1.0-service.rc
+vendor/bin/hw/android.hardware.biometrics.fingerprint@2.1-service
 vendor/bin/hw/android.hardware.health@1.0-service
 vendor/bin/hw/android.hardware.light@2.0-service
 vendor/bin/hw/android.hardware.memtrack@1.0-service
@@ -482,6 +484,8 @@ vendor/bin/hw/android.hardware.power@1.0-service
 vendor/bin/hw/android.hardware.sensors@1.0-service
 vendor/bin/hw/android.hardware.thermal@1.0-service
 vendor/bin/hw/android.hardware.vibrator@1.0-service
+vendor/lib/com.fingerprints.extension@1.0.so
+vendor/lib64/com.fingerprints.extension@1.0.so
 vendor/lib/hw/android.hardware.health@1.0-impl.so
 vendor/lib64/hw/android.hardware.health@1.0-impl.so
 vendor/lib/hw/vulkan.msm8996.so
@@ -497,6 +501,10 @@ vendor/lib64/hw/android.hardware.power@1.0-impl.so
 vendor/lib64/hw/android.hardware.sensors@1.0-impl.so
 vendor/lib64/hw/android.hardware.thermal@1.0-impl.so
 vendor/lib64/hw/android.hardware.vibrator@1.0-impl.so
+vendor/lib/mmi_fingerprint.so
+vendor/lib64/mmi_fingerprint.so
+vendor/lib/vendor.qti.hardware.fingerprint@1.0.so
+vendor/lib64/vendor.qti.hardware.fingerprint@1.0.so
 vendor/lib/sensors.hallSensor.so
 vendor/lib/sensors.ssc.so
 vendor/lib64/sensors.hallSensor.so

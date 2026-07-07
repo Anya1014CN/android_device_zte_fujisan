@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_settings_fingerprint_enroll_find_sensor_message">指纹传感器位于手机左侧中部。请轻触传感器。</string>
+    <string name="security_settings_fingerprint_enroll_touch_dialog_message">请触摸手机左侧中部的指纹传感器。</string>
+</resources>

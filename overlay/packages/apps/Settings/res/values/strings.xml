@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_settings_fingerprint_enroll_find_sensor_message">The fingerprint sensor is on the left side of your phone, near the middle. Touch the sensor lightly.</string>
+    <string name="security_settings_fingerprint_enroll_touch_dialog_message">Touch the fingerprint sensor on the left side of your phone, near the middle.</string>
+</resources>
