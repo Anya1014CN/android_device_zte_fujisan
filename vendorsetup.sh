@@ -40,9 +40,6 @@ if [ "${FUJISAN_PATCH_ROOT-}" != "$_fujisan_source_root" ]; then
     _fujisan_apply_patch \
         "$_fujisan_device_dir/patches/frameworks-base/systemui-keyguard/apply.sh" \
         "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java"
-    _fujisan_apply_patch \
-        "$_fujisan_device_dir/patches/frameworks-base/camera-key/apply.sh" \
-        "frameworks/base/core/java/com/android/internal/policy/PhoneFallbackEventHandler.java"
 fi
 
 unset -f _fujisan_apply_patch
