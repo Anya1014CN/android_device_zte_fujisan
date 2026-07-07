@@ -1,0 +1,64 @@
+Official radio stack on stock CN Android 8.1 (`P996A26 / Axon M CN 2.10`):
+
+- Baseband props:
+  - `gsm.version.baseband=MPSS.TH.2.0.1.c8-00030-M8996FAAAANAZM-1.160673.1.186062.1`
+  - `gsm.version.baseband1=MPSS.TH.2.0.1.c8-00030-M8996FAAAANAZM-1.160673.1.186062.1`
+  - `rild.libpath=/system/vendor/lib64/libril-qc-qmi-1.so`
+- Radio properties:
+  - `persist.radio.multisim.config=dsds`
+  - `ro.telephony.default_network=22,20`
+  - `persist.data.iwlan.enable=true`
+  - `persist.data.mode=concurrent`
+  - `ro.use_data_netmgrd=true`
+- Main daemons:
+  - `ril-daemon`
+  - `ril-daemon2`
+  - `imsdatadaemon`
+  - `imsqmidaemon`
+  - `imsrcsd`
+  - `cnd`
+  - `dpmQmiMgr`
+  - `netmgrd`
+  - `ipacm`
+  - `ipacm-diag`
+  - `port-bridge`
+  - `ATFWD-daemon`
+- Radio HAL registrations seen on stock:
+  - `android.hardware.radio@1.0::IRadio/slot1`
+  - `android.hardware.radio@1.0::IRadio/slot2`
+  - `android.hardware.radio@1.1::IRadio/slot1`
+  - `android.hardware.radio@1.1::IRadio/slot2`
+  - `vendor.qti.hardware.radio.ims@1.0::IImsRadio/imsradio0`
+  - `vendor.qti.hardware.radio.ims@1.0::IImsRadio/imsradio1`
+  - `vendor.qti.hardware.radio.qcrilhook@1.0::IQtiOemHook/oemhook0`
+  - `vendor.qti.hardware.radio.qcrilhook@1.0::IQtiOemHook/oemhook1`
+  - `vendor.qti.hardware.radio.qtiradio@1.0::IQtiRadio/slot1`
+  - `vendor.qti.hardware.radio.qtiradio@1.0::IQtiRadio/slot2`
+  - `vendor.qti.hardware.radio.uim@1.0::IUim/Uim0`
+  - `vendor.qti.hardware.radio.uim@1.0::IUim/Uim1`
+- Stock init/config anchors:
+  - `/vendor/etc/init/hw/init.qcom.rc`
+  - `/vendor/bin/init.qcom.early_boot.sh`
+  - `/vendor/bin/init.class_main.sh`
+  - `/vendor/bin/init.qcom.sh`
+  - `/vendor/etc/data/netmgr_config.xml`
+- Stock radio blob set that must stay together:
+  - `libqcrilFramework.so`
+  - `libril-qc-hal-qmi.so`
+  - `libril-qc-ltedirectdisc.so`
+  - `libril-qc-qmi-1.so`
+  - `libril-qc-radioconfig.so`
+  - `libril-qcril-hook-oem.so`
+  - `vendor.qti.hardware.radio.am@1.0_vendor.so`
+  - `vendor.qti.hardware.radio.ims@1.0_vendor.so`
+  - `vendor.qti.hardware.radio.lpa@1.0_vendor.so`
+  - `vendor.qti.hardware.radio.qcrilhook@1.0_vendor.so`
+  - `vendor.qti.hardware.radio.qtiradio@1.0_vendor.so`
+  - `vendor.qti.hardware.radio.uim@1.0_vendor.so`
+  - `vendor.qti.hardware.radio.uim_remote_client@1.0_vendor.so`
+  - `vendor.qti.hardware.radio.uim_remote_server@1.0_vendor.so`
+
+Bring-up notes:
+- Stock keeps `ro.use_data_netmgrd=true`; forcing it to `false` diverges from the official data/radio path.
+- `init.qcom.early_boot.sh` chooses between `libril-qc-qmi-1.so` and `libril-qc-hal-qmi.so` from modem version and zygote mode, so both 32-bit and 64-bit copies are required.
+- The stock capture device had no SIM inserted during collection (`gsm.sim.state=ABSENT,ABSENT`), so this note documents stack shape and props, not a live network attach session.

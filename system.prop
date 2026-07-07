@@ -13,7 +13,7 @@ ro.product.model=Z999
 ro.sf.lcd_density=480
 ro.sf.limit_duplicate_layer_numbers=1
 ro.telephony.default_network=22,20
-ro.use_data_netmgrd=false
+ro.use_data_netmgrd=true
 wifi.interface=wlan0
 
 debug.gralloc.enable_fb_ubwc=0
