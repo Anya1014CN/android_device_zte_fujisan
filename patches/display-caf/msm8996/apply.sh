@@ -2,17 +2,11 @@
 set -eu
 
 ROOT="${1:-$PWD}"
-TARGET="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/qdMetaData.cpp"
 DISPLAY_CONFIG_H="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/display_config.h"
 GRALLOC_MK="$ROOT/hardware/qcom/display-caf/msm8996/libgralloc/Android.mk"
 LIGHTS_PRV_CPP="$ROOT/hardware/qcom/display-caf/msm8996/liblight/lights_prv.cpp"
 SDM_CORE_MK="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/core/Android.mk"
 HWC_SESSION_CPP="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/hwc2/hwc_session.cpp"
-
-if [ ! -f "$TARGET" ]; then
-  echo "Missing target file: $TARGET" >&2
-  exit 1
-fi
 
 if [ ! -f "$DISPLAY_CONFIG_H" ]; then
   echo "Missing target file: $DISPLAY_CONFIG_H" >&2
@@ -38,43 +32,6 @@ if [ ! -f "$HWC_SESSION_CPP" ]; then
   echo "Missing target file: $HWC_SESSION_CPP" >&2
   exit 1
 fi
-
-python3 - "$TARGET" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-
-replacements = [
-    (
-        '''        ALOGE("%s: Private handle is invalid - handle:%p id: %" PRIu64,\n                __func__, handle, handle->id);''',
-        '''        ALOGE("%s: Private handle is invalid - handle:%p",\n                __func__, handle);''',
-    ),
-    (
-        '''        ALOGE("%s: Invalid metadata fd - handle:%p id: %" PRIu64 "fd: %d",\n                __func__, handle, handle->id, handle->fd_metadata);''',
-        '''        ALOGE("%s: Invalid metadata fd - handle:%p fd: %d",\n                __func__, handle, handle->fd_metadata);''',
-    ),
-    (
-        '''            ALOGE("%s: metadata mmap failed - handle:%p id: %" PRIu64  "fd: %d err: %s",\n                __func__, handle, handle->id, handle->fd_metadata, strerror(errno));''',
-        '''            ALOGE("%s: metadata mmap failed - handle:%p fd: %d err: %s",\n                __func__, handle, handle->fd_metadata, strerror(errno));''',
-    ),
-]
-
-updated = text
-applied = 0
-for old, new in replacements:
-    if old in updated:
-        updated = updated.replace(old, new)
-        applied += 1
-
-if applied == 0:
-    print(f"No matching qdMetaData.cpp hunks found in {path}; skipping qdMetaData edits")
-    sys.exit(0)
-
-path.write_text(updated)
-print(f"Applied {applied} qdMetaData.cpp replacements to {path}")
-PY
 
 python3 - "$DISPLAY_CONFIG_H" <<'PY'
 from pathlib import Path
@@ -260,6 +217,7 @@ PY
 
 python3 - "$HWC_SESSION_CPP" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 path = Path(sys.argv[1])
@@ -279,50 +237,48 @@ static bool IsFujisanDualDisplayTarget() {
 }
 '''
 
-init_old = '''  if (status) {
-    CoreInterface::DestroyCore();
-    return status;
-  }
+updated = text
+applied = 0
 
-  color_mgr_ = HWCColorManager::CreateColorManager(buffer_allocator_);
-'''
+if helper_new not in updated:
+    if helper_old not in updated:
+        print(f"Did not find expected HWCSession helper block in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(helper_old, helper_new, 1)
+    applied += 1
 
-init_new = '''  if (status) {
-    CoreInterface::DestroyCore();
-    return status;
-  }
-
-  color_mgr_ = HWCColorManager::CreateColorManager(buffer_allocator_);
-'''
-
-deinit_old = '''int HWCSession::Deinit() {
-  HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
-  hwc_display_[HWC_DISPLAY_PRIMARY] = 0;
-  if (color_mgr_) {
-'''
-
-deinit_new = '''int HWCSession::Deinit() {
+deinit_marker = '''int HWCSession::Deinit() {
   if (hwc_display_[HWC_DISPLAY_EXTERNAL]) {
     HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL]);
     hwc_display_[HWC_DISPLAY_EXTERNAL] = 0;
   }
 
   HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
-  hwc_display_[HWC_DISPLAY_PRIMARY] = 0;
-  if (color_mgr_) {
 '''
 
-register_old = '''  auto error = hwc_session->callbacks_.Register(desc, callback_data, pointer);
-  DLOGD("Registering callback: %s", to_string(desc).c_str());
-  if (descriptor == HWC2_CALLBACK_HOTPLUG)
-    hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
-  return INT32(error);
-}
-'''
+if deinit_marker not in updated:
+    deinit_pattern = re.compile(
+        r'int HWCSession::Deinit\(\) \{\n'
+        r'  HWCDisplayPrimary::Destroy\(hwc_display_\[HWC_DISPLAY_PRIMARY\]\);\n',
+        re.M,
+    )
+    if not deinit_pattern.search(updated):
+        print(f"Did not find expected HWCSession Deinit block in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = deinit_pattern.sub(
+        'int HWCSession::Deinit() {\n'
+        '  if (hwc_display_[HWC_DISPLAY_EXTERNAL]) {\n'
+        '    HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL]);\n'
+        '    hwc_display_[HWC_DISPLAY_EXTERNAL] = 0;\n'
+        '  }\n'
+        '\n'
+        '  HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);\n',
+        updated,
+        count=1,
+    )
+    applied += 1
 
-register_new = '''  auto error = hwc_session->callbacks_.Register(desc, callback_data, pointer);
-  DLOGD("Registering callback: %s", to_string(desc).c_str());
-  if (descriptor == HWC2_CALLBACK_HOTPLUG) {
+register_marker = '''  if (descriptor == HWC2_CALLBACK_HOTPLUG) {
     hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
     if (IsFujisanDualDisplayTarget()) {
       int secondary_status = hwc_session->HotPlugHandler(true);
@@ -331,27 +287,31 @@ register_new = '''  auto error = hwc_session->callbacks_.Register(desc, callback
               secondary_status);
       }
     }
-  }
-  return INT32(error);
-}
-'''
+  }'''
 
-updated = text
-applied = 0
-
-for old, new in [
-    (helper_old, helper_new),
-    (init_old, init_new),
-    (deinit_old, deinit_new),
-    (register_old, register_new),
-]:
-    if new in updated:
-        applied += 1
-        continue
-    if old not in updated:
-        print(f"Did not find expected HWCSession block in {path}", file=sys.stderr)
+if register_marker not in updated:
+    register_pattern = re.compile(
+        r'  if \(descriptor == HWC2_CALLBACK_HOTPLUG\)\n'
+        r'    hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected\);\n',
+        re.M,
+    )
+    if not register_pattern.search(updated):
+        print(f"Did not find expected HWCSession callback block in {path}", file=sys.stderr)
         sys.exit(1)
-    updated = updated.replace(old, new, 1)
+    updated = register_pattern.sub(
+        '  if (descriptor == HWC2_CALLBACK_HOTPLUG) {\n'
+        '    hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);\n'
+        '    if (IsFujisanDualDisplayTarget()) {\n'
+        '      int secondary_status = hwc_session->HotPlugHandler(true);\n'
+        '      if (secondary_status) {\n'
+        '        DLOGW("Failed to bring up dual-screen secondary display, status = %d",\n'
+        '              secondary_status);\n'
+        '      }\n'
+        '    }\n'
+        '  }\n',
+        updated,
+        count=1,
+    )
     applied += 1
 
 if updated == text:
