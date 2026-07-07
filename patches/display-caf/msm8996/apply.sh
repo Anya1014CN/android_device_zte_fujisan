@@ -292,14 +292,6 @@ init_new = '''  if (status) {
     return status;
   }
 
-  if (IsFujisanDualDisplayTarget() && !hwc_display_[HWC_DISPLAY_EXTERNAL]) {
-    int secondary_status = ConnectDisplay(HWC_DISPLAY_EXTERNAL);
-    if (secondary_status) {
-      DLOGW("Failed to pre-create dual-screen secondary display, status = %d",
-            secondary_status);
-    }
-  }
-
   color_mgr_ = HWCColorManager::CreateColorManager(buffer_allocator_);
 '''
 
@@ -332,8 +324,12 @@ register_new = '''  auto error = hwc_session->callbacks_.Register(desc, callback
   DLOGD("Registering callback: %s", to_string(desc).c_str());
   if (descriptor == HWC2_CALLBACK_HOTPLUG) {
     hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
-    if (IsFujisanDualDisplayTarget() && hwc_session->hwc_display_[HWC_DISPLAY_EXTERNAL]) {
-      hwc_session->callbacks_.Hotplug(HWC_DISPLAY_EXTERNAL, HWC2::Connection::Connected);
+    if (IsFujisanDualDisplayTarget()) {
+      int secondary_status = hwc_session->HotPlugHandler(true);
+      if (secondary_status) {
+        DLOGW("Failed to bring up dual-screen secondary display, status = %d",
+              secondary_status);
+      }
     }
   }
   return INT32(error);
