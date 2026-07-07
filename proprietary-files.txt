@@ -108,12 +108,15 @@ vendor/bin/ipacm-diag
 vendor/bin/irsc_util
 vendor/bin/LKCore
 vendor/bin/loc_launcher
+vendor/bin/lowi-server
 vendor/bin/mlid
 vendor/bin/msm_irqbalance
 vendor/bin/mm-pp-dpps
 vendor/bin/mm-qcamera-daemon
 vendor/bin/mmi
 vendor/bin/netmgrd
+vendor/bin/slim_daemon
+vendor/bin/xtra-daemon
 vendor/bin/pm-proxy
 vendor/bin/pm-service
 vendor/bin/port-bridge
@@ -328,6 +331,7 @@ vendor/lib64/libloc_core.so
 vendor/lib64/libloc_pla.so
 vendor/lib64/libloc_stub.so
 vendor/lib64/liblowi_client.so
+vendor/lib64/libslimclient.so
 vendor/lib64/libllvm-glnext.so
 vendor/lib64/libmdmdetect.so
 vendor/lib64/libmmcamera_dbg.so
@@ -399,6 +403,7 @@ vendor/lib/libloc_core.so
 vendor/lib/libloc_pla.so
 vendor/lib/libloc_stub.so
 vendor/lib/liblowi_client.so
+vendor/lib/libslimclient.so
 vendor/lib/libmdmdetect.so
 vendor/lib/libmmcamera_dbg.so
 vendor/lib/libmmcamera2_frame_algorithm.so
