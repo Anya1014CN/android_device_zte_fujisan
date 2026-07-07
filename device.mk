@@ -56,7 +56,8 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/lib/libdualcameraddm.so:system/lib/libdualcameraddm.so \
     $(LOCAL_PATH)/system/lib/libjni_dualcamera.so:system/lib/libjni_dualcamera.so \
     $(LOCAL_PATH)/system/etc/camera/vignette_map.rgb:system/etc/camera/vignette_map.rgb \
-    $(LOCAL_PATH)/system/etc/camera/warm_map.rgb:system/etc/camera/warm_map.rgb
+    $(LOCAL_PATH)/system/etc/camera/warm_map.rgb:system/etc/camera/warm_map.rgb \
+    $(LOCAL_PATH)/prebuilt/dual-screen/framework/framework-zte-res.apk:system/framework/framework-zte-res.apk
 
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.bluetooth.xml:system/etc/permissions/android.hardware.bluetooth.xml \
@@ -74,6 +75,13 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     libdolbyshim \
     libion \
+    miframework \
+    ZTE_Camera \
+    axonmcontroller_MFV_Multy \
+    launchmodetest1_MFV_Multy \
+
+PRODUCT_BOOT_JARS += \
+    miframework
 
 DEVICE_PACKAGE_OVERLAYS += \
     $(LOCAL_PATH)/overlay
@@ -101,8 +109,6 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
     ro.logdumpd.enabled=0 \
     persist.sys.usb.config=none
 
-# Single-screen bring-up first. Secondary display, hinge and companion touch
-# routing will be enabled after the primary panel build is stable.
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.radio.multisim.config=dsds \
     qcom.bluetooth.soc=rome \
