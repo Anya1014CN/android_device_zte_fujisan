@@ -54,6 +54,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/etc/camera/vd/VD_blurness_parameter.dat:system/etc/camera/vd/VD_blurness_parameter.dat \
     $(LOCAL_PATH)/system/framework/com.qualcomm.qti.camera.jar:system/framework/com.qualcomm.qti.camera.jar \
     $(LOCAL_PATH)/system/lib/libdualcameraddm.so:system/lib/libdualcameraddm.so \
+    $(LOCAL_PATH)/system/lib/libZTE_ImagePost.so:system/lib/libZTE_ImagePost.so \
     $(LOCAL_PATH)/system/lib/libjni_dualcamera.so:system/lib/libjni_dualcamera.so \
     $(LOCAL_PATH)/system/etc/camera/vignette_map.rgb:system/etc/camera/vignette_map.rgb \
     $(LOCAL_PATH)/system/etc/camera/warm_map.rgb:system/etc/camera/warm_map.rgb
@@ -77,7 +78,9 @@ PRODUCT_PACKAGES += \
     miframework \
     framework-zte-res \
     ZTE_Camera \
+    DoubleLay_MFV_Multy \
     axonmcontroller_MFV_Multy \
+    handservice_mfv_mfv6 \
     launchmodetest1_MFV_Multy \
 
 PRODUCT_BOOT_JARS += \

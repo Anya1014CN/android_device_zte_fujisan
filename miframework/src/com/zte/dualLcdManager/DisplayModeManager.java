@@ -4,7 +4,10 @@ import android.app.ActivityManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
@@ -36,7 +39,9 @@ public class DisplayModeManager {
     private static final String SETTING_SECONDARY_DISPLAY_POWER = "zte_secondary_display_power_state";
     private static final String SETTING_MAIN_BRIGHTNESS = "screen_brightness";
     private static final String CAMERA_PACKAGE = "com.zte.camera";
+    private static final int HALL_SENSOR_TYPE = 65537;
     private static final int HALL_STATUS_OPEN = 3;
+    private static final int HALL_STATUS_CLOSED = 1;
     private static final int SINGLE_DISPLAY_A = 0;
     private static final int SINGLE_DISPLAY_B = 1;
     private static final int DISPLAY_STATE_OFF = 0;
@@ -45,9 +50,13 @@ public class DisplayModeManager {
     private static DisplayModeManager sInstance;
 
     private final Context mContext;
+    private int mHallStatus = -1;
+    private SensorManager mSensorManager;
+    private SensorEventListener mHallListener;
 
     private DisplayModeManager(Context context) {
         mContext = context != null ? context.getApplicationContext() : null;
+        initHallListener();
     }
 
     public static synchronized DisplayModeManager getInstance(Context context) {
@@ -58,7 +67,17 @@ public class DisplayModeManager {
     }
 
     public int getCurrentMode() {
-        return getSystemInt(SETTING_DISPLAY_MODE, getPropInt(PROP_DEFAULT_MODE, DISPLAY_MODE_SINGLE));
+        int hallStatus = getHallSensorStatus();
+        int fallback = hallStatus == HALL_STATUS_OPEN
+                ? getSystemInt(SETTING_HALL_OPEN_MODE, DISPLAY_MODE_ZOOM)
+                : DISPLAY_MODE_SINGLE;
+        int mode = getSystemInt(SETTING_DISPLAY_MODE, getPropInt(PROP_DEFAULT_MODE, fallback));
+
+        if (hallStatus != HALL_STATUS_OPEN && mode != DISPLAY_MODE_SINGLE) {
+            return DISPLAY_MODE_SINGLE;
+        }
+
+        return mode;
     }
 
     public int getFocusDisplayId() {
@@ -69,6 +88,9 @@ public class DisplayModeManager {
     }
 
     public int getHallSensorStatus() {
+        if (mHallStatus > 0) {
+            return mHallStatus;
+        }
         return getPropInt(PROP_HALL_STATUS, 1);
     }
 
@@ -179,6 +201,60 @@ public class DisplayModeManager {
 
     public boolean isOpen() {
         return getHallSensorStatus() == HALL_STATUS_OPEN;
+    }
+
+    private void initHallListener() {
+        if (mContext == null) {
+            return;
+        }
+
+        try {
+            mSensorManager = (SensorManager) mContext.getSystemService(Context.SENSOR_SERVICE);
+            if (mSensorManager == null) {
+                return;
+            }
+
+            Sensor hallSensor = mSensorManager.getDefaultSensor(HALL_SENSOR_TYPE);
+            if (hallSensor == null) {
+                return;
+            }
+
+            mHallListener = new SensorEventListener() {
+                @Override
+                public void onSensorChanged(SensorEvent event) {
+                    if (event == null || event.values == null || event.values.length == 0) {
+                        return;
+                    }
+
+                    int hallStatus = Math.round(event.values[0]);
+                    if (hallStatus <= 0 || hallStatus == mHallStatus) {
+                        return;
+                    }
+
+                    mHallStatus = hallStatus;
+                    setSystemProperty(PROP_HALL_STATUS, Integer.toString(hallStatus));
+
+                    if (hallStatus == HALL_STATUS_CLOSED) {
+                        putSystemInt(SETTING_DISPLAY_MODE, DISPLAY_MODE_SINGLE);
+                        setSystemProperty(PROP_DEFAULT_MODE, Integer.toString(DISPLAY_MODE_SINGLE));
+                        syncSecondaryState(DISPLAY_MODE_SINGLE, getCurrentSingleDisplay());
+                    } else if (hallStatus == HALL_STATUS_OPEN) {
+                        int restoredMode = getSystemInt(SETTING_HALL_OPEN_MODE, DISPLAY_MODE_ZOOM);
+                        putSystemInt(SETTING_DISPLAY_MODE, restoredMode);
+                        setSystemProperty(PROP_DEFAULT_MODE, Integer.toString(restoredMode));
+                        syncSecondaryState(restoredMode, getCurrentSingleDisplay());
+                    }
+                }
+
+                @Override
+                public void onAccuracyChanged(Sensor sensor, int accuracy) {
+                }
+            };
+
+            mSensorManager.registerListener(mHallListener, hallSensor, SensorManager.SENSOR_DELAY_NORMAL);
+        } catch (Exception e) {
+            Log.w(TAG, "Unable to register hall sensor listener", e);
+        }
     }
 
     private int getCurrentSingleDisplay() {
