@@ -7,5 +7,12 @@ service fujisan-bootlog /system/vendor/bin/los-bootlog.sh
     disabled
     oneshot
 
+on boot
+    # Keep the PM8994 NFC/eSE power request line in a defined state before
+    # the NFC HAL starts probing the PN548 over I2C.
+    write /sys/class/gpio/export 1015
+    write /sys/class/gpio/gpio1015/direction out
+    write /sys/class/gpio/gpio1015/value 1
+
 on post-fs-data
     start fujisan-bootlog
