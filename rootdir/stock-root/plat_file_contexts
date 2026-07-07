@@ -200,7 +200,6 @@
 /adb_keys		u:object_r:adb_keys_file:s0
 /dev/uhid		u:object_r:uhid_device:s0
 /dev/zero		u:object_r:zero_device:s0
-/dev/pn544		u:object_r:nfc_device:s0
 /dev/pmsg0		u:object_r:pmsg_device:s0
 /dev/alarm		u:object_r:alarm_device:s0
 /dev/random		u:object_r:random_device:s0
