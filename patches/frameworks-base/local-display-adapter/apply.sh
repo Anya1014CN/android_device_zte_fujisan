@@ -68,6 +68,8 @@ secondary_info_new = '''            } else {
             }'''
 
 updated = text
+active_applied = False
+secondary_applied = False
 
 if active_config_new not in updated:
     active_config_pattern = re.compile(
@@ -87,6 +89,9 @@ if active_config_new not in updated:
         updated,
         count=1,
     )
+    active_applied = True
+elif active_config_new in text:
+    active_applied = True
 
 if secondary_info_new not in updated:
     secondary_info_pattern = re.compile(
@@ -97,15 +102,23 @@ if secondary_info_new not in updated:
         r'''\}\s*\}''',
         re.S,
     )
-    if not secondary_info_pattern.search(updated):
-        print(f"Did not find expected secondary-display block in {path}", file=sys.stderr)
-        sys.exit(1)
-    updated = secondary_info_pattern.sub(secondary_info_new, updated, count=1)
+    if secondary_info_pattern.search(updated):
+        updated = secondary_info_pattern.sub(secondary_info_new, updated, count=1)
+        secondary_applied = True
+    else:
+        print(f"Warning: did not find secondary-display block in {path}; keeping active-config patch only")
+elif secondary_info_new in updated:
+    secondary_applied = True
 
 if updated == text:
     print(f"LocalDisplayAdapter dual-display compatibility already updated in {path}")
     sys.exit(0)
 
 path.write_text(updated)
-print(f"Applied fujisan dual-display LocalDisplayAdapter compatibility to {path}")
+if active_applied and secondary_applied:
+    print(f"Applied full fujisan dual-display LocalDisplayAdapter compatibility to {path}")
+elif active_applied:
+    print(f"Applied active-config-only fujisan dual-display compatibility to {path}")
+else:
+    print(f"Applied fujisan dual-display LocalDisplayAdapter compatibility to {path}")
 PY
