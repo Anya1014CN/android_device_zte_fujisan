@@ -314,6 +314,49 @@ if register_marker not in updated:
     )
     applied += 1
 
+online_marker = '''        status = ConnectDisplay(HWC_DISPLAY_EXTERNAL);
+        if (status) {
+          return status;
+        }
+        if (IsFujisanDualDisplayTarget()) {
+          int online_status = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetDisplayStatus(EXTERNAL_ONLINE);
+          if (online_status) {
+            DLOGW("Failed to mark dual-screen secondary display online, status = %d",
+                  online_status);
+          }
+        }
+        notify_hotplug = true;'''
+
+if online_marker not in updated:
+    online_pattern = re.compile(
+        r'        status = ConnectDisplay\(HWC_DISPLAY_EXTERNAL\);\n'
+        r'        if \(status\) \{\n'
+        r'          return status;\n'
+        r'        \}\n'
+        r'        notify_hotplug = true;',
+        re.M,
+    )
+    if not online_pattern.search(updated):
+        print(f"Did not find expected HWCSession hotplug connect block in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = online_pattern.sub(
+        '        status = ConnectDisplay(HWC_DISPLAY_EXTERNAL);\n'
+        '        if (status) {\n'
+        '          return status;\n'
+        '        }\n'
+        '        if (IsFujisanDualDisplayTarget()) {\n'
+        '          int online_status = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetDisplayStatus(EXTERNAL_ONLINE);\n'
+        '          if (online_status) {\n'
+        '            DLOGW("Failed to mark dual-screen secondary display online, status = %d",\n'
+        '                  online_status);\n'
+        '          }\n'
+        '        }\n'
+        '        notify_hotplug = true;',
+        updated,
+        count=1,
+    )
+    applied += 1
+
 if updated == text:
     print(f"HWC2 secondary hotplug compatibility already updated in {path}")
     sys.exit(0)
