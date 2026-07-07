@@ -64,6 +64,11 @@ secondary_info_new = '''            } else {
                     if (SystemProperties.getBoolean("persist.demo.hdmirotates", false)) {
                         mInfo.flags |= DisplayDeviceInfo.FLAG_ROTATES_WITH_CONTENT;
                     }
+
+                    if (!res.getBoolean(
+                                com.android.internal.R.bool.config_localDisplaysMirrorContent)) {
+                        mInfo.flags |= DisplayDeviceInfo.FLAG_OWN_CONTENT_ONLY;
+                    }
                 }
             }'''
 
@@ -99,7 +104,12 @@ if secondary_info_new not in updated:
         r'''mInfo\.type = Display\.TYPE_HDMI;.*?'''
         r'''if \(SystemProperties\.getBoolean\("persist\.demo\.hdmirotates", false\)\) \{\s*'''
         r'''mInfo\.flags \|= DisplayDeviceInfo\.FLAG_ROTATES_WITH_CONTENT;\s*'''
-        r'''\}\s*\}''',
+        r'''\}\s*'''
+        r'''(?:if \(!res\.getBoolean\(\s*'''
+        r'''com\.android\.internal\.R\.bool\.config_localDisplaysMirrorContent\)\) \{\s*'''
+        r'''mInfo\.flags \|= DisplayDeviceInfo\.FLAG_OWN_CONTENT_ONLY;\s*'''
+        r'''\}\s*)?'''
+        r'''\}''',
         re.S,
     )
     if secondary_info_pattern.search(updated):

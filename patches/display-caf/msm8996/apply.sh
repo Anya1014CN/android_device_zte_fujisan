@@ -7,6 +7,7 @@ DISPLAY_CONFIG_H="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/display_con
 GRALLOC_MK="$ROOT/hardware/qcom/display-caf/msm8996/libgralloc/Android.mk"
 LIGHTS_PRV_CPP="$ROOT/hardware/qcom/display-caf/msm8996/liblight/lights_prv.cpp"
 SDM_CORE_MK="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/core/Android.mk"
+HWC_SESSION_CPP="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/hwc2/hwc_session.cpp"
 
 if [ ! -f "$TARGET" ]; then
   echo "Missing target file: $TARGET" >&2
@@ -30,6 +31,11 @@ fi
 
 if [ ! -f "$SDM_CORE_MK" ]; then
   echo "Missing target file: $SDM_CORE_MK" >&2
+  exit 1
+fi
+
+if [ ! -f "$HWC_SESSION_CPP" ]; then
+  echo "Missing target file: $HWC_SESSION_CPP" >&2
   exit 1
 fi
 
@@ -250,4 +256,112 @@ if applied == 0:
 
 path.write_text(updated)
 print(f"Updated {applied} SDM DRM gating blocks in {path}")
+PY
+
+python3 - "$HWC_SESSION_CPP" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+helper_old = '''#define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
+#define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"
+'''
+
+helper_new = '''#define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
+#define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"
+
+static bool IsFujisanDualDisplayTarget() {
+  char value[PROPERTY_VALUE_MAX] = {};
+  property_get("ro.feature.target_dual_display", value, "0");
+  return value[0] == '1';
+}
+'''
+
+init_old = '''  if (status) {
+    CoreInterface::DestroyCore();
+    return status;
+  }
+
+  color_mgr_ = HWCColorManager::CreateColorManager(buffer_allocator_);
+'''
+
+init_new = '''  if (status) {
+    CoreInterface::DestroyCore();
+    return status;
+  }
+
+  if (IsFujisanDualDisplayTarget() && !hwc_display_[HWC_DISPLAY_EXTERNAL]) {
+    int secondary_status = ConnectDisplay(HWC_DISPLAY_EXTERNAL);
+    if (secondary_status) {
+      DLOGW("Failed to pre-create dual-screen secondary display, status = %d",
+            secondary_status);
+    }
+  }
+
+  color_mgr_ = HWCColorManager::CreateColorManager(buffer_allocator_);
+'''
+
+deinit_old = '''int HWCSession::Deinit() {
+  HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
+  hwc_display_[HWC_DISPLAY_PRIMARY] = 0;
+  if (color_mgr_) {
+'''
+
+deinit_new = '''int HWCSession::Deinit() {
+  if (hwc_display_[HWC_DISPLAY_EXTERNAL]) {
+    HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL]);
+    hwc_display_[HWC_DISPLAY_EXTERNAL] = 0;
+  }
+
+  HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
+  hwc_display_[HWC_DISPLAY_PRIMARY] = 0;
+  if (color_mgr_) {
+'''
+
+register_old = '''  auto error = hwc_session->callbacks_.Register(desc, callback_data, pointer);
+  DLOGD("Registering callback: %s", to_string(desc).c_str());
+  if (descriptor == HWC2_CALLBACK_HOTPLUG)
+    hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
+  return INT32(error);
+}
+'''
+
+register_new = '''  auto error = hwc_session->callbacks_.Register(desc, callback_data, pointer);
+  DLOGD("Registering callback: %s", to_string(desc).c_str());
+  if (descriptor == HWC2_CALLBACK_HOTPLUG) {
+    hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
+    if (IsFujisanDualDisplayTarget() && hwc_session->hwc_display_[HWC_DISPLAY_EXTERNAL]) {
+      hwc_session->callbacks_.Hotplug(HWC_DISPLAY_EXTERNAL, HWC2::Connection::Connected);
+    }
+  }
+  return INT32(error);
+}
+'''
+
+updated = text
+applied = 0
+
+for old, new in [
+    (helper_old, helper_new),
+    (init_old, init_new),
+    (deinit_old, deinit_new),
+    (register_old, register_new),
+]:
+    if new in updated:
+        applied += 1
+        continue
+    if old not in updated:
+        print(f"Did not find expected HWCSession block in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(old, new, 1)
+    applied += 1
+
+if updated == text:
+    print(f"HWC2 secondary hotplug compatibility already updated in {path}")
+    sys.exit(0)
+
+path.write_text(updated)
+print(f"Updated {applied} HWC2 dual-display blocks in {path}")
 PY
