@@ -1,6 +1,15 @@
 LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := framework-zte-res
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_STEM := framework-zte-res.apk
+LOCAL_SRC_FILES := ../prebuilt/dual-screen/framework/framework-zte-res.apk
+LOCAL_MODULE_PATH := $(TARGET_OUT)/framework
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
 LOCAL_MODULE := ZTE_Camera
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_CLASS := APPS

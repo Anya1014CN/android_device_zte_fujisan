@@ -56,8 +56,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/lib/libdualcameraddm.so:system/lib/libdualcameraddm.so \
     $(LOCAL_PATH)/system/lib/libjni_dualcamera.so:system/lib/libjni_dualcamera.so \
     $(LOCAL_PATH)/system/etc/camera/vignette_map.rgb:system/etc/camera/vignette_map.rgb \
-    $(LOCAL_PATH)/system/etc/camera/warm_map.rgb:system/etc/camera/warm_map.rgb \
-    $(LOCAL_PATH)/prebuilt/dual-screen/framework/framework-zte-res.apk:system/framework/framework-zte-res.apk
+    $(LOCAL_PATH)/system/etc/camera/warm_map.rgb:system/etc/camera/warm_map.rgb
 
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.bluetooth.xml:system/etc/permissions/android.hardware.bluetooth.xml \
@@ -76,6 +75,7 @@ PRODUCT_PACKAGES += \
     libdolbyshim \
     libion \
     miframework \
+    framework-zte-res \
     ZTE_Camera \
     axonmcontroller_MFV_Multy \
     launchmodetest1_MFV_Multy \
