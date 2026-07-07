@@ -280,7 +280,8 @@ public class DisplayModeManager {
     }
 
     private void syncSecondaryState(int mode, int singleDisplay) {
-        boolean secondaryOn = mode == DISPLAY_MODE_DOCKED
+        boolean secondaryOn = mode == DISPLAY_MODE_ZOOM
+                || mode == DISPLAY_MODE_DOCKED
                 || mode == DISPLAY_MODE_MIRROR
                 || (mode == DISPLAY_MODE_SINGLE && singleDisplay == SINGLE_DISPLAY_B);
         setSystemProperty(PROP_FORCE_DUAL, secondaryOn ? "1" : "0");

@@ -75,6 +75,10 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     libdolbyshim \
     libion \
+    libjpeg_encode_hw_jni \
+    libsftrans \
+    libZTE_ImagePost \
+    libzte_night_jni \
     miframework \
     framework-zte-res \
     ZTE_Camera \

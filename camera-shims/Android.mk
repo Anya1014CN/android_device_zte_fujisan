@@ -1,0 +1,45 @@
+LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := libZTE_ImagePost
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_MODULE_SUFFIX := .so
+LOCAL_MULTILIB := 64
+LOCAL_SRC_FILES := zte_imagepost_stub.cpp
+LOCAL_C_INCLUDES += $(JNI_H_INCLUDE)
+LOCAL_CFLAGS += -Wno-unused-parameter
+include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := libjpeg_encode_hw_jni
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_MODULE_SUFFIX := .so
+LOCAL_MULTILIB := 64
+LOCAL_SRC_FILES := jpeg_encode_hw_stub.cpp
+LOCAL_C_INCLUDES += $(JNI_H_INCLUDE)
+LOCAL_CFLAGS += -Wno-unused-parameter
+include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := libzte_night_jni
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_MODULE_SUFFIX := .so
+LOCAL_MULTILIB := 64
+LOCAL_SRC_FILES := zte_night_stub.cpp
+LOCAL_C_INCLUDES += $(JNI_H_INCLUDE)
+LOCAL_CFLAGS += -Wno-unused-parameter
+include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := libsftrans
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_MODULE_SUFFIX := .so
+LOCAL_MULTILIB := 64
+LOCAL_SRC_FILES := sftrans_stub.cpp
+LOCAL_C_INCLUDES += $(JNI_H_INCLUDE)
+LOCAL_CFLAGS += -Wno-unused-parameter
+include $(BUILD_SHARED_LIBRARY)

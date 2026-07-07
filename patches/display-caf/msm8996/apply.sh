@@ -82,15 +82,40 @@ old = '''#ifdef QTI_BSP
 #endif
 '''
 
-if old not in text:
-    if 'DISPLAY_TERTIARY = HWC_DISPLAY_TERTIARY' in text:
-        print(f"Did not find expected tertiary display block in {path}", file=sys.stderr)
-        sys.exit(1)
+new = '''#ifndef HWC_DISPLAY_TERTIARY
+#define HWC_DISPLAY_TERTIARY HWC_DISPLAY_EXTERNAL
+#endif
+#ifdef QTI_BSP
+    DISPLAY_TERTIARY = HWC_DISPLAY_TERTIARY,
+#endif
+'''
+
+if new in text:
     print(f"Tertiary display compatibility already updated in {path}")
     sys.exit(0)
 
-path.write_text(text.replace(old, '', 1))
-print(f"Removed unsupported HWC_DISPLAY_TERTIARY reference in {path}")
+updated = text
+
+if old in updated:
+    updated = updated.replace(old, new, 1)
+elif 'DISPLAY_EXTERNAL = HWC_DISPLAY_EXTERNAL,' in updated and 'DISPLAY_TERTIARY = HWC_DISPLAY_TERTIARY' not in updated:
+    updated = updated.replace(
+        'DISPLAY_EXTERNAL = HWC_DISPLAY_EXTERNAL,\n',
+        'DISPLAY_EXTERNAL = HWC_DISPLAY_EXTERNAL,\n'
+        '#ifndef HWC_DISPLAY_TERTIARY\n'
+        '#define HWC_DISPLAY_TERTIARY HWC_DISPLAY_EXTERNAL\n'
+        '#endif\n'
+        '#ifdef QTI_BSP\n'
+        '    DISPLAY_TERTIARY = HWC_DISPLAY_TERTIARY,\n'
+        '#endif\n',
+        1,
+    )
+else:
+    print(f"Did not find expected tertiary display block in {path}", file=sys.stderr)
+    sys.exit(1)
+
+path.write_text(updated)
+print(f"Restored tertiary display compatibility in {path}")
 PY
 
 python3 - "$GRALLOC_MK" <<'PY'
