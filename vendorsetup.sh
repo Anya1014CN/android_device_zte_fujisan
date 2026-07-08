@@ -36,7 +36,7 @@ if [ "${FUJISAN_PATCH_ROOT-}" != "$_fujisan_source_root" ]; then
     export FUJISAN_PATCH_ROOT="$_fujisan_source_root"
     _fujisan_apply_patch \
         "$_fujisan_device_dir/patches/display-caf/msm8996/apply.sh" \
-        "hardware/qcom/display-caf/msm8996/libqdutils/qdMetaData.cpp"
+        "hardware/qcom/display-caf/msm8996/libqdutils/Android.mk"
     _fujisan_apply_patch \
         "$_fujisan_device_dir/patches/frameworks-base/local-display-adapter/apply.sh" \
         "frameworks/base/services/core/java/com/android/server/display/LocalDisplayAdapter.java"
