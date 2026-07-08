@@ -128,6 +128,28 @@ public class DisplayModeManager {
         return true;
     }
 
+    public void refreshCurrentState() {
+        int hallStatus = getHallSensorStatus();
+        int singleDisplay = getCurrentSingleDisplay();
+        int mode;
+
+        if (hallStatus == HALL_STATUS_OPEN) {
+            mode = getSystemInt(
+                    SETTING_DISPLAY_MODE,
+                    getSystemInt(SETTING_HALL_OPEN_MODE, DISPLAY_MODE_ZOOM));
+            if (!isValidMode(mode)) {
+                mode = DISPLAY_MODE_ZOOM;
+            }
+        } else {
+            mode = DISPLAY_MODE_SINGLE;
+        }
+
+        putSystemInt(SETTING_DISPLAY_MODE, mode);
+        setSystemProperty(PROP_DEFAULT_MODE, Integer.toString(mode));
+        setSystemProperty(PROP_DEFAULT_SINGLE_DISPLAY, Integer.toString(singleDisplay));
+        syncSecondaryState(mode, singleDisplay);
+    }
+
     public int switchRotationForDock(int rotation) {
         if (rotation >= 0) {
             putSystemInt(SETTING_DOCK_ORIENTATION, rotation);

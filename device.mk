@@ -80,6 +80,7 @@ PRODUCT_PACKAGES += \
     libZTE_ImagePost \
     libzte_night_jni \
     miframework \
+    FujisanDualScreenService \
     framework-zte-res \
     ZTE_Camera \
     DoubleLay_MFV_Multy \
