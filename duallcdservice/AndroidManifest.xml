@@ -4,10 +4,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 
-    <application
-        android:name=".DualLcdApplication"
-        android:persistent="true"
-        android:directBootAware="true">
+    <application android:directBootAware="true">
         <receiver
             android:name=".BootReceiver"
             android:directBootAware="true"
