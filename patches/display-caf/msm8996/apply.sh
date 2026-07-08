@@ -3,14 +3,15 @@ set -eu
 
 ROOT="${1:-$PWD}"
 QDUTILS_MK="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/Android.mk"
+QDUTILS_BP="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/Android.bp"
 DISPLAY_CONFIG_H="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/display_config.h"
 GRALLOC_MK="$ROOT/hardware/qcom/display-caf/msm8996/libgralloc/Android.mk"
 LIGHTS_PRV_CPP="$ROOT/hardware/qcom/display-caf/msm8996/liblight/lights_prv.cpp"
 SDM_CORE_MK="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/core/Android.mk"
 HWC_SESSION_CPP="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/hwc2/hwc_session.cpp"
 
-if [ ! -f "$QDUTILS_MK" ]; then
-  echo "Missing target file: $QDUTILS_MK" >&2
+if [ ! -f "$QDUTILS_MK" ] && [ ! -f "$QDUTILS_BP" ]; then
+  echo "Missing target file: $QDUTILS_MK or $QDUTILS_BP" >&2
   exit 1
 fi
 
@@ -87,23 +88,27 @@ path.write_text(updated)
 print(f"Restored tertiary display compatibility in {path}")
 PY
 
-python3 - "$QDUTILS_MK" <<'PY'
+python3 - "$QDUTILS_MK" "$QDUTILS_BP" <<'PY'
 from pathlib import Path
 import sys
 
-path = Path(sys.argv[1])
-text = path.read_text()
+mk_path = Path(sys.argv[1])
+bp_path = Path(sys.argv[2])
 
-if 'LOCAL_MODULE                    := libqdMetaData' in text:
-    print(f"libqdMetaData module already defined in {path}")
-    sys.exit(0)
+if mk_path.is_file():
+    path = mk_path
+    text = path.read_text()
 
-anchor = 'include $(BUILD_SHARED_LIBRARY)\n'
-if anchor not in text:
-    print(f"Did not find expected libqdutils module terminator in {path}", file=sys.stderr)
-    sys.exit(1)
+    if 'LOCAL_MODULE                    := libqdMetaData' in text:
+        print(f"libqdMetaData module already defined in {path}")
+        sys.exit(0)
 
-addition = '''
+    anchor = 'include $(BUILD_SHARED_LIBRARY)\n'
+    if anchor not in text:
+        print(f"Did not find expected libqdutils module terminator in {path}", file=sys.stderr)
+        sys.exit(1)
+
+    addition = '''
 
 include $(CLEAR_VARS)
 
@@ -121,8 +126,47 @@ LOCAL_PROPRIETARY_MODULE      := true
 include $(BUILD_SHARED_LIBRARY)
 '''
 
+    first = text.find(anchor)
+    updated = text[:first + len(anchor)] + addition + text[first + len(anchor):]
+    path.write_text(updated)
+    print(f"Restored libqdMetaData module definition in {path}")
+    sys.exit(0)
+
+path = bp_path
+text = path.read_text()
+
+if 'name: "libqdMetaData"' in text:
+    print(f"libqdMetaData module already defined in {path}")
+    sys.exit(0)
+
+anchor = 'cc_library_shared {\n    name: "libqdutils",'
+if anchor not in text:
+    print(f"Did not find expected libqdutils module block in {path}", file=sys.stderr)
+    sys.exit(1)
+
+block_end = '\n}\n'
 first = text.find(anchor)
-updated = text[:first + len(anchor)] + addition + text[first + len(anchor):]
+end = text.find(block_end, first)
+if end == -1:
+    print(f"Did not find end of libqdutils module block in {path}", file=sys.stderr)
+    sys.exit(1)
+
+end += len(block_end)
+addition = '''
+
+cc_library_shared {
+    name: "libqdMetaData",
+    vendor: true,
+    defaults: ["display_defaults"],
+    cflags: [
+        "-Wno-sign-conversion",
+        "-DLOG_TAG=\\"qdmetadata\\"",
+    ],
+    srcs: ["qdMetaData.cpp", "qd_utils.cpp"],
+}
+'''
+
+updated = text[:end] + addition + text[end:]
 path.write_text(updated)
 print(f"Restored libqdMetaData module definition in {path}")
 PY
