@@ -2,11 +2,17 @@
 set -eu
 
 ROOT="${1:-$PWD}"
+QDUTILS_MK="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/Android.mk"
 DISPLAY_CONFIG_H="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/display_config.h"
 GRALLOC_MK="$ROOT/hardware/qcom/display-caf/msm8996/libgralloc/Android.mk"
 LIGHTS_PRV_CPP="$ROOT/hardware/qcom/display-caf/msm8996/liblight/lights_prv.cpp"
 SDM_CORE_MK="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/core/Android.mk"
 HWC_SESSION_CPP="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/hwc2/hwc_session.cpp"
+
+if [ ! -f "$QDUTILS_MK" ]; then
+  echo "Missing target file: $QDUTILS_MK" >&2
+  exit 1
+fi
 
 if [ ! -f "$DISPLAY_CONFIG_H" ]; then
   echo "Missing target file: $DISPLAY_CONFIG_H" >&2
@@ -79,6 +85,46 @@ else:
 
 path.write_text(updated)
 print(f"Restored tertiary display compatibility in {path}")
+PY
+
+python3 - "$QDUTILS_MK" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+if 'LOCAL_MODULE                    := libqdMetaData' in text:
+    print(f"libqdMetaData module already defined in {path}")
+    sys.exit(0)
+
+anchor = 'include $(BUILD_SHARED_LIBRARY)\n'
+if anchor not in text:
+    print(f"Did not find expected libqdutils module terminator in {path}", file=sys.stderr)
+    sys.exit(1)
+
+addition = '''
+
+include $(CLEAR_VARS)
+
+LOCAL_EXPORT_C_INCLUDE_DIRS   := $(LOCAL_PATH)
+LOCAL_SHARED_LIBRARIES        := liblog libcutils
+LOCAL_C_INCLUDES              := $(common_includes)
+LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
+LOCAL_SRC_FILES               := qdMetaData.cpp
+LOCAL_CFLAGS                  := $(common_flags) -Wno-sign-conversion
+LOCAL_CFLAGS                  += -DLOG_TAG="DisplayMetaData"
+LOCAL_CLANG                   := true
+LOCAL_MODULE_TAGS             := optional
+LOCAL_MODULE                  := libqdMetaData
+LOCAL_PROPRIETARY_MODULE      := true
+include $(BUILD_SHARED_LIBRARY)
+'''
+
+first = text.find(anchor)
+updated = text[:first + len(anchor)] + addition + text[first + len(anchor):]
+path.write_text(updated)
+print(f"Restored libqdMetaData module definition in {path}")
 PY
 
 python3 - "$GRALLOC_MK" <<'PY'
