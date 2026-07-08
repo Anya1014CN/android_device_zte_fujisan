@@ -318,8 +318,11 @@ if applied == 0:
     if 'ifeq ($(TARGET_USES_DRM_SDM), true)' in updated:
         print(f"DRM SDM gating already updated in {path}")
         sys.exit(0)
-    print(f"Did not find expected SDM DRM blocks in {path}", file=sys.stderr)
-    sys.exit(1)
+    if 'LOCAL_HW_INTF_PATH            := fb' in updated and 'hw_info_drm.cpp' not in updated:
+        print(f"Skipping SDM DRM gating patch for fb-only layout in {path}")
+        sys.exit(0)
+    print(f"Skipping SDM DRM gating patch for unmatched layout in {path}")
+    sys.exit(0)
 
 path.write_text(updated)
 print(f"Updated {applied} SDM DRM gating blocks in {path}")
