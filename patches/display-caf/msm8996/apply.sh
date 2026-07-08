@@ -200,19 +200,45 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 
-if 'display-hals := include libqdutils libqservice $(sdm-libs)/utils $(sdm-libs)/core' in text:
-    print(f"Display HAL module list already exports libqdutils in {path}")
+updated = text
+applied = 0
+
+if updated.startswith('ifeq ($(TARGET_QCOM_DISPLAY_VARIANT),caf-msm8996)\n'):
+    updated = updated[len('ifeq ($(TARGET_QCOM_DISPLAY_VARIANT),caf-msm8996)\n'):]
+    if updated.endswith('\nendif\n'):
+        updated = updated[:-len('\nendif\n')] + '\n'
+    elif updated.endswith('\nendif'):
+        updated = updated[:-len('\nendif')] + '\n'
+    applied += 1
+
+if 'display-hals := include libqdutils libqservice $(sdm-libs)/utils $(sdm-libs)/core' in updated:
+    if applied == 0:
+        print(f"Display HAL module list already exports libqdutils in {path}")
+        sys.exit(0)
+    path.write_text(updated)
+    print(f"Removed variant gate from display HAL makefile in {path}")
     sys.exit(0)
 
 old = 'display-hals := include $(sdm-libs)/utils $(sdm-libs)/core'
 new = 'display-hals := include libqdutils libqservice $(sdm-libs)/utils $(sdm-libs)/core'
 
-if old not in text:
+alt_old = 'display-hals := libcopybit libmemtrack libqservice libqdutils'
+
+if old in updated:
+    updated = updated.replace(old, new, 1)
+    applied += 1
+elif alt_old in updated:
+    # This layout already exports libqdutils/libqservice, only keep any gate removal above.
+    pass
+else:
     print(f"Did not find expected display-hals definition in {path}", file=sys.stderr)
     sys.exit(1)
 
-path.write_text(text.replace(old, new, 1))
-print(f"Added libqdutils/libqservice to display HAL module list in {path}")
+path.write_text(updated)
+if applied == 0:
+    print(f"Display HAL module list already exports libqdutils in {path}")
+else:
+    print(f"Updated display HAL makefile for libqdutils bring-up in {path}")
 PY
 
 python3 - "$GRALLOC_MK" <<'PY'
