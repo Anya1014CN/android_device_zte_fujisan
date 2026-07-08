@@ -20,6 +20,7 @@ fi
 
 QDUTILS_MK="$DISPLAY_ROOT/libqdutils/Android.mk"
 QDUTILS_BP="$DISPLAY_ROOT/libqdutils/Android.bp"
+DISPLAY_TOP_MK="$DISPLAY_ROOT/Android.mk"
 DISPLAY_CONFIG_H="$DISPLAY_ROOT/libqdutils/display_config.h"
 GRALLOC_MK="$DISPLAY_ROOT/libgralloc/Android.mk"
 LIGHTS_PRV_CPP="$DISPLAY_ROOT/liblight/lights_prv.cpp"
@@ -38,6 +39,11 @@ fi
 
 if [ ! -f "$DISPLAY_CONFIG_H" ]; then
   echo "Missing target file: $DISPLAY_CONFIG_H" >&2
+  exit 1
+fi
+
+if [ ! -f "$DISPLAY_TOP_MK" ]; then
+  echo "Missing target file: $DISPLAY_TOP_MK" >&2
   exit 1
 fi
 
@@ -185,6 +191,28 @@ cc_library_shared {
 updated = text[:end] + addition + text[end:]
 path.write_text(updated)
 print(f"Restored libqdMetaData module definition in {path}")
+PY
+
+python3 - "$DISPLAY_TOP_MK" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+if 'display-hals := include libqdutils libqservice $(sdm-libs)/utils $(sdm-libs)/core' in text:
+    print(f"Display HAL module list already exports libqdutils in {path}")
+    sys.exit(0)
+
+old = 'display-hals := include $(sdm-libs)/utils $(sdm-libs)/core'
+new = 'display-hals := include libqdutils libqservice $(sdm-libs)/utils $(sdm-libs)/core'
+
+if old not in text:
+    print(f"Did not find expected display-hals definition in {path}", file=sys.stderr)
+    sys.exit(1)
+
+path.write_text(text.replace(old, new, 1))
+print(f"Added libqdutils/libqservice to display HAL module list in {path}")
 PY
 
 python3 - "$GRALLOC_MK" <<'PY'
