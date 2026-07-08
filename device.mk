@@ -84,7 +84,6 @@ PRODUCT_PACKAGES += \
     ZTE_Camera \
     DoubleLay_MFV_Multy \
     axonmcontroller_MFV_Multy \
-    handservice_mfv_mfv6 \
     launchmodetest1_MFV_Multy \
 
 PRODUCT_BOOT_JARS += \

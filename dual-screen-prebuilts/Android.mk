@@ -56,14 +56,3 @@ LOCAL_CERTIFICATE := platform
 LOCAL_PRIVILEGED_MODULE := true
 LOCAL_DEX_PREOPT := false
 include $(BUILD_PREBUILT)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE := handservice_mfv_mfv6
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_CLASS := APPS
-LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
-LOCAL_MODULE_STEM := handservice_mfv_mfv6
-LOCAL_SRC_FILES := ../prebuilt/dual-screen/apps/handservice_mfv_mfv6/handservice_mfv_mfv6.apk
-LOCAL_CERTIFICATE := platform
-LOCAL_DEX_PREOPT := false
-include $(BUILD_PREBUILT)
