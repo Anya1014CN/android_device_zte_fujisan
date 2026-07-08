@@ -2,47 +2,57 @@
 set -eu
 
 ROOT="${1:-$PWD}"
-find_first() {
-  find "$1" $2 2>/dev/null | head -n 1
-}
+DISPLAY_ROOT=""
+for candidate in \
+  "$ROOT/hardware/qcom/display/msm8996" \
+  "$ROOT/hardware/qcom/display-caf/msm8996"
+do
+  if [ -d "$candidate" ]; then
+    DISPLAY_ROOT="$candidate"
+    break
+  fi
+done
 
-DISPLAY_SEARCH_ROOT="$ROOT/hardware/qcom"
+if [ -z "$DISPLAY_ROOT" ]; then
+  echo "Missing target directory: hardware/qcom/display/msm8996 or hardware/qcom/display-caf/msm8996" >&2
+  exit 1
+fi
 
-QDUTILS_MK="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */libqdutils/Android.mk")"
-QDUTILS_BP="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */libqdutils/Android.bp")"
-DISPLAY_CONFIG_H="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */libqdutils/display_config.h")"
-GRALLOC_MK="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */libgralloc/Android.mk")"
-LIGHTS_PRV_CPP="$(find_first "$DISPLAY_SEARCH_ROOT" "-name lights_prv.cpp")"
-SDM_CORE_MK="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */sdm/libs/core/Android.mk")"
-HWC_SESSION_CPP="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */sdm/libs/hwc2/hwc_session.cpp")"
+QDUTILS_MK="$DISPLAY_ROOT/libqdutils/Android.mk"
+QDUTILS_BP="$DISPLAY_ROOT/libqdutils/Android.bp"
+DISPLAY_CONFIG_H="$DISPLAY_ROOT/libqdutils/display_config.h"
+GRALLOC_MK="$DISPLAY_ROOT/libgralloc/Android.mk"
+LIGHTS_PRV_CPP="$DISPLAY_ROOT/liblight/lights_prv.cpp"
+SDM_CORE_MK="$DISPLAY_ROOT/sdm/libs/core/Android.mk"
+HWC_SESSION_CPP="$DISPLAY_ROOT/sdm/libs/hwc2/hwc_session.cpp"
 
 if [ -z "$QDUTILS_MK" ] && [ -z "$QDUTILS_BP" ]; then
-  echo "Missing target file: libqdutils/Android.mk or libqdutils/Android.bp under $DISPLAY_SEARCH_ROOT" >&2
+  echo "Missing target file: $QDUTILS_MK or $QDUTILS_BP" >&2
   exit 1
 fi
 
-if [ -z "$DISPLAY_CONFIG_H" ] || [ ! -f "$DISPLAY_CONFIG_H" ]; then
-  echo "Missing target file: libqdutils/display_config.h under $DISPLAY_SEARCH_ROOT" >&2
+if [ ! -f "$QDUTILS_MK" ] && [ ! -f "$QDUTILS_BP" ]; then
+  echo "Missing target file: $QDUTILS_MK or $QDUTILS_BP" >&2
   exit 1
 fi
 
-if [ -z "$GRALLOC_MK" ] || [ ! -f "$GRALLOC_MK" ]; then
-  echo "Missing target file: libgralloc/Android.mk under $DISPLAY_SEARCH_ROOT" >&2
+if [ ! -f "$DISPLAY_CONFIG_H" ]; then
+  echo "Missing target file: $DISPLAY_CONFIG_H" >&2
   exit 1
 fi
 
-if [ -z "$LIGHTS_PRV_CPP" ] || [ ! -f "$LIGHTS_PRV_CPP" ]; then
-  echo "Missing target file: lights_prv.cpp under $DISPLAY_SEARCH_ROOT" >&2
+if [ ! -f "$GRALLOC_MK" ]; then
+  echo "Missing target file: $GRALLOC_MK" >&2
   exit 1
 fi
 
-if [ -z "$SDM_CORE_MK" ] || [ ! -f "$SDM_CORE_MK" ]; then
-  echo "Missing target file: sdm/libs/core/Android.mk under $DISPLAY_SEARCH_ROOT" >&2
+if [ ! -f "$SDM_CORE_MK" ]; then
+  echo "Missing target file: $SDM_CORE_MK" >&2
   exit 1
 fi
 
-if [ -z "$HWC_SESSION_CPP" ] || [ ! -f "$HWC_SESSION_CPP" ]; then
-  echo "Missing target file: sdm/libs/hwc2/hwc_session.cpp under $DISPLAY_SEARCH_ROOT" >&2
+if [ ! -f "$HWC_SESSION_CPP" ]; then
+  echo "Missing target file: $HWC_SESSION_CPP" >&2
   exit 1
 fi
 
@@ -199,6 +209,7 @@ path.write_text(text.replace(old, new, 1))
 print(f"Linked libqdutils into gralloc module in {path}")
 PY
 
+if [ -f "$LIGHTS_PRV_CPP" ]; then
 python3 - "$LIGHTS_PRV_CPP" <<'PY'
 from pathlib import Path
 import sys
@@ -254,6 +265,9 @@ if old not in text:
 path.write_text(text.replace(old, new, 1))
 print(f"Replaced liblight proprietary color API usage in {path}")
 PY
+else
+  echo "Skipping optional liblight compatibility patch; $LIGHTS_PRV_CPP not present"
+fi
 
 python3 - "$SDM_CORE_MK" <<'PY'
 from pathlib import Path
