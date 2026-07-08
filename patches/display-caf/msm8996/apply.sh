@@ -2,41 +2,47 @@
 set -eu
 
 ROOT="${1:-$PWD}"
-QDUTILS_MK="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/Android.mk"
-QDUTILS_BP="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/Android.bp"
-DISPLAY_CONFIG_H="$ROOT/hardware/qcom/display-caf/msm8996/libqdutils/display_config.h"
-GRALLOC_MK="$ROOT/hardware/qcom/display-caf/msm8996/libgralloc/Android.mk"
-LIGHTS_PRV_CPP="$ROOT/hardware/qcom/display-caf/msm8996/liblight/lights_prv.cpp"
-SDM_CORE_MK="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/core/Android.mk"
-HWC_SESSION_CPP="$ROOT/hardware/qcom/display-caf/msm8996/sdm/libs/hwc2/hwc_session.cpp"
+find_first() {
+  find "$1" $2 2>/dev/null | head -n 1
+}
 
-if [ ! -f "$QDUTILS_MK" ] && [ ! -f "$QDUTILS_BP" ]; then
-  echo "Missing target file: $QDUTILS_MK or $QDUTILS_BP" >&2
+DISPLAY_SEARCH_ROOT="$ROOT/hardware/qcom"
+
+QDUTILS_MK="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */libqdutils/Android.mk")"
+QDUTILS_BP="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */libqdutils/Android.bp")"
+DISPLAY_CONFIG_H="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */libqdutils/display_config.h")"
+GRALLOC_MK="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */libgralloc/Android.mk")"
+LIGHTS_PRV_CPP="$(find_first "$DISPLAY_SEARCH_ROOT" "-name lights_prv.cpp")"
+SDM_CORE_MK="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */sdm/libs/core/Android.mk")"
+HWC_SESSION_CPP="$(find_first "$DISPLAY_SEARCH_ROOT" "-path */sdm/libs/hwc2/hwc_session.cpp")"
+
+if [ -z "$QDUTILS_MK" ] && [ -z "$QDUTILS_BP" ]; then
+  echo "Missing target file: libqdutils/Android.mk or libqdutils/Android.bp under $DISPLAY_SEARCH_ROOT" >&2
   exit 1
 fi
 
-if [ ! -f "$DISPLAY_CONFIG_H" ]; then
-  echo "Missing target file: $DISPLAY_CONFIG_H" >&2
+if [ -z "$DISPLAY_CONFIG_H" ] || [ ! -f "$DISPLAY_CONFIG_H" ]; then
+  echo "Missing target file: libqdutils/display_config.h under $DISPLAY_SEARCH_ROOT" >&2
   exit 1
 fi
 
-if [ ! -f "$GRALLOC_MK" ]; then
-  echo "Missing target file: $GRALLOC_MK" >&2
+if [ -z "$GRALLOC_MK" ] || [ ! -f "$GRALLOC_MK" ]; then
+  echo "Missing target file: libgralloc/Android.mk under $DISPLAY_SEARCH_ROOT" >&2
   exit 1
 fi
 
-if [ ! -f "$LIGHTS_PRV_CPP" ]; then
-  echo "Missing target file: $LIGHTS_PRV_CPP" >&2
+if [ -z "$LIGHTS_PRV_CPP" ] || [ ! -f "$LIGHTS_PRV_CPP" ]; then
+  echo "Missing target file: lights_prv.cpp under $DISPLAY_SEARCH_ROOT" >&2
   exit 1
 fi
 
-if [ ! -f "$SDM_CORE_MK" ]; then
-  echo "Missing target file: $SDM_CORE_MK" >&2
+if [ -z "$SDM_CORE_MK" ] || [ ! -f "$SDM_CORE_MK" ]; then
+  echo "Missing target file: sdm/libs/core/Android.mk under $DISPLAY_SEARCH_ROOT" >&2
   exit 1
 fi
 
-if [ ! -f "$HWC_SESSION_CPP" ]; then
-  echo "Missing target file: $HWC_SESSION_CPP" >&2
+if [ -z "$HWC_SESSION_CPP" ] || [ ! -f "$HWC_SESSION_CPP" ]; then
+  echo "Missing target file: sdm/libs/hwc2/hwc_session.cpp under $DISPLAY_SEARCH_ROOT" >&2
   exit 1
 fi
 
