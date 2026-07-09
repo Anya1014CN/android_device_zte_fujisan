@@ -418,52 +418,36 @@ if helper_new not in updated:
     updated = updated.replace(helper_old, helper_new, 1)
     applied += 1
 
-deinit_marker = '''int HWCSession::Deinit() {
-  if (hwc_display_[HWC_DISPLAY_EXTERNAL]) {
-    HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL]);
-    hwc_display_[HWC_DISPLAY_EXTERNAL] = 0;
-  }
-
-  HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
-'''
-
-if deinit_marker not in updated:
+if 'HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL])' not in updated:
     deinit_pattern = re.compile(
-        r'int HWCSession::Deinit\(\) \{\n'
-        r'  HWCDisplayPrimary::Destroy\(hwc_display_\[HWC_DISPLAY_PRIMARY\]\);\n',
+        r'(int HWCSession::Deinit\(\) \{\n)'
+        r'((?:  Locker::SequenceCancelScopeLock lock_[vep]'
+        r'\(locker_\[HWC_DISPLAY_(?:VIRTUAL|EXTERNAL|PRIMARY)\]\);\n)*)',
         re.M,
     )
     if not deinit_pattern.search(updated):
         print(f"Did not find expected HWCSession Deinit block in {path}", file=sys.stderr)
         sys.exit(1)
     updated = deinit_pattern.sub(
-        'int HWCSession::Deinit() {\n'
+        r'\1\2'
         '  if (hwc_display_[HWC_DISPLAY_EXTERNAL]) {\n'
         '    HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL]);\n'
-        '    hwc_display_[HWC_DISPLAY_EXTERNAL] = 0;\n'
+        '    hwc_display_[HWC_DISPLAY_EXTERNAL] = nullptr;\n'
         '  }\n'
         '\n'
-        '  HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);\n',
+        ,
         updated,
         count=1,
     )
     applied += 1
 
-register_marker = '''  if (descriptor == HWC2_CALLBACK_HOTPLUG) {
-    hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
-    if (IsFujisanDualDisplayTarget()) {
-      int secondary_status = hwc_session->HotPlugHandler(true);
-      if (secondary_status) {
-        DLOGW("Failed to bring up dual-screen secondary display, status = %d",
-              secondary_status);
-      }
-    }
-  }'''
-
-if register_marker not in updated:
+if 'int secondary_status = hwc_session->HotPlugHandler(true);' not in updated:
     register_pattern = re.compile(
-        r'  if \(descriptor == HWC2_CALLBACK_HOTPLUG\)\n'
-        r'    hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected\);\n',
+        r'  if \(descriptor == HWC2_CALLBACK_HOTPLUG\) \{\n'
+        r'(?:    if \(hwc_session->hwc_display_\[HWC_DISPLAY_PRIMARY\]\) \{\n)?'
+        r'      hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected\);\n'
+        r'(?:    \}\n)?'
+        r'  \}\n',
         re.M,
     )
     if not register_pattern.search(updated):
@@ -471,7 +455,9 @@ if register_marker not in updated:
         sys.exit(1)
     updated = register_pattern.sub(
         '  if (descriptor == HWC2_CALLBACK_HOTPLUG) {\n'
-        '    hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);\n'
+        '    if (hwc_session->hwc_display_[HWC_DISPLAY_PRIMARY]) {\n'
+        '      hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);\n'
+        '    }\n'
         '    if (IsFujisanDualDisplayTarget()) {\n'
         '      int secondary_status = hwc_session->HotPlugHandler(true);\n'
         '      if (secondary_status) {\n'
@@ -485,20 +471,7 @@ if register_marker not in updated:
     )
     applied += 1
 
-online_marker = '''        status = ConnectDisplay(HWC_DISPLAY_EXTERNAL);
-        if (status) {
-          return status;
-        }
-        if (IsFujisanDualDisplayTarget()) {
-          int online_status = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetDisplayStatus(EXTERNAL_ONLINE);
-          if (online_status) {
-            DLOGW("Failed to mark dual-screen secondary display online, status = %d",
-                  online_status);
-          }
-        }
-        notify_hotplug = true;'''
-
-if online_marker not in updated:
+if 'int online_status = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetDisplayStatus(EXTERNAL_ONLINE);' not in updated:
     online_pattern = re.compile(
         r'        status = ConnectDisplay\(HWC_DISPLAY_EXTERNAL\);\n'
         r'        if \(status\) \{\n'
