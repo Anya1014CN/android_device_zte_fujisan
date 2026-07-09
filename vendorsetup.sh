@@ -61,6 +61,15 @@ _fujisan_apply_patch \
     "$_fujisan_device_dir/patches/frameworks-native/surfaceflinger-dual/apply.sh" \
     "frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp" || { unset -f _fujisan_apply_patch; return 1; }
 
+# Remove stale prebuilt HWC installs from prior incremental builds so the
+# patched source-built module is what lands in the image.
+_fujisan_product_out="$_fujisan_source_root/out/target/product/fujisan"
+rm -f \
+    "$_fujisan_product_out/vendor/lib/hw/hwcomposer.msm8996.so" \
+    "$_fujisan_product_out/vendor/lib64/hw/hwcomposer.msm8996.so" \
+    "$_fujisan_product_out/system/vendor/lib/hw/hwcomposer.msm8996.so" \
+    "$_fujisan_product_out/system/vendor/lib64/hw/hwcomposer.msm8996.so"
+
 # Invalidate build cache for patched files to ensure recompilation.
 for _f in \
     hardware/qcom/display/msm8996/libqdutils/display_config.h \
@@ -78,4 +87,5 @@ echo "fujisan: all dual-screen patches applied successfully."
 
 unset -f _fujisan_apply_patch
 unset _fujisan_device_dir
+unset _fujisan_product_out
 unset _fujisan_source_root
