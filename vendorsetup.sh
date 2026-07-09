@@ -37,7 +37,6 @@ _fujisan_apply_patch() {
         echo "fujisan: ERROR: patch $(basename "$(dirname "$script_path")") FAILED (exit code $patch_ret)" >&2
         echo "fujisan: The AOSP source tree may be out of sync. Run the following before re-lunching:" >&2
         echo "fujisan:   repo sync hardware/qcom/display-caf/msm8996" >&2
-        echo "fujisan:   repo sync hardware/qcom/display/msm8996" >&2
         echo "fujisan:   repo sync frameworks/base" >&2
         return 1
     fi
@@ -75,6 +74,8 @@ _fujisan_apply_patch \
 
 # Invalidate build cache for patched files to ensure recompilation.
 for _f in \
+    hardware/qcom/display-caf/msm8996/libqdutils/display_config.h \
+    hardware/qcom/display-caf/msm8996/sdm/libs/hwc2/hwc_session.cpp \
     hardware/qcom/display/msm8996/libqdutils/display_config.h \
     hardware/qcom/display/msm8996/sdm/libs/hwc2/hwc_session.cpp \
     frameworks/base/services/core/java/com/android/server/display/LocalDisplayAdapter.java \
