@@ -79,7 +79,7 @@ USE_OPENGL_RENDERER := true
 
 # Build HWC from source (fujisan dual-screen patches expect this).
 # The prebuilt HWC blob in the vendor tree is intentionally excluded
-# so that the patched source under hardware/qcom/display-caf/msm8996/
+# so that the patched source under hardware/qcom/display/msm8996/
 # produces the hwcomposer.msm8996.so module.
 TARGET_USES_SDM_HWC2 := true
 
