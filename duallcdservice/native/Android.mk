@@ -11,6 +11,7 @@ LOCAL_SHARED_LIBRARIES := \
     libutils \
     liblog \
     libcutils \
+    vendor.display.config@1.0 \
     vendor.display.config@1.1
 LOCAL_PROPRIETARY_MODULE := true
 LOCAL_INIT_RC := dualscreen-helper.rc
