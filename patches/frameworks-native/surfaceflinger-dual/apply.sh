@@ -11,100 +11,97 @@ fi
 
 python3 - "$TARGET" <<'PY'
 from pathlib import Path
-import re
-import sys
+import re, sys
 
 path = Path(sys.argv[1])
 text = path.read_text()
 
-# We add a synthetic hotplug for the external display (displayId=1)
-# during SurfaceFlinger initialization when ro.feature.target_dual_display=1.
-# This bypasses the need for HWC to send a hotplug event for the second panel.
+# Already patched?
+if 'fujisanDualDisplay' in text:
+    print(f"fujisan: dual-display patch already present in {path}")
+    sys.exit(0)
 
-new_code = '''
-    // Fujisan dual-display: synthetically hotplug the external display
-    // so SurfaceFlinger creates a DisplayDevice for the second panel
-    // without waiting for an HWC hotplug event that never fires.
+# Remove any stale broken code from previous attempts
+for stale in [
+    'onHotplugReceived(0, HWC_DISPLAY_EXTERNAL,',
+    'onHotplugReceived(HWC_DISPLAY_EXTERNAL,',
+]:
+    if stale in text:
+        i = text.find(stale)
+        # Find the enclosing block
+        start = text.rfind('{', 0, i)
+        if start >= 0:
+            depth = 1
+            end = start + 1
+            while depth > 0 and end < len(text):
+                if text[end] == '{': depth += 1
+                elif text[end] == '}': depth -= 1
+                end += 1
+            block = text[start:end]
+            if 'ro.feature.target_dual_display' in block:
+                text = text[:start] + text[end:]
+                print(f"fujisan: removed stale hotplug block")
+
+# Find processDisplayChangesLocked and insert the dual-display
+# property check at the beginning of the function.
+# Also find isConnected() calls and override them.
+
+# Strategy 1: Add a local variable at the top of processDisplayChangesLocked
+add_var = '''    // Fujisan dual-display: bypass isConnected check for built-in external panel.
+    bool fujisanDualDisplay = false;
     {
-        char dualProp[PROPERTY_VALUE_MAX];
-        property_get("ro.feature.target_dual_display", dualProp, "0");
-        if (dualProp[0] == '1') {
-            onHotplugReceived(0, HWC_DISPLAY_EXTERNAL,
-                HWC2::Connection::Connected, false);
-        }
+        char p[PROPERTY_VALUE_MAX];
+        property_get("ro.feature.target_dual_display", p, "0");
+        fujisanDualDisplay = (p[0] == '1');
     }
 '''
 
-# Remove any stale broken version before applying the correct one.
-old_broken = 'onHotplugReceived(HWC_DISPLAY_EXTERNAL, true);'
-if old_broken in text:
-    text = text.replace(old_broken, '')
-    print(f"fujisan: removed stale broken hotplug call")
+# Find processDisplayChangesLocked body start
+m = re.search(r'(void SurfaceFlinger::processDisplayChangesLocked\(\)\s*\{)', text)
+if not m:
+    print(f"fujisan: ERROR: processDisplayChangesLocked not found", file=sys.stderr)
+    sys.exit(1)
 
-if 'onHotplugReceived(0, HWC_DISPLAY_EXTERNAL,' in text and 'HWC2::Connection::Connected' in text:
-    print(f"fujisan: correct dual-display hotplug already present in {path}")
-    path.write_text(text)
-    sys.exit(0)
+# Find first statement after opening brace
+body_start = m.end()
+# Skip comments and blank lines to find first real code
+pos = body_start
+while pos < len(text) and text[pos] in ' \t\n\r':
+    pos += 1
+# Skip // comments
+if pos < len(text) and text[pos:pos+2] == '//':
+    pos = text.find('\n', pos) + 1
 
-applied = False
+# Insert variable after the opening brace but before first real code
+text = text[:body_start] + '\n' + add_var + '\n' + text[body_start:]
+applied = True
+print(f"fujisan: inserted fujisanDualDisplay variable in processDisplayChangesLocked")
 
-# Option 1: Insert after HWC callback registration in init()
-# Look for "registerCallback" call in init()
-m = re.search(
-    r'(mHwc->registerCallback\(\s*\w+\s*,\s*\w+\s*\)\s*[;,])(.*?)(\s*//.*?\n|\s*\n)',
-    text,
-    re.DOTALL
-)
-if m:
-    pos = m.end()
-    text = text[:pos] + new_code + text[pos:]
-    applied = True
-    print(f"fujisan: inserted dual-display hotplug after HWC callback registration")
+# Strategy 2: Modify isConnected() to include our override
+# Typically: getHwComposer().isConnected(displayToken)
+# Change to: (getHwComposer().isConnected(displayToken) || fujisanDualDisplay)
+override_count = 0
+for pattern in [
+    r'getHwComposer\(\)\.isConnected\((\w+)\)',
+    r'mHwc->isConnected\((\w+)\)',
+]:
+    matches = list(re.finditer(pattern, text))
+    for m in matches:
+        if 'fujisanDualDisplay' not in text[m.start()-50:m.end()+50]:
+            old = m.group(0)
+            new = f'({old} || fujisanDualDisplay)'
+            text = text[:m.start()] + new + text[m.end():]
+            override_count += 1
+            print(f"fujisan: modified isConnected call: {old}")
 
-# Option 2: If registerCallback pattern doesn't match, try after getHwComposer().registerCallback
-if not applied:
-    m = re.search(
-        r'(getHwComposer\(\)\.registerCallback\(\s*\w+\s*,\s*\w+\s*\))',
-        text
-    )
-    if m:
-        pos = text.find(';', m.end())
-        if pos >= 0:
-            text = text[:pos+1] + new_code + text[pos+1:]
-            applied = True
-            print(f"fujisan: inserted dual-display hotplug after registerCallback")
-
-# Option 3: Insert at the end of init() before the closing brace
-if not applied:
-    m = re.search(
-        r'(void SurfaceFlinger::init\(\).*?)(\n\})',
-        text,
-        re.DOTALL
-    )
-    if m:
-        pos = m.start(2)
-        text = text[:pos] + new_code + text[pos:]
-        applied = True
-        print(f"fujisan: inserted dual-display hotplug at end of init()")
-
-# Option 4: Insert in processDisplayChangesLocked
-if not applied:
-    m = re.search(
-        r'(void SurfaceFlinger::processDisplayChangesLocked\(\)).*?(\{)',
-        text,
-        re.DOTALL
-    )
-    if m:
-        pos = m.end(2)
-        text = text[:pos] + new_code + text[pos:]
-        applied = True
-        print(f"fujisan: inserted dual-display hotplug in processDisplayChangesLocked")
-
-if applied:
-    path.write_text(text)
-    print(f"fujisan: SurfaceFlinger dual-display patch applied")
+if override_count == 0:
+    print(f"fujisan: WARNING: no isConnected calls found to override")
+    print(f"fujisan: The external display will not be auto-connected.")
+    print(f"fujisan: Check SurfaceFlinger.cpp for the correct connection check pattern.")
 else:
-    print(f"fujisan: WARNING: could not find insertion point - SurfaceFlinger.cpp may have changed", file=sys.stderr)
-    sys.exit(0)
+    print(f"fujisan: overrode {override_count} isConnected call(s)")
+
+path.write_text(text)
+print(f"fujisan: SurfaceFlinger dual-display patch applied")
 
 PY
