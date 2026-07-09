@@ -77,6 +77,12 @@ TARGET_USES_OVERLAY := true
 TARGET_USES_QCOM_DISPLAY_BSP := true
 USE_OPENGL_RENDERER := true
 
+# Build HWC from source (fujisan dual-screen patches expect this).
+# The prebuilt HWC blob in the vendor tree is intentionally excluded
+# so that the patched source under hardware/qcom/display-caf/msm8996/
+# produces the hwcomposer.msm8996.so module.
+TARGET_USES_SDM_HWC2 := true
+
 # Recovery
 TARGET_RECOVERY_PIXEL_FORMAT := "RGBX_8888"
 RECOVERY_GRAPHICS_USE_LINELENGTH := true

@@ -19,30 +19,47 @@ fi
 _fujisan_apply_patch() {
     local script_path="$1"
     local marker_path="$2"
+    local patch_ret=0
 
     if [ -n "$marker_path" ] && [ ! -f "$_fujisan_source_root/$marker_path" ]; then
         return 0
     fi
 
     if [ ! -f "$script_path" ]; then
-        echo "fujisan: missing patch script $script_path" >&2
+        echo "fujisan: ERROR: missing patch script $script_path" >&2
         return 1
     fi
 
-    sh "$script_path" "$_fujisan_source_root"
+    echo "fujisan: applying patch $(basename "$(dirname "$script_path")")/$(basename "$script_path") ..."
+    sh "$script_path" "$_fujisan_source_root" || patch_ret=$?
+
+    if [ $patch_ret -ne 0 ]; then
+        echo "fujisan: ERROR: patch $(basename "$(dirname "$script_path")") FAILED (exit code $patch_ret)" >&2
+        echo "fujisan: The AOSP source tree may be out of sync. Run the following before re-lunching:" >&2
+        echo "fujisan:   repo sync hardware/qcom/display-caf/msm8996" >&2
+        echo "fujisan:   repo sync hardware/qcom/display/msm8996" >&2
+        echo "fujisan:   repo sync frameworks/base" >&2
+        return 1
+    fi
 }
 
 if [ "${FUJISAN_PATCH_ROOT-}" != "$_fujisan_source_root" ]; then
     export FUJISAN_PATCH_ROOT="$_fujisan_source_root"
+    echo "fujisan: applying dual-screen patches ..."
+
     _fujisan_apply_patch \
         "$_fujisan_device_dir/patches/display-caf/msm8996/apply.sh" \
-        ""
+        "" || { unset -f _fujisan_apply_patch; return 1; }
+
     _fujisan_apply_patch \
         "$_fujisan_device_dir/patches/frameworks-base/local-display-adapter/apply.sh" \
-        "frameworks/base/services/core/java/com/android/server/display/LocalDisplayAdapter.java"
+        "frameworks/base/services/core/java/com/android/server/display/LocalDisplayAdapter.java" || { unset -f _fujisan_apply_patch; return 1; }
+
     _fujisan_apply_patch \
         "$_fujisan_device_dir/patches/frameworks-base/systemui-keyguard/apply.sh" \
-        "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java"
+        "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java" || { unset -f _fujisan_apply_patch; return 1; }
+
+    echo "fujisan: all dual-screen patches applied successfully."
 fi
 
 unset -f _fujisan_apply_patch
