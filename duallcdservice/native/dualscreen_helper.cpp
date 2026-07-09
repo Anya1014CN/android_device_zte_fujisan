@@ -1,12 +1,10 @@
 #include <android/hardware/graphics/composer/2.1/IComposer.h>
 #include <android/hardware/graphics/composer/2.1/IComposerClient.h>
-#include <android/hardware/graphics/composer/2.1/types.h>
 #include <utils/Log.h>
-#include <cutils/properties.h>
 #include <unistd.h>
 
-using namespace android::hardware::graphics::composer::V2_1;
 using android::sp;
+using namespace android::hardware::graphics::composer::V2_1;
 
 int main() {
     ALOGI("dualscreen-helper: starting");
@@ -21,7 +19,6 @@ int main() {
 
         ALOGI("dualscreen-helper: got composer service");
 
-        // Create a client
         sp<IComposerClient> client;
         composer->createClient([&](const auto& err, const auto& c) {
             if (err == Error::NONE) {
@@ -38,10 +35,7 @@ int main() {
             return 1;
         }
 
-        // Set power mode ON for external display (HIDL Display enum:
-        // INVALID=0, DISPLAY_PRIMARY=1, DISPLAY_EXTERNAL=2)
-        const Display kExternalDisplay = static_cast<Display>(2);
-        Error err = client->setPowerMode(kExternalDisplay,
+        Error err = client->setPowerMode(static_cast<Display>(2),
             IComposerClient::PowerMode::ON);
         if (err == Error::NONE) {
             ALOGI("dualscreen-helper: setPowerMode(ON) for display 2 SUCCESS");
@@ -49,10 +43,6 @@ int main() {
             ALOGE("dualscreen-helper: setPowerMode failed, err=%d",
                   static_cast<int>(err));
         }
-
-        // Also try to register a callback (this forces SurfaceFlinger
-        // to know about the display)
-        composer->registerCallback(nullptr, [](const auto&, const auto&, const auto&) {});
 
         return (err == Error::NONE) ? 0 : 1;
     }
