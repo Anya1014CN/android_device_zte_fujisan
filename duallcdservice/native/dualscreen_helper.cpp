@@ -1,52 +1,42 @@
-#include <android/hardware/graphics/composer/2.1/IComposer.h>
-#include <android/hardware/graphics/composer/2.1/IComposerClient.h>
+#include <vendor/display/config/1.1/IDisplayConfig.h>
 #include <utils/Log.h>
 #include <unistd.h>
 
 using android::sp;
-using namespace android::hardware::graphics::composer::V2_1;
+using vendor::display::config::V1_1::IDisplayConfig;
+using vendor::display::config::V1_0::IDisplayConfig as IDisplayConfigV1_0;
 
 int main() {
     ALOGI("dualscreen-helper: starting");
 
     for (int i = 0; i < 30; i++) {
-        sp<IComposer> composer = IComposer::getService();
-        if (composer == nullptr) {
-            ALOGI("dualscreen-helper: waiting for composer service... (%d)", i);
+        sp<IDisplayConfig> config = IDisplayConfig::getService();
+        if (config == nullptr) {
+            ALOGI("dualscreen-helper: waiting for IDisplayConfig... (%d)", i);
             sleep(1);
             continue;
         }
 
-        ALOGI("dualscreen-helper: got composer service");
+        ALOGI("dualscreen-helper: got IDisplayConfig service");
 
-        sp<IComposerClient> client;
-        composer->createClient([&](const auto& err, const auto& c) {
-            if (err == Error::NONE) {
-                client = c;
-                ALOGI("dualscreen-helper: composer client created");
-            } else {
-                ALOGE("dualscreen-helper: createClient failed, err=%d",
-                      static_cast<int>(err));
-            }
-        });
+        // DisplayType::EXTERNAL = 1
+        // DisplayExternalStatus: EXTERNAL_OFFLINE=0, EXTERNAL_ONLINE=1
+        IDisplayConfigV1_0::DisplayType extType =
+            IDisplayConfigV1_0::DisplayType::EXTERNAL;
+        IDisplayConfig::DisplayExternalStatus status =
+            IDisplayConfig::DisplayExternalStatus::EXTERNAL_ONLINE;
 
-        if (client == nullptr) {
-            ALOGE("dualscreen-helper: null client");
-            return 1;
-        }
-
-        Error err = client->setPowerMode(static_cast<Display>(2),
-            IComposerClient::PowerMode::ON);
-        if (err == Error::NONE) {
-            ALOGI("dualscreen-helper: setPowerMode(ON) for display 2 SUCCESS");
+        auto ret = config->setSecondayDisplayStatus(extType, status);
+        if (ret.isOk()) {
+            ALOGI("dualscreen-helper: setSecondayDisplayStatus(EXTERNAL, ONLINE) SUCCESS");
+            return 0;
         } else {
-            ALOGE("dualscreen-helper: setPowerMode failed, err=%d",
-                  static_cast<int>(err));
+            ALOGE("dualscreen-helper: setSecondayDisplayStatus failed");
         }
 
-        return (err == Error::NONE) ? 0 : 1;
+        return 1;
     }
 
-    ALOGE("dualscreen-helper: timed out waiting for composer");
+    ALOGE("dualscreen-helper: timed out waiting for IDisplayConfig");
     return 1;
 }

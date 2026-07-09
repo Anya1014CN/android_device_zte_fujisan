@@ -11,7 +11,7 @@ LOCAL_SHARED_LIBRARIES := \
     libutils \
     liblog \
     libcutils \
-    android.hardware.graphics.composer@2.1
+    vendor.display.config@1.1
 LOCAL_PROPRIETARY_MODULE := true
 LOCAL_INIT_RC := dualscreen-helper.rc
 include $(BUILD_EXECUTABLE)
