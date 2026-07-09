@@ -19,20 +19,18 @@ static void* delayed_init(void*) {
         return nullptr;
     }
 
-    auto getFunc = (HWC2_PFN_GET_FUNCTION)g_hwc2_dev->getFunction(
-        g_hwc2_dev, HWC2_FUNCTION_GET_FUNCTION);
-    if (!getFunc) {
-        ALOGE("dualscreen-preload: no getFunction");
+    if (!g_hwc2_dev->getFunction) {
+        ALOGE("dualscreen-preload: no getFunction hook");
         return nullptr;
     }
 
     // Try to set power mode ON for external display (id=1)
-    auto setPowerMode = (HWC2_PFN_SET_POWER_MODE)getFunc(
-        HWC2_FUNCTION_SET_POWER_MODE);
+    auto setPowerMode = reinterpret_cast<HWC2_PFN_SET_POWER_MODE>(
+        g_hwc2_dev->getFunction(g_hwc2_dev, HWC2_FUNCTION_SET_POWER_MODE));
     if (setPowerMode) {
         // First try to get display type to see if display 1 exists
-        auto getDisplayType = (HWC2_PFN_GET_DISPLAY_TYPE)getFunc(
-            HWC2_FUNCTION_GET_DISPLAY_TYPE);
+        auto getDisplayType = reinterpret_cast<HWC2_PFN_GET_DISPLAY_TYPE>(
+            g_hwc2_dev->getFunction(g_hwc2_dev, HWC2_FUNCTION_GET_DISPLAY_TYPE));
         if (getDisplayType) {
             int32_t type = -1;
             getDisplayType(g_hwc2_dev, 1, &type);
