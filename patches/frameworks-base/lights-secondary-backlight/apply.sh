@@ -35,16 +35,20 @@ for new_import, anchor in imports.items():
             sys.exit(1)
         updated = updated.replace(anchor, anchor + new_import, 1)
 
-native_call = '''                    setLight_native(mId, color, mode, onMS, offMS, brightnessMode);
-'''
-replacement = native_call + '''                    if (mId == LightsManager.LIGHT_ID_BACKLIGHT) {
+native_call_pattern = re.compile(
+    r'''(                    setLight_native\(mId, color, mode, onMS, offMS,\s*'''
+    r'''(?:brightnessMode|brightnessMode,\s*mBrightnessLevel)\);)\n''',
+    re.S,
+)
+replacement = r'''\1
+                    if (mId == LightsManager.LIGHT_ID_BACKLIGHT) {
                         syncFujisanSecondaryBacklight(color & 0x000000ff);
                     }
 '''
-if native_call not in updated:
+if not native_call_pattern.search(updated):
     print(f"Did not find setLight_native call in {path}", file=sys.stderr)
     sys.exit(1)
-updated = updated.replace(native_call, replacement, 1)
+updated = native_call_pattern.sub(replacement, updated, count=1)
 
 helper_anchor = '''    private int getVrDisplayMode() {
 '''
