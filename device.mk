@@ -74,7 +74,6 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     dualscreen-helper \
-    hwcomposer.msm8996 \
     libdualscreen-preload \
     libdolbyshim \
     libion \
