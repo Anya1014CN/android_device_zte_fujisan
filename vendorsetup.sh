@@ -73,6 +73,7 @@ rm -f \
 # Invalidate build cache for patched files to ensure recompilation.
 for _f in \
     hardware/qcom/display/msm8996/libqdutils/display_config.h \
+    hardware/qcom/display/msm8996/sdm/libs/hwc2/Android.mk \
     hardware/qcom/display/msm8996/sdm/libs/hwc2/hwc_session.cpp \
     frameworks/base/services/core/java/com/android/server/display/LocalDisplayAdapter.java \
     frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java \
