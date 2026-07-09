@@ -56,14 +56,43 @@ add_var = '''    // Fujisan dual-display: bypass isConnected check for built-in 
     }
 '''
 
-# Find processDisplayChangesLocked body start
-m = re.search(r'(void SurfaceFlinger::processDisplayChangesLocked\(\)\s*\{)', text)
-if not m:
-    print(f"fujisan: ERROR: processDisplayChangesLocked not found", file=sys.stderr)
+# Find the function that processes display changes (name varies by AOSP version)
+func_match = None
+for func_name in [
+    'processDisplayChangesLocked',
+    'handleMessageRefresh',
+    'onHotplugReceived',
+    'processDisplayHotplugEventsLocked',
+    'handleTransactionLocked',
+    'setupNewDisplayDeviceInternal',
+    'createDisplayDeviceFromHotplugEvent',
+]:
+    m = re.search(rf'((?:void|bool|int|status_t)\s+SurfaceFlinger::{func_name}\(\s*[^)]*\)\s*\{{)', text)
+    if m:
+        func_match = m
+        print(f"fujisan: found target function: {func_name}")
+        break
+
+if not func_match:
+    # Look for isConnected usage and find the enclosing function
+    m = re.search(r'getHwComposer\(\)\.isConnected\(', text)
+    if m:
+        # Find the function containing this call
+        pos = m.start()
+        # Search backwards for function definition
+        prev_func = None
+        for fn in re.finditer(r'(?:void|bool|int|status_t|sp<\w+>)\s+SurfaceFlinger::(\w+)\(\s*[^)]*\)\s*\{', text[:pos]):
+            prev_func = fn
+        if prev_func:
+            m = prev_func
+            func_match = prev_func
+            print(f"fujisan: found containing function with isConnected: {prev_func.group(1)}")
+
+if not func_match:
+    print(f"fujisan: ERROR: could not find target function in SurfaceFlinger.cpp", file=sys.stderr)
     sys.exit(1)
 
-# Find first statement after opening brace
-body_start = m.end()
+body_start = func_match.end()
 # Skip comments and blank lines to find first real code
 pos = body_start
 while pos < len(text) and text[pos] in ' \t\n\r':
