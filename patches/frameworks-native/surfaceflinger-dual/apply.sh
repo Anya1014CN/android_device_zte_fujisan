@@ -29,7 +29,9 @@ new_code = '''
         char dualProp[PROPERTY_VALUE_MAX];
         property_get("ro.feature.target_dual_display", dualProp, "0");
         if (dualProp[0] == '1') {
-            onHotplugReceived(HWC_DISPLAY_EXTERNAL, true);
+            onHotplugReceived(0, HWC_DISPLAY_EXTERNAL,
+                static_cast<hwc2_connection_t>(HWC2::Connection::Connected),
+                false);
         }
     }
 '''
