@@ -26,7 +26,6 @@ GRALLOC_MK="$DISPLAY_ROOT/libgralloc/Android.mk"
 LIGHTS_PRV_CPP="$DISPLAY_ROOT/liblight/lights_prv.cpp"
 SDM_CORE_MK="$DISPLAY_ROOT/sdm/libs/core/Android.mk"
 HWC_SESSION_CPP="$DISPLAY_ROOT/sdm/libs/hwc2/hwc_session.cpp"
-HWC2_MK="$DISPLAY_ROOT/sdm/libs/hwc2/Android.mk"
 
 if [ -z "$QDUTILS_MK" ] && [ -z "$QDUTILS_BP" ]; then
   echo "Missing target file: $QDUTILS_MK or $QDUTILS_BP" >&2
@@ -60,11 +59,6 @@ fi
 
 if [ ! -f "$HWC_SESSION_CPP" ]; then
   echo "Missing target file: $HWC_SESSION_CPP" >&2
-  exit 1
-fi
-
-if [ ! -f "$HWC2_MK" ]; then
-  echo "Missing target file: $HWC2_MK" >&2
   exit 1
 fi
 
@@ -386,35 +380,6 @@ if applied == 0:
 
 path.write_text(updated)
 print(f"Updated {applied} SDM DRM gating blocks in {path}")
-PY
-
-python3 - "$HWC2_MK" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-
-path32 = 'LOCAL_MODULE_PATH_32         := $(2ND_TARGET_OUT_VENDOR_SHARED_LIBRARIES)'
-path64 = 'LOCAL_MODULE_PATH_64         := $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)'
-
-if path32 in text and path64 in text:
-    print(f"HWC2 install path already pinned to vendor in {path}")
-    sys.exit(0)
-
-anchor = 'LOCAL_MODULE_RELATIVE_PATH    := hw\n'
-addition = (
-    'LOCAL_MODULE_RELATIVE_PATH    := hw\n'
-    'LOCAL_MODULE_PATH_32         := $(2ND_TARGET_OUT_VENDOR_SHARED_LIBRARIES)\n'
-    'LOCAL_MODULE_PATH_64         := $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)\n'
-)
-
-if anchor not in text:
-    print(f"Did not find expected HWC2 install path anchor in {path}", file=sys.stderr)
-    sys.exit(1)
-
-path.write_text(text.replace(anchor, addition, 1))
-print(f"Pinned HWC2 install paths to vendor shared libraries in {path}")
 PY
 
 python3 - "$HWC_SESSION_CPP" <<'PY'
