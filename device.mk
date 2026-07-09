@@ -76,6 +76,7 @@ PRODUCT_PACKAGES += \
     dualscreen-helper \
     fujisan_hwcomposer_vendor_32 \
     fujisan_hwcomposer_vendor_64 \
+    hwcomposer.msm8996 \
     libdualscreen-preload \
     libdolbyshim \
     libion \
