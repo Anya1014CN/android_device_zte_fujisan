@@ -36,8 +36,15 @@ new_code = '''
     }
 '''
 
-if "ro.feature.target_dual_display" in text:
-    print(f"fujisan: dual-display hotplug already present in {path}")
+# Remove any stale broken version before applying the correct one.
+old_broken = 'onHotplugReceived(HWC_DISPLAY_EXTERNAL, true);'
+if old_broken in text:
+    text = text.replace(old_broken, '')
+    print(f"fujisan: removed stale broken hotplug call")
+
+if 'onHotplugReceived(0, HWC_DISPLAY_EXTERNAL,' in text:
+    print(f"fujisan: correct dual-display hotplug already present in {path}")
+    path.write_text(text)
     sys.exit(0)
 
 applied = False
