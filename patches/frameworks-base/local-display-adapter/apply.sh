@@ -44,7 +44,8 @@ secondary_info_new = '''            } else {
                     mInfo.name = getContext().getResources().getString(
                             com.android.internal.R.string.display_manager_hdmi_display_name);
                     mInfo.touch = DisplayDeviceInfo.TOUCH_EXTERNAL;
-                    mInfo.densityDpi = (int) (phys.density * 160 + 0.5f);
+                    mInfo.densityDpi = SystemProperties.getInt(
+                            "ro.sf.lcd_density", (int) (phys.density * 160 + 0.5f));
                     mInfo.xDpi = phys.xDpi;
                     mInfo.yDpi = phys.yDpi;
                 } else {
