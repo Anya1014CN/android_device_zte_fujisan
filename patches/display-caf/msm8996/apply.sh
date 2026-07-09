@@ -411,6 +411,21 @@ static bool IsFujisanDualDisplayTarget() {
 updated = text
 applied = 0
 
+updated = re.sub(
+    r'''        if \(IsFujisanDualDisplayTarget\(\)\) \{\n'''
+    r'''          int online_status = hwc_display_\[HWC_DISPLAY_EXTERNAL\]->SetDisplayStatus\(EXTERNAL_ONLINE\);\n'''
+    r'''          if \(online_status\) \{\n'''
+    r'''            DLOGW\("Failed to mark dual-screen secondary display online, status = %d",\n'''
+    r'''                  online_status\);\n'''
+    r'''          \}\n'''
+    r'''        \}\n''',
+    '',
+    updated,
+    count=1,
+)
+if updated != text:
+    applied += 1
+
 if helper_new not in updated:
     if helper_old not in updated:
         print(f"Did not find expected HWCSession helper block in {path}", file=sys.stderr)
@@ -466,36 +481,6 @@ if 'int secondary_status = hwc_session->HotPlugHandler(true);' not in updated:
         '      }\n'
         '    }\n'
         '  }\n',
-        updated,
-        count=1,
-    )
-    applied += 1
-
-if 'int online_status = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetDisplayStatus(EXTERNAL_ONLINE);' not in updated:
-    online_pattern = re.compile(
-        r'        status = ConnectDisplay\(HWC_DISPLAY_EXTERNAL\);\n'
-        r'        if \(status\) \{\n'
-        r'          return status;\n'
-        r'        \}\n'
-        r'        notify_hotplug = true;',
-        re.M,
-    )
-    if not online_pattern.search(updated):
-        print(f"Did not find expected HWCSession hotplug connect block in {path}", file=sys.stderr)
-        sys.exit(1)
-    updated = online_pattern.sub(
-        '        status = ConnectDisplay(HWC_DISPLAY_EXTERNAL);\n'
-        '        if (status) {\n'
-        '          return status;\n'
-        '        }\n'
-        '        if (IsFujisanDualDisplayTarget()) {\n'
-        '          int online_status = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetDisplayStatus(EXTERNAL_ONLINE);\n'
-        '          if (online_status) {\n'
-        '            DLOGW("Failed to mark dual-screen secondary display online, status = %d",\n'
-        '                  online_status);\n'
-        '          }\n'
-        '        }\n'
-        '        notify_hotplug = true;',
         updated,
         count=1,
     )
