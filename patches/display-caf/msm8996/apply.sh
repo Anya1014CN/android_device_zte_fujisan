@@ -211,7 +211,12 @@ if updated.startswith('ifeq ($(TARGET_QCOM_DISPLAY_VARIANT),caf-msm8996)\n'):
         updated = updated[:-len('\nendif')] + '\n'
     applied += 1
 
-if 'display-hals := include libqdutils libqservice $(sdm-libs)/utils $(sdm-libs)/core' in updated:
+display_hals_line = next(
+    (line for line in updated.splitlines() if line.strip().startswith('display-hals :=')),
+    '',
+)
+
+if 'libqdutils' in display_hals_line and 'libqservice' in display_hals_line:
     if applied == 0:
         print(f"Display HAL module list already exports libqdutils in {path}")
         sys.exit(0)
@@ -222,17 +227,16 @@ if 'display-hals := include libqdutils libqservice $(sdm-libs)/utils $(sdm-libs)
 old = 'display-hals := include $(sdm-libs)/utils $(sdm-libs)/core'
 new = 'display-hals := include libqdutils libqservice $(sdm-libs)/utils $(sdm-libs)/core'
 
-alt_old = 'display-hals := libcopybit libmemtrack libqservice libqdutils'
-
 if old in updated:
     updated = updated.replace(old, new, 1)
     applied += 1
-elif alt_old in updated:
-    # This layout already exports libqdutils/libqservice, only keep any gate removal above.
-    pass
 else:
-    print(f"Did not find expected display-hals definition in {path}", file=sys.stderr)
-    sys.exit(1)
+    if applied == 0:
+        print(f"Skipping Display HAL module-list patch; no display-hals definition found in {path}")
+        sys.exit(0)
+    path.write_text(updated)
+    print(f"Removed variant gate from display HAL makefile in {path}")
+    sys.exit(0)
 
 path.write_text(updated)
 if applied == 0:
