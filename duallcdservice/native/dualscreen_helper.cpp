@@ -4,7 +4,6 @@
 
 using android::sp;
 using vendor::display::config::V1_1::IDisplayConfig;
-using vendor::display::config::V1_0::IDisplayConfig as IDisplayConfigV1_0;
 
 int main() {
     ALOGI("dualscreen-helper: starting");
@@ -19,24 +18,20 @@ int main() {
 
         ALOGI("dualscreen-helper: got IDisplayConfig service");
 
-        // DisplayType::EXTERNAL = 1
-        // DisplayExternalStatus: EXTERNAL_OFFLINE=0, EXTERNAL_ONLINE=1
-        IDisplayConfigV1_0::DisplayType extType =
-            IDisplayConfigV1_0::DisplayType::EXTERNAL;
-        IDisplayConfig::DisplayExternalStatus status =
-            IDisplayConfig::DisplayExternalStatus::EXTERNAL_ONLINE;
+        // DisplayType: 0=PRIMARY, 1=EXTERNAL/HDMI
+        // DisplayExternalStatus: 0=OFFLINE, 1=ONLINE
+        auto extType = static_cast<IDisplayConfig::DisplayType>(1);
+        auto status = static_cast<IDisplayConfig::DisplayExternalStatus>(1);
 
         auto ret = config->setSecondayDisplayStatus(extType, status);
         if (ret.isOk()) {
-            ALOGI("dualscreen-helper: setSecondayDisplayStatus(EXTERNAL, ONLINE) SUCCESS");
+            ALOGI("dualscreen-helper: setSecondayDisplayStatus(1, 1) SUCCESS");
             return 0;
-        } else {
-            ALOGE("dualscreen-helper: setSecondayDisplayStatus failed");
         }
-
+        ALOGE("dualscreen-helper: setSecondayDisplayStatus failed");
         return 1;
     }
 
-    ALOGE("dualscreen-helper: timed out waiting for IDisplayConfig");
+    ALOGE("dualscreen-helper: timed out");
     return 1;
 }
