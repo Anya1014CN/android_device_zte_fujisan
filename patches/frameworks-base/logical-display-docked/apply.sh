@@ -65,16 +65,30 @@ helper = '''    private boolean isFujisanDockedSecondaryDisplay() {
         return mDisplayId == 1
                 && SystemProperties.getBoolean("ro.feature.target_dual_display", false)
                 && "4".equals(SystemProperties.get("persist.vendor.fujisan.display_mode", "1"))
-                && "3".equals(SystemProperties.get("persist.sys.zte.hallStatus", "3"));
+                && ("3".equals(SystemProperties.get("persist.sys.zte.hallStatus", "1"))
+                        || SystemProperties.getBoolean(
+                                "persist.vendor.fujisan.force_dual_screen", false));
     }
 
 '''
+helper_pattern = re.compile(
+    r'''    private boolean isFujisanDockedSecondaryDisplay\(\) \{\n'''
+    r'''        return mDisplayId == 1\n'''
+    r'''                && SystemProperties\.getBoolean\("ro\.feature\.target_dual_display", false\)\n'''
+    r'''                && "4"\.equals\(SystemProperties\.get\("persist\.vendor\.fujisan\.display_mode", "1"\)\)\n'''
+    r'''                && .*?\n'''
+    r'''    \}\n\n''',
+    re.S,
+)
 anchor = "    /**\n     * Requests the given mode.\n"
 if helper not in updated:
-    if anchor not in updated:
+    if helper_pattern.search(updated):
+        updated = helper_pattern.sub(helper, updated, count=1)
+    elif anchor not in updated:
         print(f"Did not find helper anchor in {path}", file=sys.stderr)
         sys.exit(1)
-    updated = updated.replace(anchor, helper + anchor, 1)
+    else:
+        updated = updated.replace(anchor, helper + anchor, 1)
 
 if updated == text:
     print(f"LogicalDisplay fujisan docked-secondary patch already present in {path}")

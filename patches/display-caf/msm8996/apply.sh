@@ -402,9 +402,13 @@ helper_new = '''#define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/h
 #define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"
 
 static bool IsFujisanDualDisplayTarget() {
-  char value[PROPERTY_VALUE_MAX] = {};
-  property_get("ro.feature.target_dual_display", value, "0");
-  return value[0] == '1';
+  char target[PROPERTY_VALUE_MAX] = {};
+  char hall[PROPERTY_VALUE_MAX] = {};
+  char force[PROPERTY_VALUE_MAX] = {};
+  property_get("ro.feature.target_dual_display", target, "0");
+  property_get("persist.sys.zte.hallStatus", hall, "1");
+  property_get("persist.vendor.fujisan.force_dual_screen", force, "0");
+  return target[0] == '1' && ((hall[0] == '3' && hall[1] == '\\0') || force[0] == '1');
 }
 '''
 
@@ -427,11 +431,21 @@ if updated != text:
     applied += 1
 
 if helper_new not in updated:
-    if helper_old not in updated:
+    helper_pattern = re.compile(
+        r'''static bool IsFujisanDualDisplayTarget\(\) \{\n'''
+        r'''  .*?'''
+        r'''\}\n''',
+        re.S,
+    )
+    if helper_pattern.search(updated):
+        updated = helper_pattern.sub(helper_new.strip() + "\n", updated, count=1)
+        applied += 1
+    elif helper_old not in updated:
         print(f"Did not find expected HWCSession helper block in {path}", file=sys.stderr)
         sys.exit(1)
-    updated = updated.replace(helper_old, helper_new, 1)
-    applied += 1
+    else:
+        updated = updated.replace(helper_old, helper_new, 1)
+        applied += 1
 
 if 'HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL])' not in updated:
     deinit_pattern = re.compile(
