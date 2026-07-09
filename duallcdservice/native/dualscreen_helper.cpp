@@ -18,20 +18,22 @@ int main() {
 
         ALOGI("dualscreen-helper: got IDisplayConfig");
 
+        // DisplayType enum values: 0=PRIMARY, 1=EXTERNAL/HDMI
+        auto ext = static_cast<IDisplayConfig::DisplayType>(1);
+        auto pri = static_cast<IDisplayConfig::DisplayType>(0);
+
         bool connected = false;
-        cfg->isDisplayConnected(IDisplayConfig::DisplayType::EXTERNAL,
+        cfg->isDisplayConnected(ext,
             [&](bool conn) {
                 connected = conn;
                 ALOGI("dualscreen-helper: external connected=%d", conn);
             });
 
-        auto ret = cfg->setActiveConfig(
-            IDisplayConfig::DisplayType::EXTERNAL, 0);
+        auto ret = cfg->setActiveConfig(ext, 0);
         ALOGI("dualscreen-helper: setActiveConfig(EXTERNAL,0) %s",
               ret.isOk() ? "ok" : "failed");
 
-        ret = cfg->setActiveConfig(
-            IDisplayConfig::DisplayType::PRIMARY, 0);
+        ret = cfg->setActiveConfig(pri, 0);
         ALOGI("dualscreen-helper: setActiveConfig(PRIMARY,0) %s",
               ret.isOk() ? "ok" : "failed");
 
