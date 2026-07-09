@@ -73,6 +73,7 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
+    dualscreen-helper \
     libdolbyshim \
     libion \
     libjpeg_encode_hw_jni \
