@@ -54,6 +54,10 @@ _fujisan_apply_patch \
     "frameworks/base/services/core/java/com/android/server/display/LocalDisplayAdapter.java" || { unset -f _fujisan_apply_patch; return 1; }
 
 _fujisan_apply_patch \
+    "$_fujisan_device_dir/patches/frameworks-base/logical-display-docked/apply.sh" \
+    "frameworks/base/services/core/java/com/android/server/display/LogicalDisplay.java" || { unset -f _fujisan_apply_patch; return 1; }
+
+_fujisan_apply_patch \
     "$_fujisan_device_dir/patches/frameworks-base/activity-multidisplay/apply.sh" \
     "frameworks/base/services/core/java/com/android/server/am/ActivityStackSupervisor.java" || { unset -f _fujisan_apply_patch; return 1; }
 
@@ -70,6 +74,7 @@ for _f in \
     hardware/qcom/display/msm8996/libqdutils/display_config.h \
     hardware/qcom/display/msm8996/sdm/libs/hwc2/hwc_session.cpp \
     frameworks/base/services/core/java/com/android/server/display/LocalDisplayAdapter.java \
+    frameworks/base/services/core/java/com/android/server/display/LogicalDisplay.java \
     frameworks/base/services/core/java/com/android/server/am/ActivityStackSupervisor.java \
     frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java \
     frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
