@@ -17,10 +17,6 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 
-if "isFujisanDockedSecondaryDisplay" in text:
-    print(f"LogicalDisplay fujisan docked-secondary patch already present in {path}")
-    sys.exit(0)
-
 updated = text
 
 if "import android.os.SystemProperties;" not in updated:
@@ -43,10 +39,27 @@ replacement = '''    public void setHasContentLocked(boolean hasContent) {
     }
 '''
 
-if not method_pattern.search(updated):
-    print(f"Did not find setHasContentLocked method in {path}", file=sys.stderr)
-    sys.exit(1)
-updated = method_pattern.sub(replacement, updated, count=1)
+if replacement not in updated:
+    if not method_pattern.search(updated):
+        print(f"Did not find setHasContentLocked method in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = method_pattern.sub(replacement, updated, count=1)
+
+has_content_pattern = re.compile(
+    r'''(    public boolean hasContentLocked\(\) \{\n)'''
+    r'''(        return mHasContent;\n)'''
+    r'''(    \}\n)'''
+)
+has_content_replacement = '''    public boolean hasContentLocked() {
+        return mHasContent || isFujisanDockedSecondaryDisplay();
+    }
+'''
+
+if has_content_replacement not in updated:
+    if not has_content_pattern.search(updated):
+        print(f"Did not find hasContentLocked method in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = has_content_pattern.sub(has_content_replacement, updated, count=1)
 
 helper = '''    private boolean isFujisanDockedSecondaryDisplay() {
         return mDisplayId == 1
@@ -57,11 +70,15 @@ helper = '''    private boolean isFujisanDockedSecondaryDisplay() {
 
 '''
 anchor = "    /**\n     * Requests the given mode.\n"
-if anchor not in updated:
-    print(f"Did not find helper anchor in {path}", file=sys.stderr)
-    sys.exit(1)
-updated = updated.replace(anchor, helper + anchor, 1)
+if helper not in updated:
+    if anchor not in updated:
+        print(f"Did not find helper anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(anchor, helper + anchor, 1)
 
-path.write_text(updated)
-print(f"Applied fujisan docked-secondary LogicalDisplay patch to {path}")
+if updated == text:
+    print(f"LogicalDisplay fujisan docked-secondary patch already present in {path}")
+else:
+    path.write_text(updated)
+    print(f"Applied fujisan docked-secondary LogicalDisplay patch to {path}")
 PY
