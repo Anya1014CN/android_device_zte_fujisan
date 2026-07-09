@@ -24,9 +24,9 @@ int main() {
 
         bool connected = false;
         cfg->isDisplayConnected(ext,
-            [&](bool conn) {
+            [&](int err, bool conn) {
                 connected = conn;
-                ALOGI("dualscreen-helper: external connected=%d", conn);
+                ALOGI("dualscreen-helper: external connected=%d err=%d", conn, err);
             });
 
         auto ret = cfg->setActiveConfig(ext, 0);
