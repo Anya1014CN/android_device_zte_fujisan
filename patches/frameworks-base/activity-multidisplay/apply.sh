@@ -30,36 +30,32 @@ if "import android.os.SystemProperties;" not in updated:
         sys.exit(1)
     updated = updated.replace(anchor, anchor + "import android.os.SystemProperties;\n", 1)
 
-old = '''    boolean canPlaceEntityOnDisplay(int displayId, boolean resizeable) {
-        return displayId == DEFAULT_DISPLAY || (mService.mSupportsMultiDisplay
-                && (resizeable || displayConfigMatchesGlobal(displayId)));
-    }'''
+method_pattern = re.compile(
+    r'''(    boolean canPlaceEntityOnDisplay\(\s*int displayId,\s*[^)]*\)\s*\{\n)'''
+)
+match = method_pattern.search(updated)
+if not match:
+    print(f"Did not find canPlaceEntityOnDisplay method in {path}", file=sys.stderr)
+    sys.exit(1)
 
-new = '''    boolean canPlaceEntityOnDisplay(int displayId, boolean resizeable) {
-        return displayId == DEFAULT_DISPLAY
-                || isFujisanDockedSecondaryDisplay(displayId)
-                || (mService.mSupportsMultiDisplay
-                        && (resizeable || displayConfigMatchesGlobal(displayId)));
-    }
+guard = '''        if (isFujisanDockedSecondaryDisplay(displayId)) {
+            return true;
+        }
+'''
 
-    private boolean isFujisanDockedSecondaryDisplay(int displayId) {
+updated = updated[:match.end()] + guard + updated[match.end():]
+
+helper = '''    private boolean isFujisanDockedSecondaryDisplay(int displayId) {
         return displayId == 1
                 && SystemProperties.getBoolean("ro.feature.target_dual_display", false)
                 && "4".equals(SystemProperties.get("persist.vendor.fujisan.display_mode", "1"));
     }'''
 
-if old not in updated:
-    pattern = re.compile(
-        r'''    boolean canPlaceEntityOnDisplay\(int displayId, boolean resizeable\) \{\n'''
-        r'''        return displayId == DEFAULT_DISPLAY \|\| \(mService\.mSupportsMultiDisplay\n'''
-        r'''                && \(resizeable \|\| displayConfigMatchesGlobal\(displayId\)\)\);\n'''
-        r'''    \}''')
-    if not pattern.search(updated):
-        print(f"Did not find canPlaceEntityOnDisplay block in {path}", file=sys.stderr)
-        sys.exit(1)
-    updated = pattern.sub(new, updated, count=1)
-else:
-    updated = updated.replace(old, new, 1)
+next_comment = "    /**\n     * Check if configuration of specified display matches current global config.\n"
+if next_comment not in updated:
+    print(f"Did not find displayConfigMatchesGlobal anchor in {path}", file=sys.stderr)
+    sys.exit(1)
+updated = updated.replace(next_comment, helper + "\n\n" + next_comment, 1)
 
 path.write_text(updated)
 print(f"Applied fujisan multidisplay ActivityStackSupervisor patch to {path}")
