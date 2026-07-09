@@ -73,6 +73,7 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
+    hwcomposer.msm8996 \
     dualscreen-helper \
     libdualscreen-preload \
     libdolbyshim \
