@@ -30,8 +30,7 @@ new_code = '''
         property_get("ro.feature.target_dual_display", dualProp, "0");
         if (dualProp[0] == '1') {
             onHotplugReceived(0, HWC_DISPLAY_EXTERNAL,
-                static_cast<hwc2_connection_t>(HWC2::Connection::Connected),
-                false);
+                HWC2::Connection::Connected, false);
         }
     }
 '''
@@ -42,7 +41,7 @@ if old_broken in text:
     text = text.replace(old_broken, '')
     print(f"fujisan: removed stale broken hotplug call")
 
-if 'onHotplugReceived(0, HWC_DISPLAY_EXTERNAL,' in text:
+if 'onHotplugReceived(0, HWC_DISPLAY_EXTERNAL,' in text and 'HWC2::Connection::Connected' in text:
     print(f"fujisan: correct dual-display hotplug already present in {path}")
     path.write_text(text)
     sys.exit(0)
