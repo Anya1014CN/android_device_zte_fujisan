@@ -83,6 +83,7 @@ PRODUCT_PACKAGES += \
     libZTE_ImagePost \
     libzte_night_jni \
     dualscreen-helper \
+    FujisanSecondarySystemUI \
     miframework \
     framework-zte-res \
     ZTE_Camera \

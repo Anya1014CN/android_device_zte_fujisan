@@ -12,6 +12,10 @@ static void launchSecondaryHomeIfDocked(const char *mode) {
         return;
     }
 
+    system("/system/bin/am startservice "
+           "-n org.lineageos.fujisan.secondarysysui/"
+           ".SecondarySystemUiService >/dev/null 2>&1");
+
     sleep(2);
     ALOGI("dualscreen-helper: launching secondary HOME on display 1");
     int ret = system("/system/bin/am start --display 1 "
