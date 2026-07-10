@@ -61,29 +61,130 @@ if has_content_replacement not in updated:
         sys.exit(1)
     updated = has_content_pattern.sub(has_content_replacement, updated, count=1)
 
-helper = '''    private boolean isFujisanDockedSecondaryDisplay() {
+info_anchor = '''            mBaseDisplayInfo.ownerUid = deviceInfo.ownerUid;
+            mBaseDisplayInfo.ownerPackageName = deviceInfo.ownerPackageName;
+
+            mPrimaryDisplayDeviceInfo = deviceInfo;
+'''
+info_replacement = '''            mBaseDisplayInfo.ownerUid = deviceInfo.ownerUid;
+            mBaseDisplayInfo.ownerPackageName = deviceInfo.ownerPackageName;
+
+            applyFujisanDisplayInfoLocked();
+
+            mPrimaryDisplayDeviceInfo = deviceInfo;
+'''
+if "applyFujisanDisplayInfoLocked();" not in updated:
+    if info_anchor not in updated:
+        print(f"Did not find DisplayInfo update anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(info_anchor, info_replacement, 1)
+
+projection_anchor = '''        int displayRectTop = (physHeight - displayRectHeight) / 2;
+        int displayRectLeft = (physWidth - displayRectWidth) / 2;
+        mTempDisplayRect.set(displayRectLeft, displayRectTop,
+                displayRectLeft + displayRectWidth, displayRectTop + displayRectHeight);
+
+        mTempDisplayRect.left += mDisplayOffsetX;
+'''
+projection_replacement = '''        int displayRectTop = (physHeight - displayRectHeight) / 2;
+        int displayRectLeft = (physWidth - displayRectWidth) / 2;
+        mTempDisplayRect.set(displayRectLeft, displayRectTop,
+                displayRectLeft + displayRectWidth, displayRectTop + displayRectHeight);
+
+        adjustFujisanDisplayProjectionLocked(displayInfo, orientation);
+
+        mTempDisplayRect.left += mDisplayOffsetX;
+'''
+if "adjustFujisanDisplayProjectionLocked(displayInfo, orientation);" not in updated:
+    if projection_anchor not in updated:
+        print(f"Did not find display projection anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(projection_anchor, projection_replacement, 1)
+
+helper = '''    private static final int FUJISAN_MODE_SINGLE = 1;
+    private static final int FUJISAN_MODE_ZOOM = 2;
+    private static final int FUJISAN_MODE_DOCKED = 4;
+
+    private void applyFujisanDisplayInfoLocked() {
+        if (!isFujisanDualDisplayTarget()) {
+            return;
+        }
+
+        final int mode = getFujisanDisplayMode();
+        if (mode == FUJISAN_MODE_ZOOM) {
+            setFujisanLogicalSize(2160, 1920);
+        } else if (mode == FUJISAN_MODE_DOCKED || mode == FUJISAN_MODE_SINGLE) {
+            setFujisanLogicalSize(1080, 1920);
+        }
+    }
+
+    private void setFujisanLogicalSize(int width, int height) {
+        mBaseDisplayInfo.appWidth = width;
+        mBaseDisplayInfo.appHeight = height;
+        mBaseDisplayInfo.logicalWidth = width;
+        mBaseDisplayInfo.logicalHeight = height;
+        mBaseDisplayInfo.smallestNominalAppWidth = width;
+        mBaseDisplayInfo.smallestNominalAppHeight = height;
+        mBaseDisplayInfo.largestNominalAppWidth = width;
+        mBaseDisplayInfo.largestNominalAppHeight = height;
+    }
+
+    private void adjustFujisanDisplayProjectionLocked(DisplayInfo displayInfo, int orientation) {
+        if (!isFujisanDualDisplayTarget()) {
+            return;
+        }
+
+        final int mode = getFujisanDisplayMode();
+        if (mode != FUJISAN_MODE_DOCKED && mode != FUJISAN_MODE_SINGLE) {
+            return;
+        }
+
+        if (orientation == Surface.ROTATION_90 || orientation == Surface.ROTATION_270) {
+            mTempLayerStackRect.set(0, 0, displayInfo.logicalWidth, displayInfo.logicalHeight);
+            mTempDisplayRect.set(0, 0, displayInfo.logicalHeight, displayInfo.logicalWidth);
+        } else {
+            mTempLayerStackRect.set(0, 0, displayInfo.logicalWidth, displayInfo.logicalHeight);
+            mTempDisplayRect.set(0, 0, displayInfo.logicalWidth, displayInfo.logicalHeight);
+        }
+    }
+
+    private boolean isFujisanDockedSecondaryDisplay() {
         return mDisplayId == 1
-                && SystemProperties.getBoolean("ro.feature.target_dual_display", false)
-                && "4".equals(SystemProperties.get("persist.vendor.fujisan.display_mode", "1"))
+                && isFujisanDualDisplayTarget()
+                && getFujisanDisplayMode() == FUJISAN_MODE_DOCKED
                 && ("3".equals(SystemProperties.get("persist.sys.zte.hallStatus", "1"))
                         || SystemProperties.getBoolean(
                                 "persist.vendor.fujisan.force_dual_screen", false));
     }
 
+    private static boolean isFujisanDualDisplayTarget() {
+        return SystemProperties.getBoolean("ro.feature.target_dual_display", false);
+    }
+
+    private static int getFujisanDisplayMode() {
+        return SystemProperties.getInt("persist.vendor.fujisan.display_mode",
+                FUJISAN_MODE_SINGLE);
+    }
+
 '''
 helper_pattern = re.compile(
-    r'''    private boolean isFujisanDockedSecondaryDisplay\(\) \{\n'''
+    r'''(?:    private static final int FUJISAN_MODE_SINGLE = 1;\n'''
+    r'''    .*?'''
+    r'''    private static int getFujisanDisplayMode\(\) \{\n'''
+    r'''        .*?'''
+    r'''    \}\n\n'''
+    r'''|    private boolean isFujisanDockedSecondaryDisplay\(\) \{\n'''
     r'''        return mDisplayId == 1\n'''
     r'''                && SystemProperties\.getBoolean\("ro\.feature\.target_dual_display", false\)\n'''
     r'''                && "4"\.equals\(SystemProperties\.get\("persist\.vendor\.fujisan\.display_mode", "1"\)\)\n'''
     r'''                && .*?\n'''
-    r'''    \}\n\n''',
+    r'''    \}\n\n)''',
     re.S,
 )
 anchor = "    /**\n     * Requests the given mode.\n"
 if helper not in updated:
     if helper_pattern.search(updated):
-        updated = helper_pattern.sub(helper, updated, count=1)
+        updated = helper_pattern.sub(lambda _match: helper, updated, count=1)
     elif anchor not in updated:
         print(f"Did not find helper anchor in {path}", file=sys.stderr)
         sys.exit(1)

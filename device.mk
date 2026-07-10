@@ -40,6 +40,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/usr/idc/synaptics_dsx.idc:system/usr/idc/synaptics_dsx.idc \
     $(LOCAL_PATH)/system/usr/idc/zte-touchscreen.idc:system/usr/idc/zte-touchscreen.idc \
     $(LOCAL_PATH)/system/usr/idc/zte-touchscreen-2nd.idc:system/usr/idc/zte-touchscreen-2nd.idc \
+    $(LOCAL_PATH)/system/usr/idc/zte-touchsrceen-3nd.idc:system/usr/idc/zte-touchsrceen-3nd.idc \
     $(LOCAL_PATH)/system/usr/keylayout/gpio-keys.kl:system/usr/keylayout/gpio-keys.kl \
     $(LOCAL_PATH)/system/usr/keylayout/qpnp_pon.kl:system/usr/keylayout/qpnp_pon.kl \
     $(LOCAL_PATH)/system/usr/keylayout/synaptics_dsx.kl:system/usr/keylayout/synaptics_dsx.kl \
@@ -75,8 +76,6 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
-    dualscreen-helper \
-    libdualscreen-preload \
     libdolbyshim \
     libion \
     libjpeg_encode_hw_jni \

@@ -397,6 +397,19 @@ text = path.read_text()
 updated = text
 applied = 0
 
+for include in ('#include <thread>\n', '#include <unistd.h>\n', '#include <cutils/properties.h>\n'):
+    if include in updated:
+        continue
+    include_anchor = '#include <utils/Trace.h>\n'
+    if include_anchor in updated:
+        updated = updated.replace(include_anchor, include_anchor + include, 1)
+        applied += 1
+    else:
+        include_match = re.search(r'(#include [^\n]+\n)', updated)
+        if include_match:
+            updated = updated[:include_match.end()] + include + updated[include_match.end():]
+            applied += 1
+
 updated = re.sub(
     r'''        if \(IsFujisanDualDisplayTarget\(\)\) \{\n'''
     r'''          int online_status = hwc_display_\[HWC_DISPLAY_EXTERNAL\]->SetDisplayStatus\(EXTERNAL_ONLINE\);\n'''
@@ -418,9 +431,28 @@ helper_pattern = re.compile(
     r'''\}\n''',
     re.S,
 )
-updated_without_helper = helper_pattern.sub("\n", updated, count=1)
-if updated_without_helper != updated:
-    updated = updated_without_helper
+helper = '''
+static bool IsFujisanDualDisplayTarget() {
+  char target[PROPERTY_VALUE_MAX] = {};
+  char mode[PROPERTY_VALUE_MAX] = {};
+  char force[PROPERTY_VALUE_MAX] = {};
+  property_get("ro.feature.target_dual_display", target, "0");
+  property_get("persist.vendor.fujisan.display_mode", mode, "1");
+  property_get("persist.vendor.fujisan.force_dual_screen", force, "0");
+  return target[0] == '1' && (force[0] == '1' || mode[0] == '2' || mode[0] == '4' || mode[0] == '8');
+}
+'''
+if helper_pattern.search(updated):
+    updated_with_helper = helper_pattern.sub(helper, updated, count=1)
+    if updated_with_helper != updated:
+        updated = updated_with_helper
+        applied += 1
+elif 'IsFujisanDualDisplayTarget' not in updated:
+    define_anchor = '#define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"\n'
+    if define_anchor not in updated:
+        print(f"Did not find expected HWCSession helper insertion point in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(define_anchor, define_anchor + helper, 1)
     applied += 1
 
 if 'HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL])' not in updated:
@@ -451,6 +483,21 @@ register_pattern = re.compile(
     r'(?:    if \(hwc_session->hwc_display_\[HWC_DISPLAY_PRIMARY\]\) \{\n)?'
     r'      hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected\);\n'
     r'(?:    \}\n)?'
+    r'(?:    static bool fujisan_hotplug_scheduled = false;\n'
+    r'    if \(!fujisan_hotplug_scheduled && IsFujisanDualDisplayTarget\(\)\) \{\n'
+    r'      fujisan_hotplug_scheduled = true;\n'
+    r'      std::thread\(\[hwc_session\]\(\) \{\n'
+    r'        sleep\(7\);\n'
+    r'        if \(!IsFujisanDualDisplayTarget\(\)\) \{\n'
+    r'          return;\n'
+    r'        \}\n'
+    r'        int secondary_status = hwc_session->HotPlugHandler\(true\);\n'
+    r'        if \(secondary_status\) \{\n'
+    r'          DLOGW\("Delayed dual-screen secondary hotplug failed, status = %d",\n'
+    r'                secondary_status\);\n'
+    r'        \}\n'
+    r'      \}\)\.detach\(\);\n'
+    r'    \}\n)?'
     r'(?:    if \(IsFujisanDualDisplayTarget\(\)\) \{\n'
     r'      int secondary_status = hwc_session->HotPlugHandler\(true\);\n'
     r'      if \(secondary_status\) \{\n'
@@ -468,6 +515,21 @@ register_replacement = (
     '  if (descriptor == HWC2_CALLBACK_HOTPLUG) {\n'
     '    if (hwc_session->hwc_display_[HWC_DISPLAY_PRIMARY]) {\n'
     '      hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);\n'
+    '    }\n'
+    '    static bool fujisan_hotplug_scheduled = false;\n'
+    '    if (!fujisan_hotplug_scheduled && IsFujisanDualDisplayTarget()) {\n'
+    '      fujisan_hotplug_scheduled = true;\n'
+    '      std::thread([hwc_session]() {\n'
+    '        sleep(7);\n'
+    '        if (!IsFujisanDualDisplayTarget()) {\n'
+    '          return;\n'
+    '        }\n'
+    '        int secondary_status = hwc_session->HotPlugHandler(true);\n'
+    '        if (secondary_status) {\n'
+    '          DLOGW("Delayed dual-screen secondary hotplug failed, status = %d",\n'
+    '                secondary_status);\n'
+    '        }\n'
+    '      }).detach();\n'
     '    }\n'
     '  }\n'
 )

@@ -38,6 +38,7 @@ public class DisplayModeManager {
     private static final String SETTING_SECONDARY_LCD_STATE = "zte_secondary_lcd_state";
     private static final String SETTING_SECONDARY_DISPLAY_POWER = "zte_secondary_display_power_state";
     private static final String SETTING_MAIN_BRIGHTNESS = "screen_brightness";
+    private static final String SETTING_DISPLAY_SIZE_FORCED = "display_size_forced";
     private static final String CAMERA_PACKAGE = "com.zte.camera";
     private static final int HALL_SENSOR_TYPE = 65537;
     private static final int HALL_STATUS_OPEN = 3;
@@ -109,6 +110,7 @@ public class DisplayModeManager {
         }
 
         syncSecondaryState(mode, getCurrentSingleDisplay());
+        syncForcedDisplaySize(mode);
 
         broadcastMode(mode, getCurrentSingleDisplay());
         return true;
@@ -124,6 +126,7 @@ public class DisplayModeManager {
         putSystemInt(SETTING_USER_SINGLE_DISPLAY, singleDisplay);
         setSystemProperty(PROP_DEFAULT_SINGLE_DISPLAY, Integer.toString(singleDisplay));
         syncSecondaryState(getCurrentMode(), singleDisplay);
+        syncForcedDisplaySize(getCurrentMode());
         broadcastMode(getCurrentMode(), singleDisplay);
         return true;
     }
@@ -148,6 +151,7 @@ public class DisplayModeManager {
         setSystemProperty(PROP_DEFAULT_MODE, Integer.toString(mode));
         setSystemProperty(PROP_DEFAULT_SINGLE_DISPLAY, Integer.toString(singleDisplay));
         syncSecondaryState(mode, singleDisplay);
+        syncForcedDisplaySize(mode);
     }
 
     public int switchRotationForDock(int rotation) {
@@ -308,6 +312,20 @@ public class DisplayModeManager {
                 || (mode == DISPLAY_MODE_SINGLE && singleDisplay == SINGLE_DISPLAY_B);
         setSystemProperty(PROP_FORCE_DUAL, secondaryOn ? "1" : "0");
         syncSecondaryPowerState(secondaryOn ? DISPLAY_STATE_ON : DISPLAY_STATE_OFF);
+    }
+
+    private void syncForcedDisplaySize(int mode) {
+        if (mContext == null) {
+            return;
+        }
+
+        String size = mode == DISPLAY_MODE_ZOOM ? "2160,1920" : "1080,1920";
+        try {
+            Settings.Global.putString(mContext.getContentResolver(),
+                    SETTING_DISPLAY_SIZE_FORCED, size);
+        } catch (SecurityException e) {
+            Log.w(TAG, "Unable to write forced display size", e);
+        }
     }
 
     private void syncSecondaryPowerState(int state) {
