@@ -125,25 +125,35 @@ public final class SecondarySystemUiService extends Service {
 
         if (mStatusBar == null) {
             mStatusBar = buildStatusBar();
-            mWindowManager.addView(mStatusBar, makeBarLayoutParams(
-                    WindowManager.LayoutParams.TYPE_STATUS_BAR_PANEL,
-                    Gravity.TOP, dp(24), "FujisanSecondaryStatusBar"));
+            if (!addViewSafely(mStatusBar, makeBarLayoutParams(
+                    Gravity.TOP, dp(24), "FujisanSecondaryStatusBar"))) {
+                mStatusBar = null;
+            }
         }
 
         if (mNavigationBar == null) {
             mNavigationBar = buildNavigationBar();
-            mWindowManager.addView(mNavigationBar, makeBarLayoutParams(
-                    WindowManager.LayoutParams.TYPE_NAVIGATION_BAR_PANEL,
-                    Gravity.BOTTOM, dp(56), "FujisanSecondaryNavigationBar"));
+            if (!addViewSafely(mNavigationBar, makeBarLayoutParams(
+                    Gravity.BOTTOM, dp(56), "FujisanSecondaryNavigationBar"))) {
+                mNavigationBar = null;
+            }
         }
     }
 
-    private WindowManager.LayoutParams makeBarLayoutParams(
-            int type, int gravity, int height, String title) {
+    private boolean addViewSafely(View view, WindowManager.LayoutParams lp) {
+        try {
+            mWindowManager.addView(view, lp);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private WindowManager.LayoutParams makeBarLayoutParams(int gravity, int height, String title) {
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 height,
-                type,
+                WindowManager.LayoutParams.TYPE_SYSTEM_ERROR,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_SPLIT_TOUCH
