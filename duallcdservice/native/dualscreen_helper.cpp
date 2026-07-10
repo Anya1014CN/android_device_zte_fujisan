@@ -17,11 +17,18 @@ static void launchSecondaryHomeIfDocked(const char *mode) {
            ".SecondarySystemUiService >/dev/null 2>&1");
 
     sleep(2);
-    ALOGI("dualscreen-helper: launching secondary HOME on display 1");
+    ALOGI("dualscreen-helper: launching secondary launcher on display 1");
     int ret = system("/system/bin/am start --display 1 "
+                     "-n org.lineageos.fujisan.secondarysysui/"
+                     ".SecondaryLauncherActivity "
+                     ">/dev/null 2>&1");
+    if (ret != 0) {
+        ALOGW("dualscreen-helper: secondary launcher failed (%d), trying Trebuchet", ret);
+        ret = system("/system/bin/am start --display 1 "
                      "-n org.lineageos.trebuchet/"
                      "com.android.launcher3.searchlauncher.SearchLauncher "
                      ">/dev/null 2>&1");
+    }
     if (ret != 0) {
         ALOGW("dualscreen-helper: Trebuchet launch failed (%d), trying default HOME", ret);
         ret = system("/system/bin/am start --display 1 "

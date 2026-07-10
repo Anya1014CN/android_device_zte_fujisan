@@ -234,19 +234,20 @@ public final class SecondarySystemUiService extends Service {
     }
 
     private void launchHomeOnSecondary() {
-        Intent intent = new Intent(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_HOME);
+        Intent intent = new Intent(this, SecondaryLauncherActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ActivityOptions options = ActivityOptions.makeBasic();
         options.setLaunchDisplayId(SECONDARY_DISPLAY_ID);
         try {
             startActivity(intent, options.toBundle());
         } catch (RuntimeException e) {
-            Intent fallback = new Intent();
-            fallback.setClassName("org.lineageos.trebuchet",
-                    "com.android.launcher3.searchlauncher.SearchLauncher");
-            fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-            startActivity(fallback, options.toBundle());
+            Intent fallback = new Intent(Intent.ACTION_MAIN);
+            fallback.addCategory(Intent.CATEGORY_HOME);
+            fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                startActivity(fallback, options.toBundle());
+            } catch (RuntimeException ignored) {
+            }
         }
     }
 
