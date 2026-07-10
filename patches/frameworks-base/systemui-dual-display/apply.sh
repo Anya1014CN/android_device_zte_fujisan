@@ -23,6 +23,18 @@ path = Path(sys.argv[1])
 text = path.read_text()
 updated = text
 
+def ensure_import(anchor, new_import):
+    global updated
+    if new_import in updated:
+        return
+    if anchor not in updated:
+        print(f"Did not find import anchor {anchor.strip()} in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(anchor, anchor + new_import, 1)
+
+ensure_import("import android.app.ActivityManager;\n", "import android.app.ActivityOptions;\n")
+ensure_import("import android.content.BroadcastReceiver;\n", "import android.content.ComponentName;\n")
+
 if "import android.view.Gravity;\n" not in updated:
     anchor = "import android.view.ViewGroup;\n"
     if anchor not in updated:
@@ -32,14 +44,22 @@ if "import android.view.Gravity;\n" not in updated:
 
 constant_anchor = '''    private static final String EXTRA_DISABLE_STATE = "disabled_state";
 '''
-constant_new = '''    private static final String EXTRA_DISABLE_STATE = "disabled_state";
-    private static final String EXTRA_FUJISAN_SECONDARY = "fujisan_secondary";
+constant_extra_anchor = '''    private static final String EXTRA_FUJISAN_SECONDARY = "fujisan_secondary";
 '''
-if constant_new not in updated:
-    if constant_anchor not in updated:
+constant_new = '''    private static final String EXTRA_FUJISAN_SECONDARY = "fujisan_secondary";
+    private static final int FUJISAN_PRIMARY_DISPLAY_ID = 0;
+    private static final int FUJISAN_SECONDARY_DISPLAY_ID = 1;
+    private static final String FUJISAN_SECONDARY_HOME =
+            "org.lineageos.trebuchet/com.android.launcher3.searchlauncher.SecondarySearchLauncher";
+'''
+if "FUJISAN_PRIMARY_DISPLAY_ID" not in updated:
+    if constant_extra_anchor in updated:
+        updated = updated.replace(constant_extra_anchor, constant_new, 1)
+    elif constant_anchor in updated:
+        updated = updated.replace(constant_anchor, constant_anchor + constant_new, 1)
+    else:
         print(f"Did not find NavigationBarFragment constant anchor in {path}", file=sys.stderr)
         sys.exit(1)
-    updated = updated.replace(constant_anchor, constant_new, 1)
 
 field_anchor = '''    private LightBarController mLightBarController;
 '''
@@ -65,6 +85,227 @@ if on_create_new not in updated:
         print(f"Did not find NavigationBarFragment onCreate anchor in {path}", file=sys.stderr)
         sys.exit(1)
     updated = updated.replace(on_create_anchor, on_create_new, 1)
+
+helpers_anchor = '''    private void prepareNavigationBarView() {
+        mNavigationBarView.reorient();
+'''
+helpers_new = '''    private int getFujisanTargetDisplayId() {
+        return mFujisanSecondary ? FUJISAN_SECONDARY_DISPLAY_ID : FUJISAN_PRIMARY_DISPLAY_ID;
+    }
+
+    private boolean isFujisanHomeActivity(ComponentName component) {
+        if (component == null) {
+            return false;
+        }
+        final String className = component.getClassName();
+        return "org.lineageos.trebuchet".equals(component.getPackageName())
+                && (className.endsWith(".SearchLauncher")
+                        || className.endsWith(".SecondarySearchLauncher"));
+    }
+
+    private int getTopTaskIdOnDisplay(int displayId, boolean includeHome) {
+        try {
+            int bestTaskId = -1;
+            int bestPosition = Integer.MIN_VALUE;
+            IActivityManager activityManager = ActivityManagerNative.getDefault();
+            List<ActivityManager.StackInfo> stacks = activityManager.getAllStackInfos();
+            for (int i = 0; stacks != null && i < stacks.size(); i++) {
+                ActivityManager.StackInfo stack = stacks.get(i);
+                if (stack == null || stack.displayId != displayId || stack.taskIds == null
+                        || stack.taskIds.length == 0) {
+                    continue;
+                }
+                if (!includeHome && isFujisanHomeActivity(stack.topActivity)) {
+                    continue;
+                }
+                if (stack.position >= bestPosition) {
+                    bestPosition = stack.position;
+                    bestTaskId = stack.taskIds[stack.taskIds.length - 1];
+                }
+            }
+            return bestTaskId;
+        } catch (RemoteException e) {
+            Log.w(TAG, "Unable to query display tasks", e);
+            return -1;
+        }
+    }
+
+    private boolean focusFujisanDisplayTask(int displayId, boolean includeHome) {
+        final int taskId = getTopTaskIdOnDisplay(displayId, includeHome);
+        if (taskId < 0) {
+            return false;
+        }
+        try {
+            ActivityManagerNative.getDefault().setFocusedTask(taskId);
+            return true;
+        } catch (RemoteException e) {
+            Log.w(TAG, "Unable to focus display task " + taskId, e);
+            return false;
+        }
+    }
+
+    private boolean launchFujisanSecondaryHome() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_MAIN);
+            intent.addCategory(Intent.CATEGORY_HOME);
+            intent.setComponent(ComponentName.unflattenFromString(FUJISAN_SECONDARY_HOME));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(FUJISAN_SECONDARY_DISPLAY_ID);
+            getContext().startActivityAsUser(intent, options.toBundle(), UserHandle.CURRENT);
+            return true;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Unable to launch secondary home", e);
+            return false;
+        }
+    }
+
+    private boolean cycleFujisanSecondaryTask() {
+        try {
+            IActivityManager activityManager = ActivityManagerNative.getDefault();
+            List<ActivityManager.StackInfo> stacks = activityManager.getAllStackInfos();
+            int topTaskId = -1;
+            int previousTaskId = -1;
+            int topPosition = Integer.MIN_VALUE;
+            int previousPosition = Integer.MIN_VALUE;
+            for (int i = 0; stacks != null && i < stacks.size(); i++) {
+                ActivityManager.StackInfo stack = stacks.get(i);
+                if (stack == null || stack.displayId != FUJISAN_SECONDARY_DISPLAY_ID
+                        || stack.taskIds == null || stack.taskIds.length == 0
+                        || isFujisanHomeActivity(stack.topActivity)) {
+                    continue;
+                }
+                final int taskId = stack.taskIds[stack.taskIds.length - 1];
+                if (stack.position >= topPosition) {
+                    previousTaskId = topTaskId;
+                    previousPosition = topPosition;
+                    topTaskId = taskId;
+                    topPosition = stack.position;
+                } else if (stack.position > previousPosition) {
+                    previousTaskId = taskId;
+                    previousPosition = stack.position;
+                }
+            }
+            final int taskId = previousTaskId >= 0 ? previousTaskId : topTaskId;
+            if (taskId < 0) {
+                return launchFujisanSecondaryHome();
+            }
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(FUJISAN_SECONDARY_DISPLAY_ID);
+            activityManager.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_NO_USER_ACTION,
+                    options.toBundle());
+            activityManager.setFocusedTask(taskId);
+            return true;
+        } catch (RemoteException e) {
+            Log.w(TAG, "Unable to switch secondary task", e);
+            return false;
+        }
+    }
+
+    private boolean onFujisanBackTouch(View v, MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            if (!focusFujisanDisplayTask(getFujisanTargetDisplayId(), !mFujisanSecondary)) {
+                return mFujisanSecondary;
+            }
+        }
+        return false;
+    }
+
+    private void prepareNavigationBarView() {
+        mNavigationBarView.reorient();
+'''
+if helpers_new not in updated:
+    if helpers_anchor not in updated:
+        print(f"Did not find NavigationBarFragment helper anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(helpers_anchor, helpers_new, 1)
+
+back_button_anchor = '''        ButtonDispatcher backButton = mNavigationBarView.getBackButton();
+        backButton.setLongClickable(true);
+        backButton.setOnLongClickListener(this::onLongPressBackRecents);
+'''
+back_button_new = '''        ButtonDispatcher backButton = mNavigationBarView.getBackButton();
+        backButton.setOnTouchListener(this::onFujisanBackTouch);
+        backButton.setLongClickable(true);
+        backButton.setOnLongClickListener(this::onLongPressBackRecents);
+'''
+if back_button_new not in updated:
+    if back_button_anchor not in updated:
+        print(f"Did not find NavigationBarFragment back button anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(back_button_anchor, back_button_new, 1)
+
+home_touch_anchor = '''    private boolean onHomeTouch(View v, MotionEvent event) {
+        if (mHomeBlockedThisTouch && event.getActionMasked() != MotionEvent.ACTION_DOWN) {
+            return true;
+        }
+'''
+home_touch_new = '''    private boolean onHomeTouch(View v, MotionEvent event) {
+        if (mFujisanSecondary) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    mStatusBar.awakenDreams();
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    mStatusBar.awakenDreams();
+                    launchFujisanSecondaryHome();
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    return true;
+            }
+        } else if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            focusFujisanDisplayTask(FUJISAN_PRIMARY_DISPLAY_ID, true);
+        }
+        if (mHomeBlockedThisTouch && event.getActionMasked() != MotionEvent.ACTION_DOWN) {
+            return true;
+        }
+'''
+if home_touch_new not in updated:
+    if home_touch_anchor not in updated:
+        print(f"Did not find NavigationBarFragment home touch anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(home_touch_anchor, home_touch_new, 1)
+
+recents_touch_anchor = '''    private boolean onRecentsTouch(View v, MotionEvent event) {
+        int action = event.getAction() & MotionEvent.ACTION_MASK;
+'''
+recents_touch_new = '''    private boolean onRecentsTouch(View v, MotionEvent event) {
+        if (mFujisanSecondary) {
+            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                mStatusBar.awakenDreams();
+                cycleFujisanSecondaryTask();
+            }
+            return true;
+        }
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            focusFujisanDisplayTask(FUJISAN_PRIMARY_DISPLAY_ID, true);
+        }
+        int action = event.getAction() & MotionEvent.ACTION_MASK;
+'''
+if recents_touch_new not in updated:
+    if recents_touch_anchor not in updated:
+        print(f"Did not find NavigationBarFragment recents touch anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(recents_touch_anchor, recents_touch_new, 1)
+
+recents_click_anchor = '''    private void onRecentsClick(View v) {
+        if (LatencyTracker.isEnabled(getContext())) {
+'''
+recents_click_new = '''    private void onRecentsClick(View v) {
+        if (mFujisanSecondary) {
+            mStatusBar.awakenDreams();
+            cycleFujisanSecondaryTask();
+            return;
+        }
+        focusFujisanDisplayTask(FUJISAN_PRIMARY_DISPLAY_ID, true);
+        if (LatencyTracker.isEnabled(getContext())) {
+'''
+if recents_click_new not in updated:
+    if recents_click_anchor not in updated:
+        print(f"Did not find NavigationBarFragment recents click anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(recents_click_anchor, recents_click_new, 1)
 
 current_vis_anchor = '''    public void setCurrentSysuiVisibility(int systemUiVisibility) {
         mSystemUiVisibility = systemUiVisibility;
