@@ -23,6 +23,13 @@ path = Path(sys.argv[1])
 text = path.read_text()
 updated = text
 
+if "import android.view.Gravity;\n" not in updated:
+    anchor = "import android.view.ViewGroup;\n"
+    if anchor not in updated:
+        print(f"Did not find Gravity import anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(anchor, anchor + "import android.view.Gravity;\n", 1)
+
 old = '''    public static View create(Context context, FragmentListener listener) {
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT,
@@ -62,6 +69,53 @@ new = '''    public static View create(Context context, FragmentListener listene
 
     public static View create(Context context, FragmentListener listener, int windowType,
             String title) {
+        final boolean isRealNavigationBar =
+                windowType == WindowManager.LayoutParams.TYPE_NAVIGATION_BAR;
+        final int windowHeight = isRealNavigationBar
+                ? LayoutParams.MATCH_PARENT
+                : context.getResources().getDimensionPixelSize(
+                        com.android.internal.R.dimen.navigation_bar_height);
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                LayoutParams.MATCH_PARENT, windowHeight,
+                windowType,
+                WindowManager.LayoutParams.FLAG_TOUCHABLE_WHEN_WAKING
+                        | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                        | WindowManager.LayoutParams.FLAG_SPLIT_TOUCH
+                        | WindowManager.LayoutParams.FLAG_SLIPPERY,
+                PixelFormat.TRANSLUCENT);
+        lp.token = new Binder();
+        lp.setTitle(title);
+        lp.windowAnimations = 0;
+        if (!isRealNavigationBar) {
+            lp.gravity = Gravity.BOTTOM;
+        }
+
+        View navigationBarView = LayoutInflater.from(context).inflate(
+                R.layout.navigation_bar_window, null);
+
+        if (DEBUG) Log.v(TAG, "addNavigationBar: about to add " + navigationBarView);
+        if (navigationBarView == null) return null;
+
+        context.getSystemService(WindowManager.class).addView(navigationBarView, lp);
+        FragmentHostManager fragmentHost = FragmentHostManager.get(navigationBarView);
+        NavigationBarFragment fragment = new NavigationBarFragment();
+        fragmentHost.getFragmentManager().beginTransaction()
+                .replace(R.id.navigation_bar_frame, fragment, TAG)
+                .commit();
+        fragmentHost.addTagListener(TAG, listener);
+        return navigationBarView;
+    }
+'''
+
+previous_new = '''    public static View create(Context context, FragmentListener listener) {
+        return create(context, listener, WindowManager.LayoutParams.TYPE_NAVIGATION_BAR,
+                "NavigationBar");
+    }
+
+    public static View create(Context context, FragmentListener listener, int windowType,
+            String title) {
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT,
                 windowType,
@@ -94,10 +148,13 @@ new = '''    public static View create(Context context, FragmentListener listene
 '''
 
 if new not in updated:
-    if old not in updated:
+    if previous_new in updated:
+        updated = updated.replace(previous_new, new, 1)
+    elif old in updated:
+        updated = updated.replace(old, new, 1)
+    else:
         print(f"Did not find NavigationBarFragment create block in {path}", file=sys.stderr)
         sys.exit(1)
-    updated = updated.replace(old, new, 1)
 
 if updated == text:
     print(f"NavigationBarFragment secondary window compatibility already updated in {path}")
