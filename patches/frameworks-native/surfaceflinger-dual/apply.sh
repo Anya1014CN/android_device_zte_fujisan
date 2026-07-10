@@ -25,6 +25,8 @@ for include in ("#include <thread>\n", "#include <unistd.h>\n"):
         else:
             text = include + text
 
+before_cleanup = text
+
 # Remove earlier broad bring-up attempts if they are present in an already
 # patched tree. SurfaceFlinger must not synthesize hotplug events during boot:
 # doing so can race default display publication and leave system_server stuck
@@ -60,9 +62,7 @@ text = re.sub(
     text,
 )
 
-if text == path.read_text():
-    pass
-else:
+if text != before_cleanup:
     path.write_text(text)
     print(f"fujisan: removed unsafe SurfaceFlinger secondary hotplug patch from {path}")
     text = path.read_text()
@@ -157,6 +157,8 @@ else:
 boot_replay = '''    // Fujisan dual-display: stock HWC can expose display 1 before SurfaceFlinger
     // has a real DisplayDevice for it. After boot, vendor init marks the secondary
     // panel online; replay the external hotplug a few times so SF can bind it.
+    // DisplayManager may already have sent the ON power request while SF still
+    // had no DisplayDevice, so follow the replay with an explicit power-on.
     if (property_get_bool("ro.feature.target_dual_display", false)) {
         const auto sequenceId = mComposerSequenceId;
         std::thread([this, sequenceId]() {
@@ -170,6 +172,18 @@ boot_replay = '''    // Fujisan dual-display: stock HWC can expose display 1 bef
                 ALOGI("fujisan: replaying secondary built-in display hotplug after boot");
                 onHotplugReceived(sequenceId, HWC_DISPLAY_EXTERNAL,
                         HWC2::Connection::Connected, false);
+                for (int powerAttempt = 0; powerAttempt < 4; powerAttempt++) {
+                    usleep(250000);
+                    sp<IBinder> secondaryDisplay;
+                    {
+                        Mutex::Autolock _l(mStateLock);
+                        secondaryDisplay = mBuiltinDisplays[DisplayDevice::DISPLAY_EXTERNAL];
+                    }
+                    if (secondaryDisplay != nullptr) {
+                        ALOGI("fujisan: forcing secondary built-in display power on");
+                        setPowerMode(secondaryDisplay, HWC_POWER_MODE_NORMAL);
+                    }
+                }
             }
         }).detach();
     }
