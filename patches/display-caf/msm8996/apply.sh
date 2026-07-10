@@ -479,9 +479,9 @@ if 'HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL])' not in upda
     applied += 1
 
 register_pattern = re.compile(
-    r'  if \(descriptor == HWC2_CALLBACK_HOTPLUG\) \{\n'
+    r'  if \(descriptor == HWC2_CALLBACK_HOTPLUG\)(?: \{)?\n'
     r'(?:    if \(hwc_session->hwc_display_\[HWC_DISPLAY_PRIMARY\]\) \{\n)?'
-    r'      hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected\);\n'
+    r'\s*hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected\);\n'
     r'(?:    \}\n)?'
     r'(?:    static bool fujisan_hotplug_scheduled = false;\n'
     r'    if \(!fujisan_hotplug_scheduled && IsFujisanDualDisplayTarget\(\)\) \{\n'
@@ -493,8 +493,14 @@ register_pattern = re.compile(
     r'        \}\n'
     r'        int secondary_status = hwc_session->HotPlugHandler\(true\);\n'
     r'        if \(secondary_status\) \{\n'
-    r'          DLOGW\("Delayed dual-screen secondary hotplug failed, status = %d",\n'
-    r'                secondary_status\);\n'
+    r'          if \(hwc_session->hwc_display_\[HWC_DISPLAY_EXTERNAL\]\) \{\n'
+    r'            DLOGW\("Delayed dual-screen secondary hotplug already present, replaying callback"\);\n'
+    r'            hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_EXTERNAL,\n'
+    r'                HWC2::Connection::Connected\);\n'
+    r'          \} else \{\n'
+    r'            DLOGW\("Delayed dual-screen secondary hotplug failed, status = %d",\n'
+    r'                  secondary_status\);\n'
+    r'          \}\n'
     r'        \}\n'
     r'      \}\)\.detach\(\);\n'
     r'    \}\n)?'
@@ -505,7 +511,7 @@ register_pattern = re.compile(
     r'              secondary_status\);\n'
     r'      \}\n'
     r'    \}\n)?'
-    r'  \}\n',
+    r'(?:  \}\n)?',
     re.M,
 )
 if not register_pattern.search(updated):
@@ -526,8 +532,14 @@ register_replacement = (
     '        }\n'
     '        int secondary_status = hwc_session->HotPlugHandler(true);\n'
     '        if (secondary_status) {\n'
-    '          DLOGW("Delayed dual-screen secondary hotplug failed, status = %d",\n'
-    '                secondary_status);\n'
+    '          if (hwc_session->hwc_display_[HWC_DISPLAY_EXTERNAL]) {\n'
+    '            DLOGW("Delayed dual-screen secondary hotplug already present, replaying callback");\n'
+    '            hwc_session->callbacks_.Hotplug(HWC_DISPLAY_EXTERNAL,\n'
+    '                HWC2::Connection::Connected);\n'
+    '          } else {\n'
+    '            DLOGW("Delayed dual-screen secondary hotplug failed, status = %d",\n'
+    '                  secondary_status);\n'
+    '          }\n'
     '        }\n'
     '      }).detach();\n'
     '    }\n'

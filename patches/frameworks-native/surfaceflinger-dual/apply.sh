@@ -53,8 +53,45 @@ text = re.sub(
 )
 
 if text == path.read_text():
-    print(f"fujisan: SurfaceFlinger secondary hotplug patch disabled in {path}")
+    pass
 else:
     path.write_text(text)
     print(f"fujisan: removed unsafe SurfaceFlinger secondary hotplug patch from {path}")
+    text = path.read_text()
+
+cleanup = '''        if (connection == HWC2::Connection::Connected) {
+            bool fujisanDualDisplay = false;
+            {
+                char target[PROPERTY_VALUE_MAX];
+                property_get("ro.feature.target_dual_display", target, "0");
+                fujisanDualDisplay = target[0] == '1';
+            }
+            if (fujisanDualDisplay) {
+                const sp<IBinder> oldToken = mBuiltinDisplays[type];
+                const wp<IBinder> oldDisplay(oldToken);
+                if (oldToken != nullptr && mDisplays.indexOfKey(oldDisplay) < 0) {
+                    ALOGI("fujisan: dropping stale secondary display token before hotplug replay");
+                    mCurrentState.displays.removeItem(oldDisplay);
+                    mDrawingState.displays.removeItem(oldDisplay);
+                    mBuiltinDisplays[type].clear();
+                }
+            }
+            createBuiltinDisplayLocked(type);
+'''
+
+old = '''        if (connection == HWC2::Connection::Connected) {
+            createBuiltinDisplayLocked(type);
+'''
+
+if cleanup in text:
+    print(f"fujisan: SurfaceFlinger stale secondary token cleanup already present in {path}")
+    sys.exit(0)
+
+if old not in text:
+    print(f"fujisan: ERROR: could not find external hotplug connect block in {path}", file=sys.stderr)
+    sys.exit(1)
+
+text = text.replace(old, cleanup, 1)
+path.write_text(text)
+print(f"fujisan: SurfaceFlinger stale secondary token cleanup applied to {path}")
 PY
