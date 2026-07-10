@@ -46,7 +46,6 @@ public final class SecondarySystemUiService extends Service {
     private TextView mClockView;
     private TextView mBatteryView;
     private int mBatteryLevel = -1;
-    private boolean mLaunchedHome;
 
     private final Runnable mRefreshRunnable = new Runnable() {
         @Override
@@ -103,22 +102,11 @@ public final class SecondarySystemUiService extends Service {
             updateText();
         } else {
             removeBars();
-            maybeLaunchHomeOnSecondary();
         }
     }
 
     private boolean shouldShow() {
         return false;
-    }
-
-    private void maybeLaunchHomeOnSecondary() {
-        if (mLaunchedHome || mDisplayManager == null
-                || mDisplayManager.getDisplay(SECONDARY_DISPLAY_ID) == null
-                || !"4".equals(SystemProperties.get("persist.vendor.fujisan.display_mode", "1"))) {
-            return;
-        }
-        mLaunchedHome = true;
-        launchHomeOnSecondary();
     }
 
     private void ensureBars() {

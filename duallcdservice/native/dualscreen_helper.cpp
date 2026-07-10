@@ -36,6 +36,19 @@ static void launchSecondaryHomeIfDocked(const char *mode) {
                      "-c android.intent.category.HOME >/dev/null 2>&1");
     }
     ALOGI("dualscreen-helper: secondary HOME launch result=%d", ret);
+
+    int primary_ret = system("/system/bin/am start --display 0 "
+                             "-n org.lineageos.trebuchet/"
+                             "com.android.launcher3.searchlauncher.SearchLauncher "
+                             ">/dev/null 2>&1");
+    if (primary_ret != 0) {
+        ALOGW("dualscreen-helper: primary Trebuchet launch failed (%d), trying default HOME",
+              primary_ret);
+        primary_ret = system("/system/bin/am start --display 0 "
+                             "-a android.intent.action.MAIN "
+                             "-c android.intent.category.HOME >/dev/null 2>&1");
+    }
+    ALOGI("dualscreen-helper: primary HOME launch result=%d", primary_ret);
 }
 
 int main() {
