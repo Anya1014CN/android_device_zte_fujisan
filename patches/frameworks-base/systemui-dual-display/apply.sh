@@ -299,8 +299,7 @@ create_new = '''    protected void createNavigationBar() {
 
     private void createFujisanSecondarySystemBars() {
         if (!shouldCreateFujisanSecondarySystemBars()
-                || mFujisanSecondaryNavigationBarView != null
-                || mFujisanSecondaryStatusBarView != null) {
+                || mFujisanSecondaryNavigationBarView != null) {
             return;
         }
 
@@ -338,12 +337,18 @@ create_new = '''    protected void createNavigationBar() {
             mFujisanSecondaryNavigationBarView = null;
         }
 
-        addFujisanSecondaryStatusBar(displayContext);
+        if (shouldCreateFujisanSecondaryStatusBar()) {
+            addFujisanSecondaryStatusBar(displayContext);
+        }
     }
 
     private boolean shouldCreateFujisanSecondarySystemBars() {
         return SystemProperties.getBoolean("ro.feature.target_dual_display", false)
                 && "4".equals(SystemProperties.get("persist.vendor.fujisan.display_mode", "1"));
+    }
+
+    private boolean shouldCreateFujisanSecondaryStatusBar() {
+        return SystemProperties.getBoolean("persist.vendor.fujisan.secondary_statusbar", false);
     }
 
     private void addFujisanSecondaryStatusBar(Context displayContext) {
