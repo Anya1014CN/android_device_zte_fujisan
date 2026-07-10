@@ -17,14 +17,11 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 
-if "syncFujisanSecondaryBacklight" in text:
-    print(f"LightsService fujisan secondary-backlight patch already present in {path}")
-    sys.exit(0)
-
 updated = text
 
 imports = {
     "import android.os.SystemProperties;\n": "import android.os.Message;\n",
+    "import android.os.StrictMode;\n": "import android.os.SystemProperties;\n",
     "import java.io.FileOutputStream;\n": "import android.util.Slog;\n",
     "import java.io.IOException;\n": "import java.io.FileOutputStream;\n",
 }
@@ -45,10 +42,11 @@ replacement = r'''\1
                         syncFujisanSecondaryBacklight(color & 0x000000ff);
                     }
 '''
-if not native_call_pattern.search(updated):
-    print(f"Did not find setLight_native call in {path}", file=sys.stderr)
-    sys.exit(1)
-updated = native_call_pattern.sub(replacement, updated, count=1)
+if "syncFujisanSecondaryBacklight(color & 0x000000ff)" not in updated:
+    if not native_call_pattern.search(updated):
+        print(f"Did not find setLight_native call in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = native_call_pattern.sub(replacement, updated, count=1)
 
 helper_anchor = '''    private int getVrDisplayMode() {
 '''
@@ -70,20 +68,48 @@ helper = '''    private static final String FUJISAN_SECONDARY_BACKLIGHT =
             return;
         }
 
-        try (FileOutputStream out = new FileOutputStream(FUJISAN_SECONDARY_BACKLIGHT)) {
-            out.write(Integer.toString(brightness).getBytes());
-            out.write('\\n');
-        } catch (IOException e) {
-            Slog.w(TAG, "Unable to sync fujisan secondary backlight", e);
+        StrictMode.ThreadPolicy oldPolicy = StrictMode.allowThreadDiskWrites();
+        try {
+            try (FileOutputStream out = new FileOutputStream(FUJISAN_SECONDARY_BACKLIGHT)) {
+                out.write(Integer.toString(brightness).getBytes());
+                out.write('\\n');
+            } catch (IOException e) {
+                Slog.w(TAG, "Unable to sync fujisan secondary backlight", e);
+            }
+        } finally {
+            StrictMode.setThreadPolicy(oldPolicy);
         }
     }
 
 '''
-if helper_anchor not in updated:
-    print(f"Did not find helper anchor in {path}", file=sys.stderr)
-    sys.exit(1)
-updated = updated.replace(helper_anchor, helper + helper_anchor, 1)
+helper_pattern = re.compile(
+    r'''    private static final String FUJISAN_SECONDARY_BACKLIGHT =\n'''
+    r'''            "/sys/class/leds/lcd-backlight-2/brightness";\n\n'''
+    r'''    private boolean shouldSyncFujisanSecondaryBacklight\(\) \{\n'''
+    r'''        return SystemProperties\.getBoolean\("ro\.feature\.target_dual_display", false\)\n'''
+    r'''                && \("2"\.equals\(SystemProperties\.get\("persist\.vendor\.fujisan\.display_mode", "1"\)\)\n'''
+    r'''                        \|\| "4"\.equals\(SystemProperties\.get\("persist\.vendor\.fujisan\.display_mode", "1"\)\)\n'''
+    r'''                        \|\| "8"\.equals\(SystemProperties\.get\("persist\.vendor\.fujisan\.display_mode", "1"\)\)\)\n'''
+    r'''                && \("3"\.equals\(SystemProperties\.get\("persist\.sys\.zte\.hallStatus", "1"\)\)\n'''
+    r'''                        \|\| SystemProperties\.getBoolean\(\n'''
+    r'''                                "persist\.vendor\.fujisan\.force_dual_screen", false\)\);\n'''
+    r'''    \}\n\n'''
+    r'''    private void syncFujisanSecondaryBacklight\(int brightness\) \{\n'''
+    r'''        .*?'''
+    r'''    \}\n\n''',
+    re.S,
+)
+if helper_pattern.search(updated):
+    updated = helper_pattern.sub(helper, updated, count=1)
+else:
+    if helper_anchor not in updated:
+        print(f"Did not find helper anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(helper_anchor, helper + helper_anchor, 1)
 
-path.write_text(updated)
-print(f"Applied fujisan secondary-backlight LightsService patch to {path}")
+if updated == text:
+    print(f"LightsService fujisan secondary-backlight patch already present in {path}")
+else:
+    path.write_text(updated)
+    print(f"Applied fujisan secondary-backlight LightsService patch to {path}")
 PY
