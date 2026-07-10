@@ -1,10 +1,31 @@
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #include <cutils/properties.h>
 #include <utils/Log.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 using android::sp;
 using vendor::display::config::V1_0::IDisplayConfig;
+
+static void launchSecondaryHomeIfDocked(const char *mode) {
+    if (mode[0] != '4') {
+        return;
+    }
+
+    sleep(2);
+    ALOGI("dualscreen-helper: launching secondary HOME on display 1");
+    int ret = system("/system/bin/am start --display 1 "
+                     "-n org.lineageos.trebuchet/"
+                     "com.android.launcher3.searchlauncher.SearchLauncher "
+                     ">/dev/null 2>&1");
+    if (ret != 0) {
+        ALOGW("dualscreen-helper: Trebuchet launch failed (%d), trying default HOME", ret);
+        ret = system("/system/bin/am start --display 1 "
+                     "-a android.intent.action.MAIN "
+                     "-c android.intent.category.HOME >/dev/null 2>&1");
+    }
+    ALOGI("dualscreen-helper: secondary HOME launch result=%d", ret);
+}
 
 int main() {
     ALOGI("dualscreen-helper: starting");
@@ -71,6 +92,7 @@ int main() {
         ALOGI("dualscreen-helper: refreshScreen %s",
               refresh_ret.isOk() ? "ok" : "failed");
 
+        launchSecondaryHomeIfDocked(mode);
         return 0;
     }
 

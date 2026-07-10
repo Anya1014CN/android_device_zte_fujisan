@@ -7,3 +7,6 @@ service dualscreen-helper /vendor/bin/dualscreen-helper
 
 on property:sys.boot_completed=1
     start dualscreen-helper
+
+on property:persist.vendor.fujisan.display_mode=4
+    start dualscreen-helper
