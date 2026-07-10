@@ -17,6 +17,14 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 
+for include in ("#include <thread>\n", "#include <unistd.h>\n"):
+    if include not in text:
+        anchor = "#include <utils/Trace.h>\n"
+        if anchor in text:
+            text = text.replace(anchor, anchor + include, 1)
+        else:
+            text = include + text
+
 # Remove earlier broad bring-up attempts if they are present in an already
 # patched tree. SurfaceFlinger must not synthesize hotplug events during boot:
 # doing so can race default display publication and leave system_server stuck
@@ -66,6 +74,36 @@ cleanup = '''        if (connection == HWC2::Connection::Connected) {
                 property_get("ro.feature.target_dual_display", target, "0");
                 fujisanDualDisplay = target[0] == '1';
             }
+            bool createDisplay = true;
+            if (fujisanDualDisplay) {
+                const sp<IBinder> oldToken = mBuiltinDisplays[type];
+                const wp<IBinder> oldDisplay(oldToken);
+                if (oldToken != nullptr && mDisplays.indexOfKey(oldDisplay) < 0) {
+                    ALOGI("fujisan: dropping stale secondary display token before hotplug replay");
+                    mCurrentState.displays.removeItem(oldDisplay);
+                    mDrawingState.displays.removeItem(oldDisplay);
+                    mBuiltinDisplays[type].clear();
+                } else if (oldToken != nullptr) {
+                    ALOGI("fujisan: secondary display token already has a DisplayDevice");
+                    createDisplay = false;
+                }
+            }
+            if (createDisplay) {
+                createBuiltinDisplayLocked(type);
+            }
+'''
+
+old = '''        if (connection == HWC2::Connection::Connected) {
+            createBuiltinDisplayLocked(type);
+'''
+
+old_cleanup = '''        if (connection == HWC2::Connection::Connected) {
+            bool fujisanDualDisplay = false;
+            {
+                char target[PROPERTY_VALUE_MAX];
+                property_get("ro.feature.target_dual_display", target, "0");
+                fujisanDualDisplay = target[0] == '1';
+            }
             if (fujisanDualDisplay) {
                 const sp<IBinder> oldToken = mBuiltinDisplays[type];
                 const wp<IBinder> oldDisplay(oldToken);
@@ -79,19 +117,58 @@ cleanup = '''        if (connection == HWC2::Connection::Connected) {
             createBuiltinDisplayLocked(type);
 '''
 
-old = '''        if (connection == HWC2::Connection::Connected) {
-            createBuiltinDisplayLocked(type);
-'''
-
 if cleanup in text:
-    print(f"fujisan: SurfaceFlinger stale secondary token cleanup already present in {path}")
-    sys.exit(0)
-
-if old not in text:
+    pass
+elif old_cleanup in text:
+    text = text.replace(old_cleanup, cleanup, 1)
+elif old in text:
+    text = text.replace(old, cleanup, 1)
+else:
     print(f"fujisan: ERROR: could not find external hotplug connect block in {path}", file=sys.stderr)
     sys.exit(1)
 
-text = text.replace(old, cleanup, 1)
+boot_replay = '''    // Fujisan dual-display: stock HWC can expose display 1 before SurfaceFlinger
+    // has a real DisplayDevice for it. After boot, vendor init marks the secondary
+    // panel online; replay the external hotplug a few times so SF can bind it.
+    if (property_get_bool("ro.feature.target_dual_display", false)) {
+        const auto sequenceId = mComposerSequenceId;
+        std::thread([this, sequenceId]() {
+            for (int attempt = 0; attempt < 3; attempt++) {
+                sleep(2);
+                char mode[PROPERTY_VALUE_MAX];
+                property_get("persist.vendor.fujisan.display_mode", mode, "1");
+                if (mode[0] != '2' && mode[0] != '4' && mode[0] != '8') {
+                    return;
+                }
+                ALOGI("fujisan: replaying secondary built-in display hotplug after boot");
+                onHotplugReceived(sequenceId, HWC_DISPLAY_EXTERNAL,
+                        HWC2::Connection::Connected, false);
+            }
+        }).detach();
+    }
+'''
+
+boot_anchor = '''    sp<LambdaMessage> readProperties = new LambdaMessage([&]() {
+        readPersistentProperties();
+    });
+    postMessageAsync(readProperties);
+'''
+
+old_boot_replay_pattern = re.compile(
+    r'''\n    // Fujisan dual-display: stock HWC can expose display 1 before SurfaceFlinger\n'''
+    r'''    // has a real DisplayDevice for it\..*?'''
+    r'''        \}\)\.detach\(\);\n'''
+    r'''    \}\n''',
+    re.S,
+)
+
+if boot_replay not in text:
+    text = old_boot_replay_pattern.sub("", text, count=1)
+    if boot_anchor not in text:
+        print(f"fujisan: ERROR: could not find bootFinished readProperties anchor in {path}", file=sys.stderr)
+        sys.exit(1)
+    text = text.replace(boot_anchor, boot_anchor + "\n" + boot_replay, 1)
+
 path.write_text(text)
-print(f"fujisan: SurfaceFlinger stale secondary token cleanup applied to {path}")
+print(f"fujisan: SurfaceFlinger boot-safe secondary hotplug replay applied to {path}")
 PY
