@@ -77,10 +77,9 @@ TARGET_USES_OVERLAY := true
 TARGET_USES_QCOM_DISPLAY_BSP := true
 USE_OPENGL_RENDERER := true
 
-# Build HWC from source (fujisan dual-screen patches expect this).
-# The prebuilt HWC blob in the vendor tree is intentionally excluded
-# so that the patched source under hardware/qcom/display/msm8996/
-# produces the hwcomposer.msm8996.so module.
+# Use the SDM HWC2 display stack, but keep ZTE's stock hwcomposer blob.
+# The CAF-built hwcomposer aborts inside the stock composer HIDL wrapper
+# during boot on fujisan.
 TARGET_USES_SDM_HWC2 := true
 
 # Recovery
