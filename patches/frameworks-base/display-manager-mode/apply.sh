@@ -254,7 +254,7 @@ helpers = '''    private LogicalDisplay chooseFujisanLogicalDisplayLocked(Displa
             viewport.displayId = 1;
             viewport.logicalFrame.set(0, 0, 1080, 1920);
             viewport.physicalFrame.set(0, 0, 1080, 1920);
-            viewport.deviceWidth = 2160;
+            viewport.deviceWidth = 1080;
             viewport.deviceHeight = 1920;
         }
     }
@@ -279,6 +279,22 @@ if helpers not in updated:
         print(f"Did not find logical-display helper anchor in {path}", file=sys.stderr)
         sys.exit(1)
     updated = updated.replace(helper_anchor, helpers + helper_anchor, 1)
+
+updated = updated.replace('''        } else if (mode == FUJISAN_MODE_DOCKED) {
+            viewport.displayId = 1;
+            viewport.logicalFrame.set(0, 0, 1080, 1920);
+            viewport.physicalFrame.set(0, 0, 1080, 1920);
+            viewport.deviceWidth = 2160;
+            viewport.deviceHeight = 1920;
+        }
+''', '''        } else if (mode == FUJISAN_MODE_DOCKED) {
+            viewport.displayId = 1;
+            viewport.logicalFrame.set(0, 0, 1080, 1920);
+            viewport.physicalFrame.set(0, 0, 1080, 1920);
+            viewport.deviceWidth = 1080;
+            viewport.deviceHeight = 1920;
+        }
+''')
 
 if updated == text:
     print(f"DisplayManagerService fujisan mode routing patch already present in {path}")

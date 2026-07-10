@@ -38,6 +38,7 @@ _fujisan_apply_patch() {
         echo "fujisan: The AOSP source tree may be out of sync. Run the following before re-lunching:" >&2
         echo "fujisan:   repo sync hardware/qcom/display-caf/msm8996" >&2
         echo "fujisan:   repo sync frameworks/base" >&2
+        echo "fujisan:   repo sync frameworks/native" >&2
         return 1
     fi
 }
@@ -76,6 +77,10 @@ _fujisan_apply_patch \
     "$_fujisan_device_dir/patches/frameworks-native/surfaceflinger-dual/apply.sh" \
     "frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp" || { unset -f _fujisan_apply_patch; return 1; }
 
+_fujisan_apply_patch \
+    "$_fujisan_device_dir/patches/frameworks-native/inputreader-fujisan-touch/apply.sh" \
+    "frameworks/native/services/inputflinger/InputReader.cpp" || { unset -f _fujisan_apply_patch; return 1; }
+
 # Invalidate build cache for patched files to ensure recompilation.
 for _f in \
     hardware/qcom/display-caf/msm8996/libqdutils/display_config.h \
@@ -88,7 +93,8 @@ for _f in \
     frameworks/base/services/core/java/com/android/server/lights/LightsService.java \
     frameworks/base/services/core/java/com/android/server/am/ActivityStackSupervisor.java \
     frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java \
-    frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
+    frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp \
+    frameworks/native/services/inputflinger/InputReader.cpp
 do
     if [ -f "$_fujisan_source_root/$_f" ]; then
         touch "$_fujisan_source_root/$_f"
