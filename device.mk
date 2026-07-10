@@ -82,6 +82,7 @@ PRODUCT_PACKAGES += \
     libsftrans \
     libZTE_ImagePost \
     libzte_night_jni \
+    hwcomposer.msm8996 \
     miframework \
     framework-zte-res \
     ZTE_Camera \
