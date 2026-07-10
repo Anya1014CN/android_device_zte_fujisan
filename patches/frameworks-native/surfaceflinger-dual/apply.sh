@@ -79,10 +79,9 @@ cleanup = '''        if (connection == HWC2::Connection::Connected) {
                 const sp<IBinder> oldToken = mBuiltinDisplays[type];
                 const wp<IBinder> oldDisplay(oldToken);
                 if (oldToken != nullptr && mDisplays.indexOfKey(oldDisplay) < 0) {
-                    ALOGI("fujisan: dropping stale secondary display token before hotplug replay");
-                    mCurrentState.displays.removeItem(oldDisplay);
+                    ALOGI("fujisan: reusing stale secondary display token for hotplug replay");
                     mDrawingState.displays.removeItem(oldDisplay);
-                    mBuiltinDisplays[type].clear();
+                    createDisplay = false;
                 } else if (oldToken != nullptr) {
                     ALOGI("fujisan: secondary display token already has a DisplayDevice");
                     createDisplay = false;
@@ -117,8 +116,36 @@ old_cleanup = '''        if (connection == HWC2::Connection::Connected) {
             createBuiltinDisplayLocked(type);
 '''
 
+old_create_new_token_cleanup = '''        if (connection == HWC2::Connection::Connected) {
+            bool fujisanDualDisplay = false;
+            {
+                char target[PROPERTY_VALUE_MAX];
+                property_get("ro.feature.target_dual_display", target, "0");
+                fujisanDualDisplay = target[0] == '1';
+            }
+            bool createDisplay = true;
+            if (fujisanDualDisplay) {
+                const sp<IBinder> oldToken = mBuiltinDisplays[type];
+                const wp<IBinder> oldDisplay(oldToken);
+                if (oldToken != nullptr && mDisplays.indexOfKey(oldDisplay) < 0) {
+                    ALOGI("fujisan: dropping stale secondary display token before hotplug replay");
+                    mCurrentState.displays.removeItem(oldDisplay);
+                    mDrawingState.displays.removeItem(oldDisplay);
+                    mBuiltinDisplays[type].clear();
+                } else if (oldToken != nullptr) {
+                    ALOGI("fujisan: secondary display token already has a DisplayDevice");
+                    createDisplay = false;
+                }
+            }
+            if (createDisplay) {
+                createBuiltinDisplayLocked(type);
+            }
+'''
+
 if cleanup in text:
     pass
+elif old_create_new_token_cleanup in text:
+    text = text.replace(old_create_new_token_cleanup, cleanup, 1)
 elif old_cleanup in text:
     text = text.replace(old_cleanup, cleanup, 1)
 elif old in text:
