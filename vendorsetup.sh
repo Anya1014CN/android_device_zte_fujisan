@@ -74,6 +74,10 @@ _fujisan_apply_patch \
     "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java" || { unset -f _fujisan_apply_patch; return 1; }
 
 _fujisan_apply_patch \
+    "$_fujisan_device_dir/patches/frameworks-base/systemui-dual-display/apply.sh" \
+    "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java" || { unset -f _fujisan_apply_patch; return 1; }
+
+_fujisan_apply_patch \
     "$_fujisan_device_dir/patches/frameworks-native/surfaceflinger-dual/apply.sh" \
     "frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp" || { unset -f _fujisan_apply_patch; return 1; }
 
