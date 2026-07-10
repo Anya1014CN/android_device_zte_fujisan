@@ -16,14 +16,15 @@ if [ ! -f "$SEARCH" ]; then
   exit 1
 fi
 
-rm -f "$SECONDARY"
+mkdir -p "$(dirname "$SECONDARY")"
 
-python3 - "$MANIFEST" "$SEARCH" <<'PY'
+python3 - "$MANIFEST" "$SEARCH" "$SECONDARY" <<'PY'
 from pathlib import Path
 import sys
 
 manifest = Path(sys.argv[1])
 search = Path(sys.argv[2])
+secondary = Path(sys.argv[3])
 
 text = manifest.read_text()
 updated = text
@@ -63,19 +64,23 @@ else:
     print(f"Fujisan secondary Trebuchet activity already present in {manifest}")
 
 search_text = search.read_text()
-search_updated = search_text
-
-secondary_class = '''
+secondary_inline = '''
 class SecondarySearchLauncher extends SearchLauncher {
 }
 '''
+if secondary_inline in search_text:
+    search.write_text(search_text.replace(secondary_inline, ''))
+    print(f"Removed inline Fujisan secondary Trebuchet class from {search}")
 
-if secondary_class not in search_updated:
-    if not search_updated.endswith('\n'):
-        search_updated += '\n'
-    search_updated += secondary_class
-    search.write_text(search_updated)
-    print(f"Added Fujisan secondary Trebuchet class in {search}")
+secondary_source = '''package com.android.launcher3.searchlauncher;
+
+public class SecondarySearchLauncher extends SearchLauncher {
+}
+'''
+
+if secondary.exists() and secondary.read_text() == secondary_source:
+    print(f"Fujisan secondary Trebuchet class already present in {secondary}")
 else:
-    print(f"Fujisan secondary Trebuchet class already present in {search}")
+    secondary.write_text(secondary_source)
+    print(f"Added Fujisan secondary Trebuchet class in {secondary}")
 PY
