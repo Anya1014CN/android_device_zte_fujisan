@@ -78,6 +78,10 @@ _fujisan_apply_patch \
     "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java" || { unset -f _fujisan_apply_patch; return 1; }
 
 _fujisan_apply_patch \
+    "$_fujisan_device_dir/patches/packages-apps/trebuchet/apply.sh" \
+    "packages/apps/Trebuchet/AndroidManifest.xml" || { unset -f _fujisan_apply_patch; return 1; }
+
+_fujisan_apply_patch \
     "$_fujisan_device_dir/patches/frameworks-native/surfaceflinger-dual/apply.sh" \
     "frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp" || { unset -f _fujisan_apply_patch; return 1; }
 
@@ -97,6 +101,9 @@ for _f in \
     frameworks/base/services/core/java/com/android/server/lights/LightsService.java \
     frameworks/base/services/core/java/com/android/server/am/ActivityStackSupervisor.java \
     frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java \
+    frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/NavigationBarFragment.java \
+    packages/apps/Trebuchet/AndroidManifest.xml \
+    packages/apps/Trebuchet/src/com/android/launcher3/searchlauncher/SecondarySearchLauncher.java \
     frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp \
     frameworks/native/services/inputflinger/InputReader.cpp
 do
