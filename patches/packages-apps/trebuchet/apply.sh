@@ -3,6 +3,7 @@ set -eu
 
 ROOT="${1:-$PWD}"
 MANIFEST="$ROOT/packages/apps/Trebuchet/AndroidManifest.xml"
+SEARCH="$ROOT/packages/apps/Trebuchet/src/com/android/launcher3/searchlauncher/SearchLauncher.java"
 SECONDARY="$ROOT/packages/apps/Trebuchet/src/com/android/launcher3/searchlauncher/SecondarySearchLauncher.java"
 
 if [ ! -f "$MANIFEST" ]; then
@@ -10,14 +11,19 @@ if [ ! -f "$MANIFEST" ]; then
   exit 1
 fi
 
-mkdir -p "$(dirname "$SECONDARY")"
+if [ ! -f "$SEARCH" ]; then
+  echo "Missing target file: $SEARCH" >&2
+  exit 1
+fi
 
-python3 - "$MANIFEST" "$SECONDARY" <<'PY'
+rm -f "$SECONDARY"
+
+python3 - "$MANIFEST" "$SEARCH" <<'PY'
 from pathlib import Path
 import sys
 
 manifest = Path(sys.argv[1])
-secondary = Path(sys.argv[2])
+search = Path(sys.argv[2])
 
 text = manifest.read_text()
 updated = text
@@ -56,15 +62,20 @@ if updated != text:
 else:
     print(f"Fujisan secondary Trebuchet activity already present in {manifest}")
 
-secondary_source = '''package com.android.launcher3.searchlauncher;
+search_text = search.read_text()
+search_updated = search_text
 
-public class SecondarySearchLauncher extends SearchLauncher {
+secondary_class = '''
+class SecondarySearchLauncher extends SearchLauncher {
 }
 '''
 
-if secondary.exists() and secondary.read_text() == secondary_source:
-    print(f"Fujisan secondary Trebuchet class already present in {secondary}")
+if secondary_class not in search_updated:
+    if not search_updated.endswith('\n'):
+        search_updated += '\n'
+    search_updated += secondary_class
+    search.write_text(search_updated)
+    print(f"Added Fujisan secondary Trebuchet class in {search}")
 else:
-    secondary.write_text(secondary_source)
-    print(f"Added Fujisan secondary Trebuchet class in {secondary}")
+    print(f"Fujisan secondary Trebuchet class already present in {search}")
 PY

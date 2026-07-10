@@ -74,10 +74,6 @@ _fujisan_apply_patch \
     "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java" || { unset -f _fujisan_apply_patch; return 1; }
 
 _fujisan_apply_patch \
-    "$_fujisan_device_dir/patches/frameworks-base/systemui-dual-display/apply.sh" \
-    "frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java" || { unset -f _fujisan_apply_patch; return 1; }
-
-_fujisan_apply_patch \
     "$_fujisan_device_dir/patches/packages-apps/trebuchet/apply.sh" \
     "packages/apps/Trebuchet/AndroidManifest.xml" || { unset -f _fujisan_apply_patch; return 1; }
 
@@ -93,7 +89,8 @@ _fujisan_apply_patch \
 for _stale in \
     "$_fujisan_source_root/out/target/product/fujisan/system/priv-app/FujisanSecondarySystemUI" \
     "$_fujisan_source_root/out/target/product/fujisan/system/app/FujisanSecondarySystemUI" \
-    "$_fujisan_source_root/out/target/product/fujisan/obj/APPS/FujisanSecondarySystemUI_intermediates"
+    "$_fujisan_source_root/out/target/product/fujisan/obj/APPS/FujisanSecondarySystemUI_intermediates" \
+    "$_fujisan_source_root/out/target/product/fujisan/obj/APPS/Trebuchet_intermediates/src/com/android/launcher3/searchlauncher/SecondarySearchLauncher.java"
 do
     if [ -e "$_stale" ]; then
         rm -rf "$_stale"
@@ -112,9 +109,8 @@ for _f in \
     frameworks/base/services/core/java/com/android/server/lights/LightsService.java \
     frameworks/base/services/core/java/com/android/server/am/ActivityStackSupervisor.java \
     frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java \
-    frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/NavigationBarFragment.java \
     packages/apps/Trebuchet/AndroidManifest.xml \
-    packages/apps/Trebuchet/src/com/android/launcher3/searchlauncher/SecondarySearchLauncher.java \
+    packages/apps/Trebuchet/src/com/android/launcher3/searchlauncher/SearchLauncher.java \
     frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp \
     frameworks/native/services/inputflinger/InputReader.cpp
 do
