@@ -2,14 +2,112 @@
 set -eu
 
 ROOT="${1:-$PWD}"
-TARGET="$ROOT/frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java"
+TARGET_STATUS="$ROOT/frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java"
+TARGET_NAV="$ROOT/frameworks/base/packages/SystemUI/src/com/android/systemui/statusbar/phone/NavigationBarFragment.java"
 
-if [ ! -f "$TARGET" ]; then
-  echo "Missing target file: $TARGET" >&2
+if [ ! -f "$TARGET_STATUS" ]; then
+  echo "Missing target file: $TARGET_STATUS" >&2
   exit 1
 fi
 
-python3 - "$TARGET" <<'PY'
+if [ ! -f "$TARGET_NAV" ]; then
+  echo "Missing target file: $TARGET_NAV" >&2
+  exit 1
+fi
+
+python3 - "$TARGET_NAV" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+updated = text
+
+old = '''    public static View create(Context context, FragmentListener listener) {
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_NAVIGATION_BAR,
+                WindowManager.LayoutParams.FLAG_TOUCHABLE_WHEN_WAKING
+                        | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                        | WindowManager.LayoutParams.FLAG_SPLIT_TOUCH
+                        | WindowManager.LayoutParams.FLAG_SLIPPERY,
+                PixelFormat.TRANSLUCENT);
+        lp.token = new Binder();
+        lp.setTitle("NavigationBar");
+        lp.windowAnimations = 0;
+
+        View navigationBarView = LayoutInflater.from(context).inflate(
+                R.layout.navigation_bar_window, null);
+
+        if (DEBUG) Log.v(TAG, "addNavigationBar: about to add " + navigationBarView);
+        if (navigationBarView == null) return null;
+
+        context.getSystemService(WindowManager.class).addView(navigationBarView, lp);
+        FragmentHostManager fragmentHost = FragmentHostManager.get(navigationBarView);
+        NavigationBarFragment fragment = new NavigationBarFragment();
+        fragmentHost.getFragmentManager().beginTransaction()
+                .replace(R.id.navigation_bar_frame, fragment, TAG)
+                .commit();
+        fragmentHost.addTagListener(TAG, listener);
+        return navigationBarView;
+    }
+'''
+
+new = '''    public static View create(Context context, FragmentListener listener) {
+        return create(context, listener, WindowManager.LayoutParams.TYPE_NAVIGATION_BAR,
+                "NavigationBar");
+    }
+
+    public static View create(Context context, FragmentListener listener, int windowType,
+            String title) {
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT,
+                windowType,
+                WindowManager.LayoutParams.FLAG_TOUCHABLE_WHEN_WAKING
+                        | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                        | WindowManager.LayoutParams.FLAG_SPLIT_TOUCH
+                        | WindowManager.LayoutParams.FLAG_SLIPPERY,
+                PixelFormat.TRANSLUCENT);
+        lp.token = new Binder();
+        lp.setTitle(title);
+        lp.windowAnimations = 0;
+
+        View navigationBarView = LayoutInflater.from(context).inflate(
+                R.layout.navigation_bar_window, null);
+
+        if (DEBUG) Log.v(TAG, "addNavigationBar: about to add " + navigationBarView);
+        if (navigationBarView == null) return null;
+
+        context.getSystemService(WindowManager.class).addView(navigationBarView, lp);
+        FragmentHostManager fragmentHost = FragmentHostManager.get(navigationBarView);
+        NavigationBarFragment fragment = new NavigationBarFragment();
+        fragmentHost.getFragmentManager().beginTransaction()
+                .replace(R.id.navigation_bar_frame, fragment, TAG)
+                .commit();
+        fragmentHost.addTagListener(TAG, listener);
+        return navigationBarView;
+    }
+'''
+
+if new not in updated:
+    if old not in updated:
+        print(f"Did not find NavigationBarFragment create block in {path}", file=sys.stderr)
+        sys.exit(1)
+    updated = updated.replace(old, new, 1)
+
+if updated == text:
+    print(f"NavigationBarFragment secondary window compatibility already updated in {path}")
+    sys.exit(0)
+
+path.write_text(updated)
+print(f"Added NavigationBarFragment secondary window compatibility in {path}")
+PY
+
+python3 - "$TARGET_STATUS" <<'PY'
 from pathlib import Path
 import sys
 
@@ -93,14 +191,22 @@ create_new = '''    protected void createNavigationBar() {
             return;
         }
 
-        mFujisanSecondaryNavigationBarView = NavigationBarFragment.create(displayContext,
-                (tag, fragment) -> {
-                    mFujisanSecondaryNavigationBar = (NavigationBarFragment) fragment;
-                    if (mLightBarController != null) {
-                        mFujisanSecondaryNavigationBar.setLightBarController(mLightBarController);
-                    }
-                    mFujisanSecondaryNavigationBar.setCurrentSysuiVisibility(mSystemUiVisibility);
-                });
+        try {
+            mFujisanSecondaryNavigationBarView = NavigationBarFragment.create(displayContext,
+                    (tag, fragment) -> {
+                        mFujisanSecondaryNavigationBar = (NavigationBarFragment) fragment;
+                        if (mLightBarController != null) {
+                            mFujisanSecondaryNavigationBar.setLightBarController(
+                                    mLightBarController);
+                        }
+                        mFujisanSecondaryNavigationBar.setCurrentSysuiVisibility(
+                                mSystemUiVisibility);
+                    }, WindowManager.LayoutParams.TYPE_SYSTEM_ERROR,
+                    "FujisanSecondaryNavigationBar");
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Unable to add secondary navigation bar", e);
+            mFujisanSecondaryNavigationBarView = null;
+        }
 
         addFujisanSecondaryStatusBar(displayContext);
     }
@@ -122,7 +228,7 @@ create_new = '''    protected void createNavigationBar() {
         final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 getStatusBarHeight(),
-                WindowManager.LayoutParams.TYPE_STATUS_BAR,
+                WindowManager.LayoutParams.TYPE_SYSTEM_ERROR,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_SPLIT_TOUCH
