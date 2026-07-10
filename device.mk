@@ -82,6 +82,7 @@ PRODUCT_PACKAGES += \
     libsftrans \
     libZTE_ImagePost \
     libzte_night_jni \
+    dualscreen-helper \
     miframework \
     framework-zte-res \
     ZTE_Camera \
