@@ -17,8 +17,10 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 
-# Remove the earlier broad bring-up attempt if it is present in an already
-# patched tree. It was harmless, but it did not create a SurfaceFlinger display.
+# Remove earlier broad bring-up attempts if they are present in an already
+# patched tree. SurfaceFlinger must not synthesize hotplug events during boot:
+# doing so can race default display publication and leave system_server stuck
+# in DisplayManagerService.waitForDefaultDisplay().
 text = re.sub(
     r'''\n    // Fujisan dual-display: bypass isConnected check for built-in external panel\.\n'''
     r'''    bool fujisanDualDisplay = false;\n'''
@@ -50,40 +52,9 @@ text = re.sub(
     text,
 )
 
-force_hotplug = '''    // Fujisan dual-display: the secondary built-in panel can emit its
-    // connect uevent before SurfaceFlinger has registered as the HWC listener.
-    // Replay it only when the device is open, or when explicitly forced for debugging.
-    bool forceFujisanExternalDisplayHotplug = false;
-    {
-        char target[PROPERTY_VALUE_MAX];
-        char hall[PROPERTY_VALUE_MAX];
-        char force[PROPERTY_VALUE_MAX];
-        property_get("ro.feature.target_dual_display", target, "0");
-        property_get("persist.sys.zte.hallStatus", hall, "1");
-        property_get("persist.vendor.fujisan.force_dual_screen", force, "0");
-        forceFujisanExternalDisplayHotplug =
-                target[0] == '1' && ((hall[0] == '3' && hall[1] == '\\0') || force[0] == '1');
-    }
-    if (forceFujisanExternalDisplayHotplug) {
-        ALOGI("fujisan: forcing secondary built-in display hotplug");
-        onHotplugReceived(mComposerSequenceId, HWC_DISPLAY_EXTERNAL,
-                HWC2::Connection::Connected, false);
-    }
-'''
-
-insert_after = '''    // initialize our drawing state
-    mDrawingState = mCurrentState;
-'''
-
-if insert_after not in text:
-    print(f"fujisan: ERROR: could not find drawing-state initialization in {path}", file=sys.stderr)
-    sys.exit(1)
-
-if force_hotplug in text:
-    print(f"fujisan: SurfaceFlinger secondary hotplug patch already present in {path}")
-    sys.exit(0)
-
-text = text.replace(insert_after, insert_after + "\n" + force_hotplug + "\n", 1)
-path.write_text(text)
-print(f"fujisan: SurfaceFlinger secondary hotplug patch applied to {path}")
+if text == path.read_text():
+    print(f"fujisan: SurfaceFlinger secondary hotplug patch disabled in {path}")
+else:
+    path.write_text(text)
+    print(f"fujisan: removed unsafe SurfaceFlinger secondary hotplug patch from {path}")
 PY

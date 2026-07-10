@@ -394,24 +394,6 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 
-helper_old = '''#define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
-#define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"
-'''
-
-helper_new = '''#define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
-#define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"
-
-static bool IsFujisanDualDisplayTarget() {
-  char target[PROPERTY_VALUE_MAX] = {};
-  char hall[PROPERTY_VALUE_MAX] = {};
-  char force[PROPERTY_VALUE_MAX] = {};
-  property_get("ro.feature.target_dual_display", target, "0");
-  property_get("persist.sys.zte.hallStatus", hall, "1");
-  property_get("persist.vendor.fujisan.force_dual_screen", force, "0");
-  return target[0] == '1' && ((hall[0] == '3' && hall[1] == '\\0') || force[0] == '1');
-}
-'''
-
 updated = text
 applied = 0
 
@@ -430,22 +412,16 @@ updated = re.sub(
 if updated != text:
     applied += 1
 
-if helper_new not in updated:
-    helper_pattern = re.compile(
-        r'''static bool IsFujisanDualDisplayTarget\(\) \{\n'''
-        r'''  .*?'''
-        r'''\}\n''',
-        re.S,
-    )
-    if helper_pattern.search(updated):
-        updated = helper_pattern.sub(helper_new.strip() + "\n", updated, count=1)
-        applied += 1
-    elif helper_old not in updated:
-        print(f"Did not find expected HWCSession helper block in {path}", file=sys.stderr)
-        sys.exit(1)
-    else:
-        updated = updated.replace(helper_old, helper_new, 1)
-        applied += 1
+helper_pattern = re.compile(
+    r'''\nstatic bool IsFujisanDualDisplayTarget\(\) \{\n'''
+    r'''  .*?'''
+    r'''\}\n''',
+    re.S,
+)
+updated_without_helper = helper_pattern.sub("\n", updated, count=1)
+if updated_without_helper != updated:
+    updated = updated_without_helper
+    applied += 1
 
 if 'HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL])' not in updated:
     deinit_pattern = re.compile(
@@ -470,40 +446,40 @@ if 'HWCDisplayExternal::Destroy(hwc_display_[HWC_DISPLAY_EXTERNAL])' not in upda
     )
     applied += 1
 
-if 'int secondary_status = hwc_session->HotPlugHandler(true);' not in updated:
-    register_pattern = re.compile(
-        r'  if \(descriptor == HWC2_CALLBACK_HOTPLUG\) \{\n'
-        r'(?:    if \(hwc_session->hwc_display_\[HWC_DISPLAY_PRIMARY\]\) \{\n)?'
-        r'      hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected\);\n'
-        r'(?:    \}\n)?'
-        r'  \}\n',
-        re.M,
-    )
-    if not register_pattern.search(updated):
-        print(f"Did not find expected HWCSession callback block in {path}", file=sys.stderr)
-        sys.exit(1)
-    updated = register_pattern.sub(
-        '  if (descriptor == HWC2_CALLBACK_HOTPLUG) {\n'
-        '    if (hwc_session->hwc_display_[HWC_DISPLAY_PRIMARY]) {\n'
-        '      hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);\n'
-        '    }\n'
-        '    if (IsFujisanDualDisplayTarget()) {\n'
-        '      int secondary_status = hwc_session->HotPlugHandler(true);\n'
-        '      if (secondary_status) {\n'
-        '        DLOGW("Failed to bring up dual-screen secondary display, status = %d",\n'
-        '              secondary_status);\n'
-        '      }\n'
-        '    }\n'
-        '  }\n',
-        updated,
-        count=1,
-    )
+register_pattern = re.compile(
+    r'  if \(descriptor == HWC2_CALLBACK_HOTPLUG\) \{\n'
+    r'(?:    if \(hwc_session->hwc_display_\[HWC_DISPLAY_PRIMARY\]\) \{\n)?'
+    r'      hwc_session->callbacks_\.Hotplug\(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected\);\n'
+    r'(?:    \}\n)?'
+    r'(?:    if \(IsFujisanDualDisplayTarget\(\)\) \{\n'
+    r'      int secondary_status = hwc_session->HotPlugHandler\(true\);\n'
+    r'      if \(secondary_status\) \{\n'
+    r'        DLOGW\("Failed to bring up dual-screen secondary display, status = %d",\n'
+    r'              secondary_status\);\n'
+    r'      \}\n'
+    r'    \}\n)?'
+    r'  \}\n',
+    re.M,
+)
+if not register_pattern.search(updated):
+    print(f"Did not find expected HWCSession callback block in {path}", file=sys.stderr)
+    sys.exit(1)
+register_replacement = (
+    '  if (descriptor == HWC2_CALLBACK_HOTPLUG) {\n'
+    '    if (hwc_session->hwc_display_[HWC_DISPLAY_PRIMARY]) {\n'
+    '      hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);\n'
+    '    }\n'
+    '  }\n'
+)
+updated_after_register = register_pattern.sub(register_replacement, updated, count=1)
+if updated_after_register != updated:
+    updated = updated_after_register
     applied += 1
 
 if updated == text:
-    print(f"HWC2 secondary hotplug compatibility already updated in {path}")
+    print(f"HWC2 boot-safe hotplug compatibility already updated in {path}")
     sys.exit(0)
 
 path.write_text(updated)
-print(f"Updated {applied} HWC2 dual-display blocks in {path}")
+print(f"Updated {applied} HWC2 boot-safe dual-display blocks in {path}")
 PY
