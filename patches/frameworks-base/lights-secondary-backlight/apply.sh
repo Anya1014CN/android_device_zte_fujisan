@@ -72,7 +72,7 @@ helper = '''    private static final String FUJISAN_SECONDARY_BACKLIGHT =
         try {
             try (FileOutputStream out = new FileOutputStream(FUJISAN_SECONDARY_BACKLIGHT)) {
                 out.write(Integer.toString(brightness).getBytes());
-                out.write('\\n');
+                out.write(10);
             } catch (IOException e) {
                 Slog.w(TAG, "Unable to sync fujisan secondary backlight", e);
             }
@@ -100,7 +100,7 @@ helper_pattern = re.compile(
     re.S,
 )
 if helper_pattern.search(updated):
-    updated = helper_pattern.sub(helper, updated, count=1)
+    updated = helper_pattern.sub(lambda _match: helper, updated, count=1)
 else:
     if helper_anchor not in updated:
         print(f"Did not find helper anchor in {path}", file=sys.stderr)
