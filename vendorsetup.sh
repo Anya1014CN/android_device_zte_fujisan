@@ -89,6 +89,17 @@ _fujisan_apply_patch \
     "$_fujisan_device_dir/patches/frameworks-native/inputreader-fujisan-touch/apply.sh" \
     "frameworks/native/services/inputflinger/InputReader.cpp" || { unset -f _fujisan_apply_patch; return 1; }
 
+# Keep incremental builds from carrying the removed custom secondary UI forward.
+for _stale in \
+    "$_fujisan_source_root/out/target/product/fujisan/system/priv-app/FujisanSecondarySystemUI" \
+    "$_fujisan_source_root/out/target/product/fujisan/system/app/FujisanSecondarySystemUI" \
+    "$_fujisan_source_root/out/target/product/fujisan/obj/APPS/FujisanSecondarySystemUI_intermediates"
+do
+    if [ -e "$_stale" ]; then
+        rm -rf "$_stale"
+    fi
+done
+
 # Invalidate build cache for patched files to ensure recompilation.
 for _f in \
     hardware/qcom/display-caf/msm8996/libqdutils/display_config.h \
