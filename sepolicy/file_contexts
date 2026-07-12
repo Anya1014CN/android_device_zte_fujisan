@@ -1,0 +1,5 @@
+/bt_firmware(/.*)?                                                 u:object_r:bt_firmware_file:s0
+/(vendor|system/vendor)/bin/hw/vendor\.qti\.gnss@1\.0-service      u:object_r:hal_gnss_default_exec:s0
+/(vendor|system/vendor)/bin/hw/vendor\.qti\.gnss@1\.1-service      u:object_r:hal_gnss_default_exec:s0
+/(vendor|system/vendor)/bin/hw/vendor\.qti\.gnss@1\.2-service      u:object_r:hal_gnss_default_exec:s0
+/(vendor|system/vendor)/bin/hw/android\.hardware\.gnss@1\.0-service-qti u:object_r:hal_gnss_default_exec:s0

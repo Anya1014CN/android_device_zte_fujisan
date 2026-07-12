@@ -1,0 +1,7 @@
+PRODUCT_MAKEFILES := \
+    $(LOCAL_DIR)/lineage_fujisan.mk
+
+COMMON_LUNCH_CHOICES := \
+    lineage_fujisan-user \
+    lineage_fujisan-userdebug \
+    lineage_fujisan-eng
