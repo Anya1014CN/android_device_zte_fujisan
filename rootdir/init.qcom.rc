@@ -13,9 +13,11 @@ on fs
     symlink /dev/block/platform/soc/${ro.boot.bootdevice} /dev/block/bootdevice
     mount_all /vendor/etc/fstab.qcom
     swapon_all /vendor/etc/fstab.qcom
+    write /cache/fujisan-init-stage fs
     restorecon_recursive /persist
 
 on boot
+    write /cache/fujisan-init-stage boot
     # Keep the PM8994 NFC/eSE power request line in a defined state before
     # the NFC HAL starts probing the PN548 over I2C.
     write /sys/class/gpio/export 1015
