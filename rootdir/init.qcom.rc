@@ -12,6 +12,8 @@ on early-init
 on fs
     wait /dev/block/platform/soc/${ro.boot.bootdevice}
     symlink /dev/block/platform/soc/${ro.boot.bootdevice} /dev/block/bootdevice
+    mount ext4 /dev/block/bootdevice/by-name/cache /cache noatime nosuid nodev barrier=1
+    write /cache/fujisan-init-stage fs-enter
     mount_all /system/vendor/etc/fstab.qcom
     swapon_all /system/vendor/etc/fstab.qcom
     write /cache/fujisan-init-stage fs
