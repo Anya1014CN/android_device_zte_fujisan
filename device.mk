@@ -19,6 +19,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25
 
 PRODUCT_PACKAGES += \
+    init.qcom.rc \
     libdolbyshim
 
 PRODUCT_COPY_FILES += \

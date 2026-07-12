@@ -1,5 +1,19 @@
-import /vendor/etc/init/hw/init.vendor.rc
 import /init.dualscreen.rc
+
+on early-init
+    mkdir /firmware 0771 system system
+    mkdir /bt_firmware 0771 system system
+    mkdir /dsp 0771 media media
+    mkdir /persist 0771 system system
+    symlink /system/vendor /vendor
+    symlink /sys/kernel/debug /d
+
+on fs
+    wait /dev/block/platform/soc/${ro.boot.bootdevice}
+    symlink /dev/block/platform/soc/${ro.boot.bootdevice} /dev/block/bootdevice
+    mount_all /fstab.qcom
+    swapon_all /fstab.qcom
+    restorecon_recursive /persist
 
 on boot
     # Keep the PM8994 NFC/eSE power request line in a defined state before
