@@ -42,11 +42,10 @@ BOARD_RAMDISK_OFFSET := 0x01000000
 BOARD_KERNEL_IMAGE_NAME := Image.gz-dtb
 TARGET_KERNEL_ARCH := arm64
 TARGET_KERNEL_HEADER_ARCH := arm64
-ifeq ($(PREBUILT_KERNEL),false)
 TARGET_KERNEL_SOURCE := kernel/zte/fujisan
 TARGET_KERNEL_CONFIG := lineageos_fujisan_defconfig
 TARGET_KERNEL_CLANG_COMPILE := true
-else
+ifneq ($(PREBUILT_KERNEL),false)
 TARGET_FORCE_PREBUILT_KERNEL := true
 TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilt-kernel/Image.gz-dtb.stock
 endif
