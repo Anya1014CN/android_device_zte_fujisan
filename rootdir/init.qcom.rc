@@ -1,28 +1,8 @@
-on early-init
-    write /dev/kmsg "fujisan:init.qcom early-init\n"
-    write /dev/pmsg0 "fujisan:init.qcom early-init\n"
-
-on init
-    write /dev/kmsg "fujisan:init.qcom init\n"
-    write /dev/pmsg0 "fujisan:init.qcom init\n"
-
-on fs
-    write /dev/kmsg "fujisan:init.qcom fs-enter\n"
-    write /dev/pmsg0 "fujisan:init.qcom fs-enter\n"
-    mkdir /cache 0770 system cache
-    mount ext4 /dev/block/platform/soc/7464900.sdhci/by-name/cache /cache noatime nosuid nodev barrier=1
-    write /cache/fujisan-init-stage fs-enter
-    mount_all /system/vendor/etc/fstab.qcom
-    swapon_all /system/vendor/etc/fstab.qcom
-    write /cache/fujisan-init-stage fs
-    write /dev/kmsg "fujisan:init.qcom fs-done\n"
-    write /dev/pmsg0 "fujisan:init.qcom fs-done\n"
+on post-fs
     restorecon_recursive /persist
 
 on boot
-    write /dev/kmsg "fujisan:init.qcom boot\n"
-    write /dev/pmsg0 "fujisan:init.qcom boot\n"
-    write /cache/fujisan-init-stage boot
+    write /dev/kmsg "fujisan:boot\n"
     # Keep the PM8994 NFC/eSE power request line in a defined state before
     # the NFC HAL starts probing the PN548 over I2C.
     write /sys/class/gpio/export 1015
