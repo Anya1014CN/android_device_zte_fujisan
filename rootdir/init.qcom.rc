@@ -1,17 +1,5 @@
-import /init.dualscreen.rc
-
-on early-init
-    mkdir /firmware 0771 system system
-    mkdir /bt_firmware 0771 system system
-    mkdir /dsp 0771 media media
-    mkdir /persist 0771 system system
-    rmdir /vendor
-    symlink /system/vendor /vendor
-    symlink /sys/kernel/debug /d
-
 on fs
-    wait /dev/block/platform/soc/${ro.boot.bootdevice}
-    symlink /dev/block/platform/soc/${ro.boot.bootdevice} /dev/block/bootdevice
+    mkdir /cache 0770 system cache
     mount ext4 /dev/block/platform/soc/7464900.sdhci/by-name/cache /cache noatime nosuid nodev barrier=1
     write /cache/fujisan-init-stage fs-enter
     mount_all /system/vendor/etc/fstab.qcom
