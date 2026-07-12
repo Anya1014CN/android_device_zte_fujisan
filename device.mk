@@ -23,6 +23,8 @@ PRODUCT_PACKAGES += \
     libdolbyshim
 
 PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_ROOT)/init.qcom.rc \
+    $(LOCAL_PATH)/rootdir/init.dualscreen.rc:$(TARGET_COPY_OUT_ROOT)/init.dualscreen.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/bt_firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/dsp/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/dsp/.placeholder \
