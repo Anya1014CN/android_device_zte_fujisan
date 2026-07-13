@@ -43,6 +43,7 @@ TARGET_KERNEL_ARCH := arm64
 TARGET_KERNEL_HEADER_ARCH := arm64
 TARGET_KERNEL_SOURCE := kernel/zte/msm8996
 TARGET_KERNEL_CONFIG := lineageos_fujisan_defconfig
+NEED_KERNEL_MODULE_ROOT := true
 
 # Partitions
 BOARD_BOOTIMAGE_PARTITION_SIZE := 67108864
@@ -110,7 +111,7 @@ TARGET_RIL_VARIANT := caf
 
 # Wi-Fi
 WIFI_DRIVER_MODULE_NAME := wlan
-WIFI_DRIVER_MODULE_PATH := "/vendor/lib/modules/wlan.ko"
+WIFI_DRIVER_MODULE_PATH := "/lib/modules/wlan.ko"
 WIFI_DRIVER_FW_PATH_PARAM := "/sys/module/wlan/parameters/fwpath"
 WIFI_DRIVER_FW_PATH_STA := "sta"
 WIFI_DRIVER_FW_PATH_AP := "ap"

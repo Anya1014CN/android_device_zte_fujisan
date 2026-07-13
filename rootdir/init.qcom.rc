@@ -1,5 +1,6 @@
 on post-fs
     restorecon_recursive /persist
+    insmod /lib/modules/wlan.ko
 
 on boot
     write /dev/kmsg "fujisan:boot\n"
