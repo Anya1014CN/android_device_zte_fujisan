@@ -108,6 +108,13 @@ TARGET_NO_RPC := true
 USE_DEVICE_SPECIFIC_GPS := true
 TARGET_RIL_VARIANT := caf
 
+# Wi-Fi
+WIFI_DRIVER_MODULE_NAME := wlan
+WIFI_DRIVER_MODULE_PATH := "/vendor/lib/modules/wlan.ko"
+WIFI_DRIVER_FW_PATH_PARAM := "/sys/module/wlan/parameters/fwpath"
+WIFI_DRIVER_FW_PATH_STA := "sta"
+WIFI_DRIVER_FW_PATH_AP := "ap"
+
 # Recovery
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/rootdir/etc/fstab.qcom
 TARGET_RECOVERY_PIXEL_FORMAT := "RGBX_8888"
