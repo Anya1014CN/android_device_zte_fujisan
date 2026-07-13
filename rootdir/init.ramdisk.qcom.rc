@@ -1,3 +1,0 @@
-on post-fs
-    insmod /lib/modules/wlan.ko
-    setprop wlan.driver.status ok
