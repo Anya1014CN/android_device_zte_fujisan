@@ -3,6 +3,8 @@ on post-fs
 
 on boot
     write /dev/kmsg "fujisan:boot\n"
+    # Lineage exposes the panels as independent displays.
+    write /sys/module/zte_touch_expand/parameters/separate_inputs 1
     # Keep the PM8994 NFC/eSE power request line in a defined state before
     # the NFC HAL starts probing the PN548 over I2C.
     write /sys/class/gpio/export 1015
