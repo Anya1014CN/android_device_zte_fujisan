@@ -107,6 +107,10 @@ MAX_EGL_CACHE_KEY_SIZE := 12*1024
 MAX_EGL_CACHE_SIZE := 2048*1024
 OVERRIDE_RS_DRIVER := libRSDriver_adreno.so
 
+# The legacy fujisan DRM headers use a numeric fourcc vendor argument.
+TARGET_GLOBAL_CFLAGS += -DQCOM=0x05
+TARGET_GLOBAL_CPPFLAGS += -DQCOM=0x05
+
 # GPS / radio
 TARGET_NO_RPC := true
 USE_DEVICE_SPECIFIC_GPS := true
