@@ -1,5 +1,6 @@
 DEVICE_PATH := device/zte/fujisan
 BOARD_VENDOR := zte
+TARGET_SPECIFIC_HEADER_PATH := $(DEVICE_PATH)/include
 
 # Platform
 TARGET_BOARD_PLATFORM := msm8996
@@ -106,10 +107,6 @@ USE_OPENGL_RENDERER := true
 MAX_EGL_CACHE_KEY_SIZE := 12*1024
 MAX_EGL_CACHE_SIZE := 2048*1024
 OVERRIDE_RS_DRIVER := libRSDriver_adreno.so
-
-# The legacy fujisan DRM headers use a numeric fourcc vendor argument.
-TARGET_GLOBAL_CFLAGS += -DQCOM=0x05
-TARGET_GLOBAL_CPPFLAGS += -DQCOM=0x05
 
 # GPS / radio
 TARGET_NO_RPC := true
