@@ -1,0 +1,2 @@
+allow hal_wifi_default rootfs:file { getattr open read };
+allow hal_wifi_default rootfs:system module_load;
