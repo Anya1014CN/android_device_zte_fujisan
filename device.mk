@@ -36,6 +36,13 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
+# The legacy vendor manifest exposes IPower 1.0.  SystemServer waits for this
+# HAL while creating PowerManagerService, so use the Android 11 wrapper for
+# the already-installed generic power.default module.
+PRODUCT_PACKAGES += \
+    android.hardware.power@1.0-impl \
+    android.hardware.power@1.0-service
+
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
