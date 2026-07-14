@@ -26,8 +26,6 @@ TARGET_2ND_CPU_VARIANT := kryo
 
 # Legacy vendor layout
 TARGET_COPY_OUT_VENDOR := system/vendor
-# Creates the system-root /vendor -> /system/vendor compatibility link.
-PRODUCT_VENDOR_MOVE_ENABLED := true
 BOARD_PROPERTY_OVERRIDES_SPLIT_ENABLED := true
 BOARD_VNDK_RUNTIME_DISABLE := true
 BOARD_VNDK_VERSION := current
