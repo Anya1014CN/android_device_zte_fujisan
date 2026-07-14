@@ -26,6 +26,8 @@ TARGET_2ND_CPU_VARIANT := kryo
 
 # Legacy vendor layout
 TARGET_COPY_OUT_VENDOR := system/vendor
+# Creates the system-root /vendor -> /system/vendor compatibility link.
+PRODUCT_VENDOR_MOVE_ENABLED := true
 BOARD_PROPERTY_OVERRIDES_SPLIT_ENABLED := true
 BOARD_VNDK_RUNTIME_DISABLE := true
 BOARD_VNDK_VERSION := current
@@ -76,10 +78,8 @@ BOARD_ROOT_EXTRA_FOLDERS += \
     storage \
     system
 
-# The legacy system-root image must expose /system/vendor directly as /vendor.
 BOARD_ROOT_EXTRA_SYMLINKS += \
     /system/etc:/etc \
-    /system/vendor:/vendor \
     /vendor/lib/dsp:/dsp \
     /sys/kernel/debug:/d
 
