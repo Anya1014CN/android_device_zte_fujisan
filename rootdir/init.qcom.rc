@@ -10,10 +10,3 @@ on boot
     write /sys/class/gpio/export 1015
     write /sys/class/gpio/gpio1015/direction out
     write /sys/class/gpio/gpio1015/value 1
-
-# The bootloader leaves the cached backlight level at 255 while the TD4322
-# hardware brightness register is zero. Force one transition so the panel
-# receives a DCS brightness command before framework restores its level.
-on property:sys.boot_completed=1
-    write /sys/class/leds/lcd-backlight/brightness 1
-    write /sys/class/leds/lcd-backlight/brightness 255
