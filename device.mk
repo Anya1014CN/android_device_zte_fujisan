@@ -102,6 +102,7 @@ PRODUCT_PACKAGES += \
 # Wi-Fi
 PRODUCT_PACKAGES += \
     hostapd \
+    ipacm \
     IPACM_cfg.xml \
     libQWiFiSoftApCfg \
     libqsap_sdk \

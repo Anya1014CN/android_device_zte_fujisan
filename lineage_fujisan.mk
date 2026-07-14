@@ -5,10 +5,6 @@ $(call inherit-product, vendor/lineage/config/common_full_phone.mk)
 
 $(call inherit-product, device/zte/fujisan/device.mk)
 
-# The generic Qualcomm product file adds its Android 11 IPACM after device.mk.
-# Fujisan's 3.18 IPA driver requires the matching stock daemon from vendor.
-PRODUCT_PACKAGES := $(filter-out ipacm ipacm.rc,$(PRODUCT_PACKAGES))
-
 PRODUCT_NAME := lineage_fujisan
 PRODUCT_DEVICE := fujisan
 PRODUCT_BRAND := ZTE
