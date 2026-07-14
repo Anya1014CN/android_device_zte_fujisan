@@ -26,10 +26,10 @@ TARGET_2ND_CPU_VARIANT := kryo
 
 # Legacy vendor layout
 TARGET_COPY_OUT_VENDOR := system/vendor
+PRODUCT_VENDOR_MOVE_ENABLED := true
 BOARD_PROPERTY_OVERRIDES_SPLIT_ENABLED := true
 BOARD_VNDK_RUNTIME_DISABLE := true
 BOARD_VNDK_VERSION := current
-PRODUCT_FULL_TREBLE_OVERRIDE := true
 TARGET_SYSTEM_PROP += $(DEVICE_PATH)/system.prop
 
 # Kernel
@@ -79,7 +79,6 @@ BOARD_ROOT_EXTRA_FOLDERS += \
 
 BOARD_ROOT_EXTRA_SYMLINKS += \
     /system/etc:/etc \
-    /system/vendor:/vendor \
     /vendor/lib/dsp:/dsp \
     /sys/kernel/debug:/d
 
@@ -107,14 +106,39 @@ OVERRIDE_RS_DRIVER := libRSDriver_adreno.so
 # GPS / radio
 TARGET_NO_RPC := true
 USE_DEVICE_SPECIFIC_GPS := true
+BOARD_VENDOR_QCOM_GPS_LOC_API_HARDWARE := default
+LW_FEATURE_SET := true
 TARGET_RIL_VARIANT := caf
 
+# Bluetooth
+BOARD_HAS_QCA_BT_ROME := true
+BOARD_HAVE_BLUETOOTH := true
+BOARD_HAVE_BLUETOOTH_QCOM := true
+QCOM_BT_USE_BTNV := true
+QCOM_BT_USE_SMD_TTY := true
+
+# Keymaster
+TARGET_PROVIDES_KEYMASTER := true
+
+# Thermal
+USE_DEVICE_SPECIFIC_THERMAL := true
+
 # Wi-Fi
+BOARD_HAS_QCOM_WLAN := true
+BOARD_HAS_QCOM_WLAN_SDK := true
+BOARD_WLAN_DEVICE := qcwcn
+BOARD_HOSTAPD_DRIVER := NL80211
+BOARD_HOSTAPD_PRIVATE_LIB := lib_driver_cmd_$(BOARD_WLAN_DEVICE)
+BOARD_WPA_SUPPLICANT_DRIVER := NL80211
+BOARD_WPA_SUPPLICANT_PRIVATE_LIB := lib_driver_cmd_$(BOARD_WLAN_DEVICE)
+WPA_SUPPLICANT_VERSION := VER_0_8_X
+WIFI_AVOID_IFACE_RESET_MAC_CHANGE := true
 WIFI_DRIVER_MODULE_NAME := wlan
 WIFI_DRIVER_MODULE_PATH := "/lib/modules/wlan.ko"
 WIFI_DRIVER_FW_PATH_PARAM := "/sys/module/wlan/parameters/fwpath"
 WIFI_DRIVER_FW_PATH_STA := "sta"
 WIFI_DRIVER_FW_PATH_AP := "ap"
+WIFI_DRIVER_FW_PATH_P2P := "p2p"
 
 # Recovery
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/rootdir/etc/fstab.qcom
