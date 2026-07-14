@@ -29,7 +29,6 @@ TARGET_COPY_OUT_VENDOR := system/vendor
 BOARD_PROPERTY_OVERRIDES_SPLIT_ENABLED := true
 BOARD_VNDK_RUNTIME_DISABLE := true
 BOARD_VNDK_VERSION := current
-PRODUCT_FULL_TREBLE_OVERRIDE := true
 TARGET_SYSTEM_PROP += $(DEVICE_PATH)/system.prop
 
 # Kernel
@@ -77,6 +76,7 @@ BOARD_ROOT_EXTRA_FOLDERS += \
     storage \
     system
 
+# The legacy system-root image must expose /system/vendor directly as /vendor.
 BOARD_ROOT_EXTRA_SYMLINKS += \
     /system/etc:/etc \
     /system/vendor:/vendor \
