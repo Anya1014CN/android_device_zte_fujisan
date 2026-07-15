@@ -1,0 +1,7 @@
+# Start the Qualcomm sensor daemon before the HIDL sensor service.
+# Without sensors.qcom running, the device-tree-built sensor HAL crashes
+# with DEAD_OBJECT, taking down system_server.
+service sensors.qcom /vendor/bin/sensors.qcom
+    class core
+    user root
+    group root
