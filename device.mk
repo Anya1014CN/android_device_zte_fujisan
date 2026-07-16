@@ -42,13 +42,6 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
-# The framework Bluetooth stack talks to the HCI transport through the
-# android.hardware.bluetooth HIDL service declared in the vendor manifest.
-# Build the Qualcomm ROMe/SMD implementation from source for this msm8996
-# target instead of copying the stock HAL service binary.
-PRODUCT_PACKAGES += \
-    android.hardware.bluetooth@1.0-service-qti
-
 # AudioService waits synchronously for media.audio_policy, while audioserver
 # cannot publish it until the declared audio@2.0 device factory is available.
 # Keep the Android 11 HIDL service stack source-built, and provide any
