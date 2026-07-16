@@ -77,6 +77,13 @@ PRODUCT_PACKAGES += \
     android.hardware.thermal@1.0-impl \
     android.hardware.thermal@1.0-service
 
+# BatteryExternalStatsWorker synchronously queries the Wi-Fi HAL before
+# returning battery statistics.  Without a registered IWifi service, Settings
+# exhausts its parallel controller pool and ANRs while opening dashboards.
+PRODUCT_PACKAGES += \
+    android.hardware.wifi@1.0-impl \
+    android.hardware.wifi@1.0-service
+
 # The stock security HAL services are excluded from the generated vendor
 # image.  Keystore otherwise waits forever for Keymaster and never publishes
 # android.security.keystore, which crashes SystemServer during boot phase 600.
