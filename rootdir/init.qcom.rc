@@ -18,6 +18,7 @@ on init
 
 on boot
     write /dev/kmsg "fujisan:boot\n"
+    write /sys/class/android_usb/android0/iSerial ${ro.serialno}
     # Lineage exposes the panels as independent displays.
     write /sys/module/zte_touch_expand/parameters/separate_inputs 1
     # Keep the PM8994 NFC/eSE power request line in a defined state before
