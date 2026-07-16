@@ -8,7 +8,7 @@ $(call inherit-product, device/zte/fujisan/device.mk)
 PRODUCT_NAME := lineage_fujisan
 PRODUCT_DEVICE := fujisan
 PRODUCT_BRAND := ZTE
-PRODUCT_MODEL := Z999
+PRODUCT_MODEL := ZTE Axon M
 PRODUCT_MANUFACTURER := ZTE
 
 PRODUCT_BUILD_PROP_OVERRIDES += \
