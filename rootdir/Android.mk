@@ -9,5 +9,5 @@ LOCAL_MODULE_CLASS := ETC
 LOCAL_SRC_FILES := .vendor-root-placeholder
 LOCAL_MODULE_PATH := $(TARGET_OUT)
 LOCAL_MODULE_STEM := .fujisan_legacy_vendor_root
-LOCAL_POST_INSTALL_CMD := rm -rf $(TARGET_ROOT_OUT)/vendor $(TARGET_RECOVERY_ROOT_OUT)/vendor; ln -s /system/vendor $(TARGET_ROOT_OUT)/vendor
+LOCAL_POST_INSTALL_CMD := rm -rf $(TARGET_ROOT_OUT)/vendor $(TARGET_RECOVERY_ROOT_OUT)/vendor; ln -s /system/vendor $(TARGET_ROOT_OUT)/vendor; mkdir -p $(TARGET_OUT)/bugreports/bugreports
 include $(BUILD_PREBUILT)
