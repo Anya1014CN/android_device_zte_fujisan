@@ -19,6 +19,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25
 
 PRODUCT_PACKAGES += \
+    fujisan_legacy_vendor_root \
     copybit.msm8996 \
     gralloc.msm8996 \
     hwcomposer.msm8996 \

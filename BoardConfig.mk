@@ -65,7 +65,6 @@ BOARD_ROOT_EXTRA_FOLDERS += \
     acct \
     bt_firmware \
     bugreports \
-    bugreports/bugreports \
     cache \
     config \
     data \
