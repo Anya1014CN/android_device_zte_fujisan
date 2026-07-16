@@ -42,6 +42,11 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
+# Use the Android 11 Qualcomm Bluetooth HIDL service, while keeping the
+# device-specific boot-time permissions from fujisan.bluetooth.rc.
+PRODUCT_PACKAGES += \
+    android.hardware.bluetooth@1.0-service-qti
+
 # AudioService waits synchronously for media.audio_policy, while audioserver
 # cannot publish it until the declared audio@2.0 device factory is available.
 # Keep the Android 11 HIDL service stack source-built, and provide any
@@ -93,6 +98,10 @@ PRODUCT_PACKAGES += \
     android.hardware.wifi@1.2 \
     android.hardware.wifi@1.3 \
     android.hardware.wifi@1.4 \
+    android.hardware.wifi.supplicant@1.0 \
+    android.hardware.wifi.supplicant@1.1 \
+    android.hardware.wifi.supplicant@1.2 \
+    android.hardware.wifi.supplicant@1.3 \
     wpa_supplicant \
     wpa_supplicant.conf
 
