@@ -64,7 +64,6 @@ BOARD_SUPPRESS_SECURE_ERASE := true
 BOARD_ROOT_EXTRA_FOLDERS += \
     acct \
     bt_firmware \
-    bugreports \
     cache \
     config \
     data \
