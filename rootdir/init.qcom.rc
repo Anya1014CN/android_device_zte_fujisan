@@ -7,6 +7,15 @@ on late-fs
 on post-fs
     restorecon_recursive /persist
 
+# This kernel uses the legacy android_usb gadget rather than configfs.  Map
+# Android's "adb" composition name to FunctionFS before init.usb.rc applies
+# the persistent USB configuration.
+on init
+    mkdir /dev/usb-ffs 0770 shell shell
+    mkdir /dev/usb-ffs/adb 0770 shell shell
+    mount functionfs adb /dev/usb-ffs/adb uid=2000,gid=2000
+    write /sys/class/android_usb/android0/f_ffs/aliases adb
+
 on boot
     write /dev/kmsg "fujisan:boot\n"
     # Lineage exposes the panels as independent displays.
