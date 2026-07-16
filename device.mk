@@ -18,14 +18,6 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25
 
-# Use stock vendor audio wrapper prebuilts instead of any inherited
-# source-built impl modules. Some common inherited products still pull these
-# in implicitly, which collides with the vendor-side copies.
-PRODUCT_PACKAGES_REMOVE += \
-    android.hardware.audio@2.0-service \
-    android.hardware.audio@2.0-impl \
-    android.hardware.audio.effect@2.0-impl
-
 # Use Android 11 gestural navigation by default.
 PRODUCT_PACKAGES += \
     NavigationBarModeGesturalOverlay
@@ -57,13 +49,16 @@ PRODUCT_PACKAGES += \
 
 # AudioService waits synchronously for media.audio_policy, while audioserver
 # cannot publish it until the declared audio@2.0 device factory is available.
-# Keep only the interface libraries source-built. The service binary and impl
-# wrappers come from the stock vendor image so they stay matched to the legacy
-# Qualcomm audio stack and Dolby preload behavior.
+# Follow the msm8996 LineageOS pattern: keep the Android 11 HIDL service stack
+# source-built, and provide the device-specific codec glue through the stock
+# audio.primary.msm8996 HAL plus vendor helpers such as libdolbyshim.
 PRODUCT_PACKAGES += \
     android.hardware.audio@2.0 \
     android.hardware.audio.common@2.0 \
     android.hardware.audio.effect@2.0 \
+    android.hardware.audio@2.0-impl \
+    android.hardware.audio.effect@2.0-impl \
+    android.hardware.audio@2.0-service \
     libdolbyshim
 
 # The legacy vendor manifest exposes IPower 1.0.  SystemServer waits for this
