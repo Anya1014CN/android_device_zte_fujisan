@@ -42,6 +42,13 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
+# The framework Bluetooth stack talks to the HCI transport through the
+# android.hardware.bluetooth HIDL service declared in the vendor manifest.
+# Build the Qualcomm ROMe/SMD implementation from source for this msm8996
+# target instead of copying the stock HAL service binary.
+PRODUCT_PACKAGES += \
+    android.hardware.bluetooth@1.0-service-qti
+
 # AudioService waits synchronously for media.audio_policy, while audioserver
 # cannot publish it until the declared audio@2.0 device factory is available.
 # Build the AOSP wrapper instead of packaging the stock service executable.
@@ -140,6 +147,7 @@ PRODUCT_PACKAGES += \
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/bt_firmware/.placeholder \
