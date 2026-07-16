@@ -42,7 +42,11 @@ PRODUCT_PACKAGES += \
 # cannot publish it until the declared audio@2.0 device factory is available.
 # Build the AOSP wrapper instead of packaging the stock service executable.
 PRODUCT_PACKAGES += \
+    android.hardware.audio@2.0 \
+    android.hardware.audio.common@2.0 \
+    android.hardware.audio.effect@2.0 \
     android.hardware.audio@2.0-impl \
+    android.hardware.audio.effect@2.0-impl \
     android.hardware.audio@2.0-service \
     libdolbyshim
 
