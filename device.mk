@@ -108,6 +108,13 @@ PRODUCT_PACKAGES += \
     android.hardware.sensors@1.0-impl \
     android.hardware.sensors@1.0-service
 
+# The stock 32-bit OMX service lives in /vendor and resolves its VNDK
+# companion libraries from the vendor namespace.
+PRODUCT_PACKAGES += \
+    android.hardware.media.omx@1.0 \
+    android.hidl.memory@1.0 \
+    libminijail
+
 # Android 11 requires health@2.1.  Use the AOSP default implementation
 # instead of the stock health@1.0 prebuilt.
 PRODUCT_PACKAGES += \
