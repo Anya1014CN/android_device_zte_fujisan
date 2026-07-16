@@ -33,6 +33,7 @@ ro.board.platform=msm8996
 ro.build.product=fujisan
 ro.opengles.version=196610
 ro.config.navkeys=0
+qemu.hw.mainkeys=0
 ro.hardware=qcom
 ro.product.device=fujisan
 ro.product.model=Z999
