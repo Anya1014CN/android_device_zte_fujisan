@@ -23,7 +23,7 @@ subsystem sound
 /dev/uhid                 0660   uhid       uhid
 /dev/uinput               0660   system     bluetooth
 /dev/usb_accessory        0660   root       usb
-/dev/mtp_usb              0660   root       mtp
+/dev/mtp_usb              0660   root       system
 
 /sys/devices/virtual/input/input*   enable      0660  root   input
 /sys/class/leds/lcd-backlight       brightness  0664  root   graphics
