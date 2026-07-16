@@ -81,8 +81,13 @@ PRODUCT_PACKAGES += \
 # returning battery statistics.  Without a registered IWifi service, Settings
 # exhausts its parallel controller pool and ANRs while opening dashboards.
 PRODUCT_PACKAGES += \
+    android.hardware.wifi@1.0 \
     android.hardware.wifi@1.0-impl \
-    android.hardware.wifi@1.0-service
+    android.hardware.wifi@1.0-service \
+    android.hardware.wifi@1.1 \
+    android.hardware.wifi@1.2 \
+    android.hardware.wifi@1.3 \
+    android.hardware.wifi@1.4
 
 # The stock security HAL services are excluded from the generated vendor
 # image.  Keystore otherwise waits forever for Keymaster and never publishes
@@ -90,6 +95,7 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.gatekeeper@1.0-impl \
     android.hardware.gatekeeper@1.0-service \
+    gatekeeper.default \
     android.hardware.keymaster@4.0-service
 
 # Build the framework-compatible HIDL service; Qualcomm sensor backends remain
