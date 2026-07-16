@@ -49,16 +49,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-service-qti
 
-# AudioService waits synchronously for media.audio_policy, while audioserver
-# cannot publish it until the declared audio@2.0 device factory is available.
-# Build the AOSP wrapper instead of packaging the stock service executable.
+# The stock vendor audio stack carries device-specific integration for the
+# msm8996/Tasha path.  The generic Android 11 audio wrapper boots, but
+# audioserver crashes while instantiating IDevicesFactory on fujisan.
 PRODUCT_PACKAGES += \
-    android.hardware.audio@2.0 \
-    android.hardware.audio.common@2.0 \
-    android.hardware.audio.effect@2.0 \
-    android.hardware.audio@2.0-impl \
-    android.hardware.audio.effect@2.0-impl \
-    android.hardware.audio@2.0-service \
     libdolbyshim
 
 # The legacy vendor manifest exposes IPower 1.0.  SystemServer waits for this
