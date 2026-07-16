@@ -18,6 +18,10 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25
 
+# Use Android 11 gestural navigation by default.
+PRODUCT_PACKAGES += \
+    NavigationBarModeGesturalOverlay
+
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
     bugreports_root_dir \
