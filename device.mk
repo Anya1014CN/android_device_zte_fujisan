@@ -18,6 +18,13 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25
 
+# Use stock vendor audio wrapper prebuilts instead of any inherited
+# source-built impl modules. Some common inherited products still pull these
+# in implicitly, which collides with the vendor-side copies.
+PRODUCT_PACKAGES_REMOVE += \
+    android.hardware.audio@2.0-impl \
+    android.hardware.audio.effect@2.0-impl
+
 # Use Android 11 gestural navigation by default.
 PRODUCT_PACKAGES += \
     NavigationBarModeGesturalOverlay
