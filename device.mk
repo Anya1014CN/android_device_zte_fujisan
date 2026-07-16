@@ -91,7 +91,9 @@ PRODUCT_PACKAGES += \
     android.hardware.wifi@1.1 \
     android.hardware.wifi@1.2 \
     android.hardware.wifi@1.3 \
-    android.hardware.wifi@1.4
+    android.hardware.wifi@1.4 \
+    wpa_supplicant \
+    wpa_supplicant.conf
 
 # The stock security HAL services are excluded from the generated vendor
 # image.  Keystore otherwise waits forever for Keymaster and never publishes
@@ -138,6 +140,7 @@ PRODUCT_PACKAGES += \
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/bt_firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/dsp/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/dsp/.placeholder \
