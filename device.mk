@@ -70,6 +70,20 @@ PRODUCT_PACKAGES += \
     android.hardware.vibrator@1.0-impl \
     android.hardware.vibrator@1.0-service
 
+# HardwarePropertiesManagerService acquires the declared thermal HAL during
+# SystemServer startup.  The stock service is excluded from the vendor image,
+# so provide the framework-compatible AOSP implementation.
+PRODUCT_PACKAGES += \
+    android.hardware.thermal@1.0-impl \
+    android.hardware.thermal@1.0-service
+
+# The stock security HAL services are excluded from the generated vendor
+# image.  Keystore otherwise waits forever for Keymaster and never publishes
+# android.security.keystore, which crashes SystemServer during boot phase 600.
+PRODUCT_PACKAGES += \
+    android.hardware.gatekeeper@1.0-service \
+    android.hardware.keymaster@4.0-service
+
 # Build the framework-compatible HIDL service; Qualcomm sensor backends remain
 # supplied by the stock vendor image.
 PRODUCT_PACKAGES += \
