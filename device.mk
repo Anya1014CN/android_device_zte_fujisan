@@ -38,12 +38,33 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
+# AudioService waits synchronously for media.audio_policy, while audioserver
+# cannot publish it until the declared audio@2.0 device factory is available.
+# Build the AOSP wrapper instead of packaging the stock service executable.
+PRODUCT_PACKAGES += \
+    android.hardware.audio@2.0-impl \
+    android.hardware.audio@2.0-service \
+    libdolbyshim
+
 # The legacy vendor manifest exposes IPower 1.0.  SystemServer waits for this
 # HAL while creating PowerManagerService, so use the Android 11 wrapper for
 # the already-installed generic power.default module.
 PRODUCT_PACKAGES += \
     android.hardware.power@1.0-impl \
     android.hardware.power@1.0-service
+
+# The stock light HAL is intentionally excluded from the legacy vendor image.
+# Build the framework-compatible AOSP implementation instead; without it,
+# DisplayManagerService blocks forever while entering the display boot phase.
+PRODUCT_PACKAGES += \
+    android.hardware.light@2.0-impl \
+    android.hardware.light@2.0-service
+
+# VibratorService synchronously acquires IVibrator during SystemServer startup.
+# Supply the AOSP HIDL wrapper for the legacy vibrator.default implementation.
+PRODUCT_PACKAGES += \
+    android.hardware.vibrator@1.0-impl \
+    android.hardware.vibrator@1.0-service
 
 # Build the framework-compatible HIDL service; Qualcomm sensor backends remain
 # supplied by the stock vendor image.
