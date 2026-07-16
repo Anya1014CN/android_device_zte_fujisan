@@ -81,6 +81,7 @@ PRODUCT_PACKAGES += \
 # image.  Keystore otherwise waits forever for Keymaster and never publishes
 # android.security.keystore, which crashes SystemServer during boot phase 600.
 PRODUCT_PACKAGES += \
+    android.hardware.gatekeeper@1.0-impl \
     android.hardware.gatekeeper@1.0-service \
     android.hardware.keymaster@4.0-service
 
