@@ -115,6 +115,14 @@ PRODUCT_PACKAGES += \
     android.hidl.memory@1.0 \
     libminijail
 
+# The stock 32-bit CAS service is retained; keep its HIDL interface libraries
+# available in the vendor namespace.
+PRODUCT_PACKAGES += \
+    android.hardware.cas@1.0 \
+    android.hardware.cas@1.1 \
+    android.hardware.cas@1.2 \
+    android.hardware.cas.native@1.0
+
 # Android 11 requires health@2.1.  Use the AOSP default implementation
 # instead of the stock health@1.0 prebuilt.
 PRODUCT_PACKAGES += \
