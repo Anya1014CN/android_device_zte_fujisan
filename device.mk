@@ -20,6 +20,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
+    bugreports_root_dir \
     copybit.msm8996 \
     gralloc.msm8996 \
     hwcomposer.msm8996 \
