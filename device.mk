@@ -71,10 +71,10 @@ PRODUCT_PACKAGES += \
     android.hardware.power@1.0-impl \
     android.hardware.power@1.0-service
 
-# The stock light HAL is intentionally excluded from the legacy vendor image.
-# Build the framework-compatible AOSP implementation instead; without it,
-# DisplayManagerService blocks forever while entering the display boot phase.
+# The HIDL light service wraps the legacy msm8996 module that drives the
+# primary panel backlight.
 PRODUCT_PACKAGES += \
+    lights.msm8996 \
     android.hardware.light@2.0-impl \
     android.hardware.light@2.0-service
 
