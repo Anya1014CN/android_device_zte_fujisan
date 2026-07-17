@@ -11,6 +11,7 @@ on post-fs-data
     chmod 0660 /sys/module/wlan/parameters/fwpath
 
 on property:init.svc.vendor.wifi_hal_legacy=running
+    setprop wlan.driver.status ok
     chown wifi wifi /sys/module/wlan/parameters/fwpath
     chmod 0660 /sys/module/wlan/parameters/fwpath
 

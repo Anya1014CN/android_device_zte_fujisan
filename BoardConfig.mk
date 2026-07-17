@@ -108,8 +108,9 @@ USE_DEVICE_SPECIFIC_GPS := true
 TARGET_RIL_VARIANT := caf
 
 # Wi-Fi
-WIFI_DRIVER_MODULE_NAME := wlan
-WIFI_DRIVER_MODULE_PATH := "/lib/modules/wlan.ko"
+# The stock kernel already exposes a live wlan module/interface, so forcing
+# legacy module insertion from libwifi-hal causes finit_module(...wlan.ko) to
+# fail with EEXIST ("File exists") and abort Wi-Fi HAL startup.
 WIFI_DRIVER_FW_PATH_PARAM := "/sys/module/wlan/parameters/fwpath"
 WIFI_DRIVER_FW_PATH_STA := "sta"
 WIFI_DRIVER_FW_PATH_AP := "ap"
