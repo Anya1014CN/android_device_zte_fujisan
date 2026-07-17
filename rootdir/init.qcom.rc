@@ -6,6 +6,8 @@ on late-fs
 
 on post-fs
     restorecon_recursive /persist
+    insmod /lib/modules/wlan.ko
+    setprop wlan.driver.status ok
 
 # This kernel uses the legacy android_usb gadget rather than configfs.  Map
 # Android's "adb" composition name to FunctionFS before init.usb.rc applies
