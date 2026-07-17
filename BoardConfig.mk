@@ -108,12 +108,10 @@ USE_DEVICE_SPECIFIC_GPS := true
 TARGET_RIL_VARIANT := caf
 
 # Wi-Fi
-# The stock kernel already exposes a live wlan module/interface, so forcing
-# legacy module insertion from libwifi-hal causes finit_module(...wlan.ko) to
-# fail with EEXIST ("File exists") and abort Wi-Fi HAL startup.
-WIFI_DRIVER_FW_PATH_PARAM := "/sys/module/wlan/parameters/fwpath"
-WIFI_DRIVER_FW_PATH_STA := "sta"
-WIFI_DRIVER_FW_PATH_AP := "ap"
+# The stock kernel already exposes a live wlan module/interface and does not
+# expose the legacy fwpath sysfs node. Advertising legacy fwpath switching to
+# libwifi-hal makes startup fail while trying to switch firmware mode on a
+# non-existent node.
 
 # Recovery
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/rootdir/etc/fstab.qcom
