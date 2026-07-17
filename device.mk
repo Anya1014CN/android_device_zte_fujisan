@@ -45,7 +45,7 @@ PRODUCT_PACKAGES += \
 # Use the Android 11 Qualcomm Bluetooth HIDL service, while keeping the
 # device-specific boot-time permissions from fujisan.bluetooth.rc.
 PRODUCT_PACKAGES += \
-    android.hardware.bluetooth@1.0-service-qti
+    android.hardware.bluetooth@1.0-service
 
 # AudioService waits synchronously for media.audio_policy, while audioserver
 # cannot publish it until the declared audio@2.0 device factory is available.
