@@ -18,6 +18,11 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25
 
+# The Android 11 Qualcomm Bluetooth HAL selects the ROME UART transport from
+# this vendor property. The legacy qcom.bluetooth.soc key is not sufficient.
+PRODUCT_VENDOR_PROPERTIES += \
+    vendor.qcom.bluetooth.soc=rome
+
 # Use Android 11 gestural navigation by default.
 PRODUCT_PACKAGES += \
     NavigationBarModeGesturalOverlay
