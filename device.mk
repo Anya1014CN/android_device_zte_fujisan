@@ -47,8 +47,13 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
-# Use the Android 11 Qualcomm Bluetooth HIDL service, while keeping the
-# Bluetooth is handled by hardware/qcom/bt via BOARD_HAS_QCA_BT_ROME
+# Use the Android 11 Qualcomm Bluetooth HIDL stack.  BOARD_HAS_QCA_BT_ROME
+# selects the transport at build time, but does not install these modules.
+PRODUCT_PACKAGES += \
+    android.hardware.bluetooth@1.0-service-qti \
+    android.hardware.bluetooth@1.0-impl-qti \
+    com.qualcomm.qti.ant@1.0 \
+    com.qualcomm.qti.ant@1.0-impl
 
 # AudioService waits synchronously for media.audio_policy, while audioserver
 # cannot publish it until the declared audio@2.0 device factory is available.
