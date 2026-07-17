@@ -55,6 +55,12 @@ PRODUCT_PACKAGES += \
     com.qualcomm.qti.ant@1.0 \
     com.qualcomm.qti.ant@1.0-impl
 
+# The FPC service is proprietary, but its standard HIDL interfaces must be
+# provided by the Android 11 build for the stock service and extension library.
+PRODUCT_PACKAGES += \
+    android.hardware.biometrics.fingerprint@2.1 \
+    android.hidl.base@1.0
+
 # AudioService waits synchronously for media.audio_policy, while audioserver
 # cannot publish it until the declared audio@2.0 device factory is available.
 # Follow the msm8996 LineageOS pattern: keep the Android 11 HIDL service stack
