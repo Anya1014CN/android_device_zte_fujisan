@@ -82,7 +82,8 @@ BOARD_ROOT_EXTRA_SYMLINKS += \
     /sys/kernel/debug:/d
 
 # VINTF
-DEVICE_MANIFEST_FILE := vendor/zte/fujisan/proprietary/vendor/manifest.xml
+DEVICE_MANIFEST_FILE := vendor/zte/fujisan/proprietary/vendor/manifest.xml \
+    $(DEVICE_PATH)/manifest.xml
 DEVICE_MATRIX_FILE := vendor/zte/fujisan/proprietary/vendor/compatibility_matrix.xml
 
 # Display

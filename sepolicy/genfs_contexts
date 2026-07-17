@@ -1,0 +1,4 @@
+genfscon proc /panel_hue_0_set u:object_r:proc_panel_hue:s0
+genfscon proc /panel_hue_0_switch u:object_r:proc_panel_hue:s0
+genfscon proc /panel_hue_1_set u:object_r:proc_panel_hue:s0
+genfscon proc /panel_hue_1_switch u:object_r:proc_panel_hue:s0
