@@ -1,1 +1,0 @@
-allow system_server hal_lineage_livedisplay_hwservice:hwservice_manager find;

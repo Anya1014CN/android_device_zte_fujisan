@@ -1,3 +1,1 @@
-type hal_lineage_livedisplay_fujisan, domain;
-type hal_lineage_livedisplay_fujisan_exec, exec_type, vendor_file_type, file_type;
 type proc_panel_hue, fs_type, proc_type;
