@@ -21,7 +21,8 @@ PRODUCT_PACKAGES += \
     vendor.lineage.livedisplay@2.0-service.fujisan
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
-    ro.product.first_api_level=25
+    ro.product.first_api_level=25 \
+    audio.smartpa.channel=right
 
 # The Android 11 Qualcomm Bluetooth HAL selects the ROME UART transport from
 # this vendor property. The legacy qcom.bluetooth.soc key is not sufficient.
