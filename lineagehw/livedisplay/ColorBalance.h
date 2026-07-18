@@ -23,7 +23,7 @@ public:
 
     static bool isSupported();
 
-    Return<Range> getColorBalanceRange() override;
+    Return<void> getColorBalanceRange(getColorBalanceRange_cb _hidl_cb) override;
     Return<int32_t> getColorBalance() override;
     Return<bool> setColorBalance(int32_t value) override;
 

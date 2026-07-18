@@ -27,6 +27,7 @@ constexpr int32_t kBalanceMax = 100;
 using ::android::base::ReadFileToString;
 using ::android::base::Trim;
 using ::android::base::WriteStringToFile;
+using ::android::hardware::Void;
 
 namespace vendor {
 namespace lineage {
@@ -38,8 +39,9 @@ bool ColorBalance::isSupported() {
     return access(kPanelHue, R_OK | W_OK) == 0;
 }
 
-Return<Range> ColorBalance::getColorBalanceRange() {
-    return Range{kBalanceMax, kBalanceMin, 1};
+Return<void> ColorBalance::getColorBalanceRange(getColorBalanceRange_cb _hidl_cb) {
+    _hidl_cb(Range{kBalanceMax, kBalanceMin, 1});
+    return Void();
 }
 
 Return<int32_t> ColorBalance::getColorBalance() {
