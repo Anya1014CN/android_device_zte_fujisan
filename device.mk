@@ -3,6 +3,9 @@ LOCAL_PATH := device/zte/fujisan
 $(call inherit-product, $(SRC_TARGET_DIR)/product/product_launched_with_n_mr1.mk)
 $(call inherit-product-if-exists, vendor/zte/fujisan/fujisan-vendor.mk)
 
+DEVICE_PACKAGE_OVERLAYS += \
+    $(LOCAL_PATH)/overlay
+
 PRODUCT_CHARACTERISTICS := nosdcard
 PRODUCT_AAPT_CONFIG := normal
 PRODUCT_AAPT_PREF_CONFIG := xxhdpi
