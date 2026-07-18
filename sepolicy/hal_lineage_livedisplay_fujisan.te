@@ -1,6 +1,6 @@
 init_daemon_domain(hal_lineage_livedisplay_fujisan)
 hwbinder_use(hal_lineage_livedisplay_fujisan)
 add_hwservice(hal_lineage_livedisplay_fujisan,
-    hal_lineage_livedisplay_fujisan_hwservice)
+    hal_lineage_livedisplay_hwservice)
 
 allow hal_lineage_livedisplay_fujisan proc_panel_hue:file rw_file_perms;
