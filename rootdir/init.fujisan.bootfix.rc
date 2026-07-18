@@ -1,0 +1,11 @@
+service vendor.livedisplay-hal-2-0-sdm /system/bin/true
+    override
+    class late_start
+    disabled
+    oneshot
+
+service imsdatadaemon /system/bin/true
+    override
+    class late_start
+    disabled
+    oneshot

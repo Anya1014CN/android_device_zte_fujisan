@@ -165,7 +165,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.radio@1.0 \
     android.hardware.radio@1.1 \
-    android.hardware.radio.deprecated@1.0
+    android.hardware.radio.deprecated@1.0 \
+    librmnetctl \
+    libxml2 \
+    libprotobuf-cpp-full
 
 # Android 11 requires health@2.1.  Use the AOSP default implementation
 # instead of the stock health@1.0 prebuilt.
@@ -193,3 +196,5 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/ramdisk,$(TARGET_COPY_OUT_RAMDISK))
+
+PRODUCT_PACKAGES := $(filter-out vendor.lineage.livedisplay@2.0-service-sdm,$(PRODUCT_PACKAGES))
