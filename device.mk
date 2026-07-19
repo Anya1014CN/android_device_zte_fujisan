@@ -82,7 +82,8 @@ PRODUCT_PACKAGES += \
     android.hardware.audio@2.0-impl \
     android.hardware.audio.effect@2.0-impl \
     android.hardware.audio@2.0-service \
-    libdolbyshim
+    libdolbyshim \
+    libtinyalsa_compat
 
 # The legacy vendor manifest exposes IPower 1.0.  SystemServer waits for this
 # HAL while creating PowerManagerService, so use the Android 11 wrapper for
