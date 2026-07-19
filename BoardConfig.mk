@@ -77,7 +77,6 @@ BOARD_ROOT_EXTRA_FOLDERS += \
     system
 
 BOARD_ROOT_EXTRA_SYMLINKS += \
-    /:/system \
     /system/etc:/etc \
     /vendor/lib/dsp:/dsp \
     /sys/kernel/debug:/d
