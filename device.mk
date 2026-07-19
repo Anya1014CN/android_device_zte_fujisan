@@ -74,6 +74,7 @@ PRODUCT_PACKAGES += \
 # and the primary/amplifier audio HALs source-built, while shipping only the
 # device-specific calibration, mixer, firmware, and smartpa userspace blobs.
 PRODUCT_PACKAGES += \
+    audiod \
     android.hardware.audio@2.0 \
     android.hardware.audio.common@2.0 \
     android.hardware.audio.effect@2.0 \
