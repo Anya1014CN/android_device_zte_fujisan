@@ -88,6 +88,7 @@ PRODUCT_PACKAGES += \
     audio_amplifier.msm8996 \
     libaudio-resampler \
     libaudioroute \
+    libaudioroute.vendor \
     libqcompostprocbundle \
     libqcomvisualizer \
     libqcomvoiceprocessing \
