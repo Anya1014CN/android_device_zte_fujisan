@@ -71,8 +71,10 @@ PRODUCT_PACKAGES += \
     android.hidl.base@1.0
 
 # Follow the msm8996 LineageOS pattern: keep the Android 11 HIDL service stack
-# and the primary/amplifier audio HALs source-built, while shipping only the
-# device-specific calibration, mixer, firmware, and smartpa userspace blobs.
+# and device-owned audio configuration in-tree. The msm8996 source-built
+# primary/amplifier path is still crashing during route enable on Fujisan, so
+# keep the generic service stack for now and iterate on the device HAL
+# separately without blocking boot.
 PRODUCT_PACKAGES += \
     android.hardware.audio@2.0 \
     android.hardware.audio.common@2.0 \
@@ -81,10 +83,8 @@ PRODUCT_PACKAGES += \
     android.hardware.audio.effect@2.0-impl \
     android.hardware.audio@2.0-service \
     audio.a2dp.default \
-    audio.primary.msm8996 \
     audio.r_submix.default \
     audio.usb.default \
-    audio_amplifier.msm8996 \
     libaudio-resampler \
     libqcompostprocbundle \
     libqcomvisualizer \
