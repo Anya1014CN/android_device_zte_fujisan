@@ -205,4 +205,11 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/ramdisk,$(TARGET_COPY_OUT_RAMDISK))
 
-PRODUCT_PACKAGES := $(filter-out vendor.lineage.livedisplay@2.0-service-sdm,$(PRODUCT_PACKAGES))
+# Fujisan uses the panel-hue LiveDisplay HAL above.  The generic SDM service
+# is for Qualcomm SDM display stacks and crashes here after failing to load
+# libsdm-disp-vndapis.  Exclude both install variants at product definition
+# time; do not ship an init override for a service this device never uses.
+PRODUCT_PACKAGES := $(filter-out \
+    lineage.livedisplay@2.0-service-sdm \
+    vendor.lineage.livedisplay@2.0-service-sdm, \
+    $(PRODUCT_PACKAGES))
