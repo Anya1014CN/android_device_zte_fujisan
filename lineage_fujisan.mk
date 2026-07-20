@@ -5,22 +5,6 @@ $(call inherit-product, vendor/lineage/config/common_full_phone.mk)
 
 $(call inherit-product, device/zte/fujisan/device.mk)
 
-# common_full_phone or other inherited product fragments may pull in the
-# source-built fingerprint wrapper service.  Fujisan keeps the proprietary
-# vendor fingerprint service instead, so drop the AOSP wrapper at the final
-# product level to avoid duplicate install rules and VINTF fragment conflicts.
-PRODUCT_PACKAGES := $(filter-out \
-    android.hardware.biometrics.fingerprint@2.1-service, \
-    $(PRODUCT_PACKAGES))
-
-PRODUCT_PACKAGES_DEBUG := $(filter-out \
-    android.hardware.biometrics.fingerprint@2.1-service, \
-    $(PRODUCT_PACKAGES_DEBUG))
-
-PRODUCT_PACKAGES_ENG := $(filter-out \
-    android.hardware.biometrics.fingerprint@2.1-service, \
-    $(PRODUCT_PACKAGES_ENG))
-
 PRODUCT_NAME := lineage_fujisan
 PRODUCT_DEVICE := fujisan
 PRODUCT_BRAND := ZTE

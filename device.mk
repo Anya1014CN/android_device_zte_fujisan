@@ -66,10 +66,13 @@ PRODUCT_PACKAGES += \
     libbt-vendor
 
 # The FPC service itself remains proprietary on this device.  Keep only the
-# standard framework interface libraries source-built and let the vendor image
-# provide the service binary plus its matching init/manifest pieces.
+# standard framework interface libraries and wrapper service source-built, then
+# replace the installed wrapper binary with the proprietary FPC implementation
+# at packaging time.  This keeps the standard init/VINTF wiring while avoiding
+# the incompatible AOSP implementation at runtime.
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
+    android.hardware.biometrics.fingerprint@2.1-service \
     android.hidl.base@1.0
 
 # Oreo vendor blobs depend on vendor-visible HIDL runtime libraries. The
