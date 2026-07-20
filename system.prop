@@ -30,6 +30,7 @@ persist.data.iwlan.enable=true
 persist.data.mode=concurrent
 bluetooth.enable_timeout_ms=8000
 qcom.bluetooth.soc=rome
+vendor.qcom.bluetooth.soc=rome
 ro.bt.bdaddr_path=/data/vendor/bluetooth/bluetooth_bdaddr
 ro.board.platform=msm8996
 ro.build.product=fujisan
