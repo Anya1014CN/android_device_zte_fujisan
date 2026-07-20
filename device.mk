@@ -66,8 +66,10 @@ PRODUCT_PACKAGES += \
     libbt-vendor
 
 # The FPC service is proprietary, but its standard HIDL interfaces must be
-# provided by the Android 11 build for the stock service and extension library.
+# provided by the Android 11 build.  Keep the wrapper service source-built and
+# ship only the proprietary vendor fingerprint libraries/calibration pieces.
 PRODUCT_PACKAGES += \
+    android.hardware.biometrics.fingerprint@2.1-service \
     android.hardware.biometrics.fingerprint@2.1 \
     android.hidl.base@1.0
 
