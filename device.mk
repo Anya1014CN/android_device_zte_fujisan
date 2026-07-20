@@ -62,7 +62,8 @@ PRODUCT_PACKAGES += \
 # BoardConfigVendor rather than by shipping a second prebuilt libbt-vendor.
 PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-service \
-    android.hardware.bluetooth@1.0-impl
+    android.hardware.bluetooth@1.0-impl \
+    libbt-vendor
 
 # The FPC service is proprietary, but its standard HIDL interfaces must be
 # provided by the Android 11 build for the stock service and extension library.
