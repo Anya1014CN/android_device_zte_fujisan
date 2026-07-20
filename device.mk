@@ -56,13 +56,14 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
-# Use the Android 11 Qualcomm Bluetooth HIDL stack.  BOARD_HAS_QCA_BT_ROME
-# selects the transport at build time, but does not install these modules.
+# Use the standard Android 11 Bluetooth HIDL stack plus the Qualcomm Rome
+# vendor interface library built from source.  This matches the LineageOS
+# msm8996 pattern more closely than the stock qti service binary, which pulls
+# in additional proprietary FM/ANT passthrough dependencies.
 PRODUCT_PACKAGES += \
-    android.hardware.bluetooth@1.0-service-qti \
-    android.hardware.bluetooth@1.0-impl-qti:64 \
-    com.qualcomm.qti.ant@1.0 \
-    com.qualcomm.qti.ant@1.0-impl:64
+    android.hardware.bluetooth@1.0-service \
+    android.hardware.bluetooth@1.0-impl \
+    libbt-vendor
 
 # The FPC service is proprietary, but its standard HIDL interfaces must be
 # provided by the Android 11 build for the stock service and extension library.
