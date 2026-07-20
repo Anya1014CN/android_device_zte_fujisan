@@ -65,11 +65,10 @@ PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-impl \
     libbt-vendor
 
-# The FPC service is proprietary, but its standard HIDL interfaces must be
-# provided by the Android 11 build.  Keep the wrapper service source-built and
-# ship only the proprietary vendor fingerprint libraries/calibration pieces.
+# The FPC service itself remains proprietary on this device.  Keep only the
+# standard framework interface libraries source-built and let the vendor image
+# provide the service binary plus its matching init/manifest pieces.
 PRODUCT_PACKAGES += \
-    android.hardware.biometrics.fingerprint@2.1-service \
     android.hardware.biometrics.fingerprint@2.1 \
     android.hidl.base@1.0
 
@@ -245,6 +244,7 @@ PRODUCT_COPY_FILES += \
 # libsdm-disp-vndapis.  Exclude both install variants at product definition
 # time; do not ship an init override for a service this device never uses.
 PRODUCT_PACKAGES := $(filter-out \
+    android.hardware.biometrics.fingerprint@2.1-service \
     lineage.livedisplay@2.0-service-sdm \
     vendor.lineage.livedisplay@2.0-service-sdm, \
     $(PRODUCT_PACKAGES))
