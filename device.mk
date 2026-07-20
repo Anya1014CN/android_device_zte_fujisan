@@ -70,7 +70,8 @@ PRODUCT_PACKAGES += \
 # provide the service binary plus its matching init/manifest pieces.
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
-    android.hidl.base@1.0
+    android.hidl.base@1.0 \
+    fujisan_fingerprint_service
 
 # Oreo vendor blobs depend on vendor-visible HIDL runtime libraries. The
 # legacy interface sonames android.hidl.base@1.0.so and
@@ -244,7 +245,6 @@ PRODUCT_COPY_FILES += \
 # libsdm-disp-vndapis.  Exclude both install variants at product definition
 # time; do not ship an init override for a service this device never uses.
 PRODUCT_PACKAGES := $(filter-out \
-    android.hardware.biometrics.fingerprint@2.1-service \
     lineage.livedisplay@2.0-service-sdm \
     vendor.lineage.livedisplay@2.0-service-sdm, \
     $(PRODUCT_PACKAGES))
