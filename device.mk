@@ -33,7 +33,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_VENDOR_PROPERTIES += \
     vendor.qcom.bluetooth.soc=rome
 
-# Use Android 11 gestural navigation by default.
+# Use gestural navigation by default.
 PRODUCT_PACKAGES += \
     NavigationBarModeGesturalOverlay
 
@@ -57,7 +57,7 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
-# Keep the Android 11 Bluetooth HIDL service/impl and the Qualcomm transport
+# Keep the Bluetooth HIDL service/impl and the Qualcomm transport
 # library source-built. Device-specific compatibility lives in
 # BoardConfigVendor rather than by shipping a second prebuilt libbt-vendor.
 PRODUCT_PACKAGES += \
@@ -85,7 +85,7 @@ PRODUCT_PACKAGES += \
     libhidltransport.vendor \
     libhwbinder.vendor
 
-# Follow the msm8996 LineageOS pattern: keep the Android 11 HIDL service stack
+# Follow the msm8996 LineageOS pattern: keep the legacy HIDL service stack
 # and the primary/amplifier audio HALs source-built, while shipping only the
 # device-specific calibration, mixer, firmware, and smartpa userspace blobs.
 PRODUCT_PACKAGES += \
@@ -96,7 +96,13 @@ PRODUCT_PACKAGES += \
     android.hardware.audio@2.0-impl \
     android.hardware.audio.effect@2.0-impl \
     android.hardware.audio@2.0-service \
-    audio.a2dp.default \
+    android.hardware.audio@6.0 \
+    android.hardware.audio.common@6.0 \
+    android.hardware.audio.common@6.0-util \
+    android.hardware.audio@6.0-impl \
+    android.hardware.audio.effect@6.0 \
+    android.hardware.audio.effect@6.0-impl \
+    audio.bluetooth.default \
     audio.primary.msm8996 \
     audio.r_submix.default \
     audio.usb.default \
@@ -197,7 +203,7 @@ PRODUCT_PACKAGES += \
     libxml2 \
     libprotobuf-cpp-full
 
-# Android 11 requires health@2.1.  Use the AOSP default implementation
+# Android 12L requires health@2.1.  Use the AOSP default implementation
 # instead of the stock health@1.0 prebuilt.
 PRODUCT_PACKAGES += \
     android.hardware.health@2.1-service \
@@ -219,6 +225,8 @@ PRODUCT_COPY_FILES += \
     frameworks/av/services/audiopolicy/config/a2dp_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/a2dp_audio_policy_configuration.xml \
     frameworks/av/services/audiopolicy/config/usb_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/usb_audio_policy_configuration.xml \
     frameworks/av/services/audiopolicy/config/r_submix_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/r_submix_audio_policy_configuration.xml \
+    system/core/libprocessgroup/profiles/cgroups_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \
+    system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     frameworks/av/media/libstagefright/data/media_codecs_google_audio.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_audio.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_telephony.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_telephony.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml \

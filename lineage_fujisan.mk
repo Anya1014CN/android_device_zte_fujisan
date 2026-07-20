@@ -3,6 +3,11 @@ $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/verity.mk)
 $(call inherit-product, vendor/lineage/config/common_full_phone.mk)
 
+# The stock firmware has no separate vendor image.  Keep APEXes unpacked and
+# allow the device manifest to provide the legacy vendor HAL declarations.
+PRODUCT_COMPRESSED_APEX := false
+PRODUCT_ENFORCE_VINTF_MANIFEST_OVERRIDE := true
+
 $(call inherit-product, device/zte/fujisan/device.mk)
 
 PRODUCT_NAME := lineage_fujisan

@@ -9,7 +9,11 @@ TARGET_BOOTLOADER_BOARD_NAME := fujisan
 TARGET_NO_BOOTLOADER := true
 TARGET_NO_RADIOIMAGE := true
 BOARD_USES_QCOM_HARDWARE := true
-TARGET_USES_64_BIT_BINDER := true
+
+# Android 12L still accepts the legacy system/vendor layout used by the
+# Oreo firmware.  Permit the prebuilt product copies from that image while
+# keeping the device out of the unsupported VNDK-Lite path.
+BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES := true
 
 # Architecture
 TARGET_ARCH := arm64
@@ -26,9 +30,6 @@ TARGET_2ND_CPU_VARIANT := kryo
 
 # Legacy vendor layout
 TARGET_COPY_OUT_VENDOR := system/vendor
-BOARD_PROPERTY_OVERRIDES_SPLIT_ENABLED := true
-BOARD_VNDK_RUNTIME_DISABLE := true
-BOARD_VNDK_VERSION := current
 TARGET_SYSTEM_PROP += $(DEVICE_PATH)/system.prop
 
 # Audio
@@ -146,6 +147,6 @@ BOARD_USES_MMCUTILS := true
 
 # SELinux
 include device/qcom/sepolicy-legacy-um/SEPolicy.mk
-BOARD_SEPOLICY_DIRS += $(DEVICE_PATH)/sepolicy
+BOARD_VENDOR_SEPOLICY_DIRS += $(DEVICE_PATH)/sepolicy
 
 -include vendor/zte/fujisan/BoardConfigVendor.mk
