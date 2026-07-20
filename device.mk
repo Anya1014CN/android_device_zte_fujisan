@@ -70,6 +70,16 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     android.hidl.base@1.0
 
+# Oreo vendor blobs depend on vendor-visible HIDL interface/runtime libraries
+# that are not pulled in automatically when the blob itself is copied from the
+# proprietary tree.
+PRODUCT_PACKAGES += \
+    android.hidl.base@1.0.vendor \
+    android.hidl.manager@1.0 \
+    android.hidl.manager@1.0.vendor \
+    libhidltransport.vendor \
+    libhwbinder.vendor
+
 # Follow the msm8996 LineageOS pattern: keep the Android 11 HIDL service stack
 # and the primary/amplifier audio HALs source-built, while shipping only the
 # device-specific calibration, mixer, firmware, and smartpa userspace blobs.
