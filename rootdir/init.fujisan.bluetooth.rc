@@ -25,3 +25,11 @@ on post-fs-data
     mkdir /data/vendor/bluetooth 0770 bluetooth bluetooth
     mkdir /data/vendor/ramdump 0771 root system
     mkdir /data/vendor/ramdump/bluetooth 0770 bluetooth bluetooth
+    start fujisan-btaddr
+
+service fujisan-btaddr /system/bin/sh /system/bin/init.fujisan.btaddr.sh
+    class core
+    user root
+    group root bluetooth
+    disabled
+    oneshot

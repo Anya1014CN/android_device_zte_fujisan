@@ -27,8 +27,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
     audio.smartpa.channel=right
 
-# The Android 11 Qualcomm Bluetooth HAL selects the ROME UART transport from
-# this vendor property. The legacy qcom.bluetooth.soc key is not sufficient.
+# Keep the modern framework-side Bluetooth stack source-built, but pair it
+# with the stock Qualcomm transport blob in vendor/.  Runtime testing showed
+# that fujisan's stock wcnss_filter userspace expects the legacy transport
+# property contract from the stock libbt-vendor implementation.
 PRODUCT_VENDOR_PROPERTIES += \
     vendor.qcom.bluetooth.soc=rome
 
@@ -56,14 +58,11 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
-# Use the standard Android 11 Bluetooth HIDL stack plus the Qualcomm Rome
-# vendor interface library built from source.  This matches the LineageOS
-# msm8996 pattern more closely than the stock qti service binary, which pulls
-# in additional proprietary FM/ANT passthrough dependencies.
+# Keep the Android 11 Bluetooth HIDL service/impl source-built.  Only the
+# firmware-coupled transport layer stays proprietary on this device.
 PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-service \
-    android.hardware.bluetooth@1.0-impl \
-    libbt-vendor
+    android.hardware.bluetooth@1.0-impl
 
 # The FPC service is proprietary, but its standard HIDL interfaces must be
 # provided by the Android 11 build for the stock service and extension library.
@@ -217,6 +216,7 @@ PRODUCT_COPY_FILES += \
     frameworks/av/media/libstagefright/data/media_codecs_google_audio.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_audio.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_telephony.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_telephony.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml \
+    $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
