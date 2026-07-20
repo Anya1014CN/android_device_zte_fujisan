@@ -13,6 +13,14 @@ PRODUCT_PACKAGES := $(filter-out \
     android.hardware.biometrics.fingerprint@2.1-service, \
     $(PRODUCT_PACKAGES))
 
+PRODUCT_PACKAGES_DEBUG := $(filter-out \
+    android.hardware.biometrics.fingerprint@2.1-service, \
+    $(PRODUCT_PACKAGES_DEBUG))
+
+PRODUCT_PACKAGES_ENG := $(filter-out \
+    android.hardware.biometrics.fingerprint@2.1-service, \
+    $(PRODUCT_PACKAGES_ENG))
+
 PRODUCT_NAME := lineage_fujisan
 PRODUCT_DEVICE := fujisan
 PRODUCT_BRAND := ZTE

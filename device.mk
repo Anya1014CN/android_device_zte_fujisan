@@ -70,8 +70,7 @@ PRODUCT_PACKAGES += \
 # provide the service binary plus its matching init/manifest pieces.
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
-    android.hidl.base@1.0 \
-    fujisan_fingerprint_service
+    android.hidl.base@1.0
 
 # Oreo vendor blobs depend on vendor-visible HIDL runtime libraries. The
 # legacy interface sonames android.hidl.base@1.0.so and
