@@ -27,10 +27,9 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
     audio.smartpa.channel=right
 
-# Keep the modern framework-side Bluetooth stack source-built, but pair it
-# with the stock Qualcomm transport blob in vendor/.  Runtime testing showed
-# that fujisan's stock wcnss_filter userspace expects the legacy transport
-# property contract from the stock libbt-vendor implementation.
+# Keep the modern framework-side Bluetooth stack source-built. Fujisan still
+# uses the legacy wcnss_filter userspace path, so BoardConfigVendor enables the
+# old wc_transport property contract for the source-built libbt-vendor.
 PRODUCT_VENDOR_PROPERTIES += \
     vendor.qcom.bluetooth.soc=rome
 
@@ -58,8 +57,9 @@ PRODUCT_PACKAGES += \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
 
-# Keep the Android 11 Bluetooth HIDL service/impl source-built.  Only the
-# firmware-coupled transport layer stays proprietary on this device.
+# Keep the Android 11 Bluetooth HIDL service/impl and the Qualcomm transport
+# library source-built. Device-specific compatibility lives in
+# BoardConfigVendor rather than by shipping a second prebuilt libbt-vendor.
 PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-service \
     android.hardware.bluetooth@1.0-impl
