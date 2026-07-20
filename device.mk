@@ -60,9 +60,9 @@ PRODUCT_PACKAGES += \
 # selects the transport at build time, but does not install these modules.
 PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-service-qti \
-    android.hardware.bluetooth@1.0-impl-qti \
+    android.hardware.bluetooth@1.0-impl-qti:64 \
     com.qualcomm.qti.ant@1.0 \
-    com.qualcomm.qti.ant@1.0-impl
+    com.qualcomm.qti.ant@1.0-impl:64
 
 # The FPC service is proprietary, but its standard HIDL interfaces must be
 # provided by the Android 11 build for the stock service and extension library.
@@ -70,13 +70,12 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     android.hidl.base@1.0
 
-# Oreo vendor blobs depend on vendor-visible HIDL interface/runtime libraries
-# that are not pulled in automatically when the blob itself is copied from the
-# proprietary tree.
+# Oreo vendor blobs depend on vendor-visible HIDL runtime libraries. The
+# legacy interface sonames android.hidl.base@1.0.so and
+# android.hidl.manager@1.0.so no longer build as standalone libraries on
+# Android 11, so rootdir/Android.mk provides vendor-side compatibility
+# symlinks to the source-built libhidlbase.so instead.
 PRODUCT_PACKAGES += \
-    android.hidl.base@1.0.vendor \
-    android.hidl.manager@1.0 \
-    android.hidl.manager@1.0.vendor \
     libhidltransport.vendor \
     libhwbinder.vendor
 
