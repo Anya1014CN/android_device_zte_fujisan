@@ -259,3 +259,15 @@ PRODUCT_PACKAGES := $(filter-out \
     lineage.livedisplay@2.0-service-sdm \
     vendor.lineage.livedisplay@2.0-service-sdm, \
     $(PRODUCT_PACKAGES))
+
+# The launched-with-N product pulls generic HIDL wrappers into
+# PRODUCT_PACKAGES. Fujisan ships the matching Oreo services as vendor blobs.
+PRODUCT_PACKAGES := $(filter-out \
+    android.hardware.graphics.composer@2.1-impl \
+    android.hardware.graphics.composer@2.1-service \
+    android.hardware.gatekeeper@1.0-impl \
+    android.hardware.gatekeeper@1.0-service \
+    gatekeeper.default \
+    android.hardware.vibrator@1.0-impl \
+    android.hardware.vibrator@1.0-service, \
+    $(PRODUCT_PACKAGES))
