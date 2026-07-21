@@ -55,8 +55,6 @@ PRODUCT_PACKAGES += \
     android.hardware.configstore@1.1-service \
     android.hardware.graphics.allocator@2.0-impl \
     android.hardware.graphics.allocator@2.0-service \
-    android.hardware.graphics.composer@2.1-impl \
-    android.hardware.graphics.composer@2.1-service \
     android.hardware.graphics.mapper@2.0-impl \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
@@ -133,12 +131,6 @@ PRODUCT_PACKAGES += \
     android.hardware.light@2.0-impl \
     android.hardware.light@2.0-service
 
-# VibratorService synchronously acquires IVibrator during SystemServer startup.
-# Supply the AOSP HIDL wrapper for the legacy vibrator.default implementation.
-PRODUCT_PACKAGES += \
-    android.hardware.vibrator@1.0-impl \
-    android.hardware.vibrator@1.0-service
-
 # HardwarePropertiesManagerService acquires the declared thermal HAL during
 # SystemServer startup.  The stock service is excluded from the vendor image,
 # so provide the framework-compatible AOSP implementation.
@@ -164,13 +156,9 @@ PRODUCT_PACKAGES += \
     wpa_supplicant \
     wpa_supplicant.conf
 
-# The stock security HAL services are excluded from the generated vendor
-# image.  Keystore otherwise waits forever for Keymaster and never publishes
-# android.security.keystore, which crashes SystemServer during boot phase 600.
+# Keep the framework-side Gatekeeper interface available for Keystore.
 PRODUCT_PACKAGES += \
-    android.hardware.gatekeeper@1.0-impl \
-    android.hardware.gatekeeper@1.0-service \
-    gatekeeper.default \
+    android.hardware.gatekeeper@1.0 \
     android.hardware.keymaster@4.0-service \
     libhidltransport
 
