@@ -1,0 +1,10 @@
+# Init parses *.rc files in lexical order. Define the bpfloader service before
+# AOSP's bpfloader.rc so its load_bpf_programs action starts this safe stub.
+service bpfloader /system/bin/fujisan_bpfloader
+    class core
+    user root
+    group root system
+    oneshot
+
+on early-init
+    setprop bpf.progs_loaded 1

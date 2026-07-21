@@ -23,10 +23,6 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_PACKAGES += \
     vendor.lineage.livedisplay@2.0-service.fujisan
 
-# Keep Android 12's bpfloader failure path from rebooting this 3.18 device.
-PRODUCT_PACKAGES += \
-    fujisan_bpfloader
-
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
     bpf.progs_loaded=1 \
@@ -240,9 +236,11 @@ PRODUCT_COPY_FILES += \
     frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml \
     $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
     $(LOCAL_PATH)/rootdir/bin/fujisan_bootlog.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_bootlog.sh \
+    $(LOCAL_PATH)/rootdir/bin/fujisan_bpfloader.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_bpfloader \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bootlog.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bootlog.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
+    $(LOCAL_PATH)/rootdir/etc/init/00-fujisan-bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/00-fujisan-bpfloader.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
