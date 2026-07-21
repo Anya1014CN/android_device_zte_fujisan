@@ -1,4 +1,4 @@
-# Optional early mark. Real AOSP bpfloader remains installed (same as gemini).
-# Kernel now has CONFIG_BPF_SYSCALL + HASH/ARRAY maps for 3.18.
+# The stub service is the authoritative bpfloader for this 3.18 kernel.
 on early-init
+    setprop bpf.progs_loaded 1
     setprop bpf.has_net_cgroup 0

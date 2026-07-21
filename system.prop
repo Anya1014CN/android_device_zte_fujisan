@@ -63,3 +63,5 @@ sys.usb.config=adb
 ro.adb.secure=0
 
 
+# The 3.18 kernel does not implement Android 12's full eBPF ABI.
+bpf.progs_loaded=1

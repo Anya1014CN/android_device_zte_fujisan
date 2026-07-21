@@ -23,8 +23,13 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_PACKAGES += \
     vendor.lineage.livedisplay@2.0-service.fujisan
 
+# Keep Android 12's bpfloader failure path from rebooting this 3.18 device.
+PRODUCT_PACKAGES += \
+    fujisan_bpfloader
+
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
+    bpf.progs_loaded=1 \
     audio.smartpa.channel=right \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
