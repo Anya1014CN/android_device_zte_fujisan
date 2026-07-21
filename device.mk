@@ -23,9 +23,8 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_PACKAGES += \
     vendor.lineage.livedisplay@2.0-service.fujisan
 
-# msm8996 3.18 cannot yet run AOSP bpfloader like 4.4 gemini.
-# Install a separate stub binary and replace system/etc/init/bpfloader.rc.
-# Never install a second system/bin/bpfloader.
+# Replace AOSP bpfloader (binary+rc) via Soong overrides; do not
+# PRODUCT_COPY_FILES over the same paths (causes overriding commands).
 PRODUCT_PACKAGES += \
     fujisan_bpfloader
 
@@ -246,7 +245,6 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bootlog.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bootlog.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
-    $(LOCAL_PATH)/rootdir/etc/init/bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/bpfloader.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \

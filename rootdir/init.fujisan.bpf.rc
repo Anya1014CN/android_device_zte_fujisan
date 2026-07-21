@@ -1,4 +1,4 @@
-# Safety net if stub/init ordering races on 3.18.
+# Extra safety net if service ordering races before the stub runs.
 on early-init
     setprop bpf.progs_loaded 1
     setprop bpf.has_net_cgroup 0

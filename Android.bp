@@ -1,9 +1,12 @@
 // Fujisan is Linux 3.18; gemini/msm8996 is 4.4 with full eBPF.
-// Never install over system/bin/bpfloader (dual install rules collide).
-// Ship a separate stub and repoint the init service via bpfloader.rc.
+// Replace the entire AOSP bpfloader Soong module (binary + init_rc) so we do
+// not dual-install system/bin/bpfloader or system/etc/init/bpfloader.rc.
 cc_binary {
     name: "fujisan_bpfloader",
     srcs: ["rootdir/bin/fujisan_bpfloader.cpp"],
+    stem: "bpfloader",
+    overrides: ["bpfloader"],
+    init_rc: ["rootdir/etc/init/bpfloader.rc"],
     cflags: [
         "-Wall",
         "-Werror",

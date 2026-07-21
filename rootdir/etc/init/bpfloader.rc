@@ -1,6 +1,5 @@
-# Replace AOSP bpfloader.rc. Stock binary may still be present but is unused.
-# 3.18 eBPF is incomplete vs gemini/4.4; run a success stub instead.
-service bpfloader /system/bin/fujisan_bpfloader
+# Replacement for AOSP bpfloader.rc on 3.18 (gemini uses real eBPF on 4.4).
+service bpfloader /system/bin/bpfloader
     class core
     user root
     group root system
