@@ -1,9 +1,0 @@
-# Replacement for AOSP bpfloader.rc on 3.18 (gemini uses real eBPF on 4.4).
-service bpfloader /system/bin/bpfloader
-    class core
-    user root
-    group root system
-    oneshot
-
-on early-init
-    setprop bpf.progs_loaded 1

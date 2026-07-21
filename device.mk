@@ -23,15 +23,8 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_PACKAGES += \
     vendor.lineage.livedisplay@2.0-service.fujisan
 
-# Replace AOSP bpfloader (binary+rc) via Soong overrides; do not
-# PRODUCT_COPY_FILES over the same paths (causes overriding commands).
-PRODUCT_PACKAGES += \
-    fujisan_bpfloader
-
-
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
-    bpf.progs_loaded=1 \
     audio.smartpa.channel=right \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
@@ -269,6 +262,7 @@ PRODUCT_COPY_FILES += \
 # is for Qualcomm SDM display stacks and crashes here after failing to load
 # libsdm-disp-vndapis.  Exclude both install variants at product definition
 # time; do not ship an init override for a service this device never uses.
+
 
 PRODUCT_PACKAGES := $(filter-out \
     lineage.livedisplay@2.0-service-sdm \

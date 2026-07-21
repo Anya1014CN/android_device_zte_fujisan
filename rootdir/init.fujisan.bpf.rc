@@ -1,7 +1,4 @@
-# Extra safety net if service ordering races before the stub runs.
+# Optional early mark. Real AOSP bpfloader remains installed (same as gemini).
+# Kernel now has CONFIG_BPF_SYSCALL + HASH/ARRAY maps for 3.18.
 on early-init
-    setprop bpf.progs_loaded 1
     setprop bpf.has_net_cgroup 0
-
-on property:sys.boot_completed=1
-    setprop bpf.progs_loaded 1

@@ -63,5 +63,3 @@ sys.usb.config=adb
 ro.adb.secure=0
 
 
-# 3.18 lacks gemini/4.4 eBPF; avoid bpfloader hard-fail races.
-bpf.progs_loaded=1
