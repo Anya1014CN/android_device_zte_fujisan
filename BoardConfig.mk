@@ -66,6 +66,8 @@ TARGET_KERNEL_ARCH := arm64
 TARGET_KERNEL_HEADER_ARCH := arm64
 TARGET_KERNEL_SOURCE := kernel/zte/msm8996
 TARGET_KERNEL_CONFIG := lineageos_fujisan_defconfig
+# The 4.4 msm8996 base builds a 32-bit compat vDSO with clang.
+TARGET_KERNEL_MAKE_ENV += CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 NEED_KERNEL_MODULE_ROOT := true
 
 # Partitions
