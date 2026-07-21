@@ -1,0 +1,14 @@
+# The generic composer service is built into the non-Treble vendor path, but
+# ZTE's stock init rules expect this legacy service name.
+service hwcomposer-2-1 /vendor/bin/hw/android.hardware.graphics.composer@2.1-service
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    onrestart restart surfaceflinger
+
+on property:init.svc.hwservicemanager=running
+    start hwcomposer-2-1
+
+on boot
+    start hwcomposer-2-1
