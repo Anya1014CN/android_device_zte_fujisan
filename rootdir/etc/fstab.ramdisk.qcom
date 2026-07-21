@@ -1,8 +1,10 @@
 # Android 12 first-stage fstab used from the boot ramdisk.
-# Fujisan is non-Treble and has no separate vendor partition. First-stage init
-# only needs to mount the system image; remaining partitions mount later from
-# /vendor/etc/fstab.qcom (which lives at /system/vendor/etc/fstab.qcom).
+# Fujisan is non-Treble and has no separate vendor partition.
+# Mount system for second-stage handoff, plus dcmlog/cache for early breadcrumb logs.
 
-# Use both bootdevice aliases and the concrete sdhci path for first-stage mount.
-/dev/block/bootdevice/by-name/system                          /system  ext4  ro,barrier=1,discard  wait,first_stage_mount
-/dev/block/platform/soc/7464900.sdhci/by-name/system        /system  ext4  ro,barrier=1,discard  wait,first_stage_mount
+/dev/block/bootdevice/by-name/system                          /system  ext4  ro,barrier=1,discard                    wait,first_stage_mount
+/dev/block/platform/soc/7464900.sdhci/by-name/system        /system  ext4  ro,barrier=1,discard                    wait,first_stage_mount
+/dev/block/bootdevice/by-name/dcmlog                          /dcmlog  ext4  rw,noatime,nosuid,nodev,barrier=1       wait,check,formattable,first_stage_mount
+/dev/block/platform/soc/7464900.sdhci/by-name/dcmlog        /dcmlog  ext4  rw,noatime,nosuid,nodev,barrier=1       wait,check,formattable,first_stage_mount
+/dev/block/bootdevice/by-name/cache                           /cache   ext4  rw,noatime,nosuid,nodev,barrier=1       wait,formattable,first_stage_mount
+/dev/block/platform/soc/7464900.sdhci/by-name/cache         /cache   ext4  rw,noatime,nosuid,nodev,barrier=1       wait,formattable,first_stage_mount
