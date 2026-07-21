@@ -10,12 +10,11 @@ int main(void) {
     __system_property_set("bpf.progs_loaded", "1");
     __system_property_set("bpf.has_net_cgroup", "0");
 
-    /* Best-effort breadcrumbs for early bring-up debugging. */
     FILE *kmsg = fopen("/dev/kmsg", "w");
     if (kmsg) {
-        fputs("fujisan-bpfloader: stub done bpf.progs_loaded=1\n", kmsg);
+        fputs("fujisan-bpfloader: stub done bpf.progs_loaded=1
+", kmsg);
         fclose(kmsg);
     }
-
     return 0;
 }

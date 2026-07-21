@@ -1,14 +1,9 @@
-// Fujisan is Linux 3.18. Lineage gemini/msm8996 is 4.4 with a full eBPF
-// stack. Until the 3.18 eBPF port is complete enough for stock bpfloader,
-// replace AOSP bpfloader with a success stub.
-//
-// sh_binary does not support "overrides"; cc_binary does. Make
-// LOCAL_OVERRIDES_MODULES also collides with the Soong install rule.
+// Fujisan is Linux 3.18; gemini/msm8996 is 4.4 with full eBPF.
+// Never install over system/bin/bpfloader (dual install rules collide).
+// Ship a separate stub and repoint the init service via bpfloader.rc.
 cc_binary {
     name: "fujisan_bpfloader",
     srcs: ["rootdir/bin/fujisan_bpfloader.cpp"],
-    stem: "bpfloader",
-    overrides: ["bpfloader"],
     cflags: [
         "-Wall",
         "-Werror",

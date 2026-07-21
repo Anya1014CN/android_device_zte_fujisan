@@ -1,6 +1,7 @@
-# Mark BPF programs loaded early on 3.18 while gemini-like eBPF is incomplete.
+# Safety net if stub/init ordering races on 3.18.
 on early-init
     setprop bpf.progs_loaded 1
+    setprop bpf.has_net_cgroup 0
 
 on property:sys.boot_completed=1
     setprop bpf.progs_loaded 1
