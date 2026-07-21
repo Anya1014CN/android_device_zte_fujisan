@@ -56,3 +56,8 @@ debug.sf.latch_unsignaled=1
 debug.sf.recomputecrop=0
 persist.hwc.enable_vds=1
 vendor.display.enable_default_color_mode=1
+
+# Bring-up: keep adb enabled even if userspace restarts early.
+persist.sys.usb.config=adb
+sys.usb.config=adb
+ro.adb.secure=0

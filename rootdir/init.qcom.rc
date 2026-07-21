@@ -1,10 +1,18 @@
+on early-init
+    write /dev/kmsg "fujisan: early-init\n"
+
 on fs
+    write /dev/kmsg "fujisan: fs before mount_all\n"
     mount_all /vendor/etc/fstab.qcom --early
+    write /dev/kmsg "fujisan: fs after mount_all early\n"
 
 on late-fs
+    write /dev/kmsg "fujisan: late-fs before mount_all\n"
     mount_all /vendor/etc/fstab.qcom --late
+    write /dev/kmsg "fujisan: late-fs after mount_all late\n"
 
 on post-fs
+    write /dev/kmsg "fujisan: post-fs\n"
     restorecon_recursive /persist
     insmod /lib/modules/wlan.ko
     setprop wlan.driver.status ok
@@ -13,6 +21,7 @@ on post-fs
 # Android's "adb" composition name to FunctionFS before init.usb.rc applies
 # the persistent USB configuration.
 on init
+    write /dev/kmsg "fujisan: init\n"
     mkdir /dev/usb-ffs 0770 shell shell
     mkdir /dev/usb-ffs/adb 0770 shell shell
     mount functionfs adb /dev/usb-ffs/adb uid=2000,gid=2000
