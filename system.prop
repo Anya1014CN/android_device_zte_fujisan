@@ -61,3 +61,6 @@ vendor.display.enable_default_color_mode=1
 persist.sys.usb.config=adb
 sys.usb.config=adb
 ro.adb.secure=0
+
+# 3.18 kernel has no usable eBPF; skip Android 12 bpfloader hard-fail.
+bpf.progs_loaded=1

@@ -1,0 +1,9 @@
+# msm8996 3.18 has no usable eBPF. Mark BPF programs loaded early so
+# Android 12 does not stall waiting on bpf.progs_loaded after the stub
+# bpfloader binary returns success.
+
+on early-init
+    setprop bpf.progs_loaded 1
+
+on property:sys.boot_completed=1
+    setprop bpf.progs_loaded 1

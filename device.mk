@@ -23,12 +23,17 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_PACKAGES += \
     vendor.lineage.livedisplay@2.0-service.fujisan
 
+# Stub out AOSP bpfloader on kernels without eBPF.
+PRODUCT_PACKAGES += \
+    fujisan_bpfloader_override
+
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
     audio.smartpa.channel=right \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
-    sys.usb.config=adb
+    sys.usb.config=adb \
+    bpf.progs_loaded=1
 
 # Keep the modern framework-side Bluetooth stack source-built. Fujisan still
 # uses the legacy wcnss_filter userspace path, so BoardConfigVendor enables the
@@ -237,6 +242,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/bin/fujisan_bootlog.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_bootlog.sh \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bootlog.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bootlog.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
