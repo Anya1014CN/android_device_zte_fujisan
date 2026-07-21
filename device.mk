@@ -23,17 +23,18 @@ PRODUCT_SOONG_NAMESPACES += \
 PRODUCT_PACKAGES += \
     vendor.lineage.livedisplay@2.0-service.fujisan
 
-# Stub out AOSP bpfloader on kernels without eBPF.
+# msm8996 3.18 cannot yet run AOSP bpfloader like 4.4 gemini; Soong-override it.
 PRODUCT_PACKAGES += \
-    fujisan_bpfloader_override
+    fujisan_bpfloader
+
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
+    bpf.progs_loaded=1 \
     audio.smartpa.channel=right \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
     sys.usb.config=adb \
-    bpf.progs_loaded=1
 
 # Keep the modern framework-side Bluetooth stack source-built. Fujisan still
 # uses the legacy wcnss_filter userspace path, so BoardConfigVendor enables the
@@ -267,6 +268,11 @@ PRODUCT_COPY_FILES += \
 # is for Qualcomm SDM display stacks and crashes here after failing to load
 # libsdm-disp-vndapis.  Exclude both install variants at product definition
 # time; do not ship an init override for a service this device never uses.
+
+# Prefer the Soong stub install of system/bin/bpfloader.
+PRODUCT_PACKAGES := $(filter-out \
+    bpfloader, \
+    $(PRODUCT_PACKAGES))
 PRODUCT_PACKAGES := $(filter-out \
     lineage.livedisplay@2.0-service-sdm \
     vendor.lineage.livedisplay@2.0-service-sdm, \

@@ -1,0 +1,11 @@
+// Fujisan is Linux 3.18. Lineage gemini/msm8996 is 4.4 with a full eBPF
+// stack (CONFIG_BPF_SYSCALL, HASH/ARRAY maps, CGROUP_BPF). The 3.18 tree
+// cannot yet run AOSP bpfloader successfully, so replace it with a success
+// stub. Use Soong overrides; Make LOCAL_OVERRIDES_MODULES collides with the
+// AOSP soong install rule for system/bin/bpfloader.
+sh_binary {
+    name: "fujisan_bpfloader",
+    src: "rootdir/bin/fujisan_bpfloader.sh",
+    filename: "bpfloader",
+    overrides: ["bpfloader"],
+}
