@@ -240,7 +240,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bootlog.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bootlog.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
-    $(LOCAL_PATH)/rootdir/etc/init/00-fujisan-bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/00-fujisan-bpfloader.rc \
+    $(LOCAL_PATH)/rootdir/etc/init/a-fujisan-bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/a-fujisan-bpfloader.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
