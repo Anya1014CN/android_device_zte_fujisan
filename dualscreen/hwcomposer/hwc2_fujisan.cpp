@@ -13,6 +13,43 @@
 #include <hardware/hwcomposer2.h>
 #include <system/graphics.h>
 #include <cutils/properties.h>
+#include <hardware/gralloc.h>
+
+/* From CAF gralloc_priv.h / gr_priv_handle.h (msm8996). */
+#ifndef GRALLOC_MODULE_PERFORM_GET_CUSTOM_STRIDE_FROM_HANDLE
+#define GRALLOC_MODULE_PERFORM_GET_CUSTOM_STRIDE_FROM_HANDLE 3
+#endif
+#ifndef GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS
+#define GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS 10
+#endif
+#ifndef PRIV_FLAGS_UBWC_ALIGNED
+#define PRIV_FLAGS_UBWC_ALIGNED 0x08000000
+#endif
+
+struct FujisanPrivateHandle {
+    native_handle_t base;
+    int fd;
+    int fd_metadata;
+    int magic;
+    int flags;
+    int width;              /* aligned stride in pixels */
+    int height;             /* aligned height */
+    int unaligned_width;    /* client width */
+    int unaligned_height;   /* client height */
+    int format;
+    int buffer_type;
+    unsigned int size;
+    unsigned int offset;
+    unsigned int offset_metadata;
+    uint64_t base_addr;
+    uint64_t base_metadata;
+    uint64_t gpuaddr;
+    uint64_t id;
+    uint64_t producer_usage;
+    uint64_t consumer_usage;
+    unsigned int layer_count;
+};
+static constexpr int kFujisanGrallocMagic = 'gmsm';
 #include <log/log.h>
 #include <sync/sync.h>
 
@@ -29,6 +66,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <cstdint>
 #include <map>
 #include <mutex>
 
@@ -455,9 +493,78 @@ static int32_t SecGetChanged(Device* d, uint32_t* out_count, hwc2_layer_t* out_l
     return HWC2_ERROR_NONE;
 }
 
+static bool GetGrallocStridePx(buffer_handle_t handle, int* out_stride_px, int* out_w, int* out_h,
+                              int* out_format, int* out_flags) {
+    if (!handle || !out_stride_px)
+        return false;
+    *out_stride_px = FUJISAN_SEC_WIDTH;
+    if (out_w)
+        *out_w = FUJISAN_SEC_WIDTH;
+    if (out_h)
+        *out_h = FUJISAN_SEC_HEIGHT;
+    if (out_format)
+        *out_format = HAL_PIXEL_FORMAT_RGBA_8888;
+    if (out_flags)
+        *out_flags = 0;
+
+    const auto* hnd = reinterpret_cast<const FujisanPrivateHandle*>(handle);
+    if (hnd && hnd->magic == kFujisanGrallocMagic) {
+        if (out_w && hnd->unaligned_width > 0)
+            *out_w = hnd->unaligned_width;
+        if (out_h && hnd->unaligned_height > 0)
+            *out_h = hnd->unaligned_height;
+        if (hnd->width > 0)
+            *out_stride_px = hnd->width; /* CAF: width == aligned stride */
+        if (out_format)
+            *out_format = hnd->format;
+        if (out_flags)
+            *out_flags = hnd->flags;
+        return true;
+    }
+
+    /* Fallback: gralloc perform */
+    const hw_module_t* module = nullptr;
+    if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module) == 0 && module) {
+        const auto* g = reinterpret_cast<const gralloc_module_t*>(module);
+        if (g->perform) {
+            int stride = 0;
+            if (g->perform(const_cast<gralloc_module_t*>(g),
+                           GRALLOC_MODULE_PERFORM_GET_CUSTOM_STRIDE_FROM_HANDLE, handle,
+                           &stride) == 0 &&
+                stride > 0) {
+                *out_stride_px = stride;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
     if (!handle || !OpenFb1(d) || d->fb_map == MAP_FAILED)
         return false;
+
+    int stride_px = FUJISAN_SEC_WIDTH;
+    int w = FUJISAN_SEC_WIDTH;
+    int h = FUJISAN_SEC_HEIGHT;
+    int format = HAL_PIXEL_FORMAT_RGBA_8888;
+    int flags = 0;
+    GetGrallocStridePx(handle, &stride_px, &w, &h, &format, &flags);
+
+    if (w > FUJISAN_SEC_WIDTH)
+        w = FUJISAN_SEC_WIDTH;
+    if (h > FUJISAN_SEC_HEIGHT)
+        h = FUJISAN_SEC_HEIGHT;
+    if (stride_px < w)
+        stride_px = w;
+
+    if (flags & PRIV_FLAGS_UBWC_ALIGNED) {
+        ALOGE("client target is UBWC (flags=0x%x fmt=%d) — CPU copy will snow; "
+              "need linear buffer",
+              flags, format);
+        /* Still attempt lock; some stacks decompress on CPU_READ. */
+    }
+
     if (d->mapper == nullptr)
         d->mapper = IMapper::getService();
     if (d->mapper == nullptr) {
@@ -465,9 +572,10 @@ static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
         return false;
     }
 
-    const int w = FUJISAN_SEC_WIDTH;
-    const int h = FUJISAN_SEC_HEIGHT;
-    IMapper::Rect rect{0, 0, w, h};
+    /* Lock full aligned height/stride region when possible. */
+    const int lock_w = stride_px;
+    const int lock_h = h;
+    IMapper::Rect rect{0, 0, lock_w, lock_h};
     void* vaddr = nullptr;
     Error err = Error::NONE;
     d->mapper->lock(const_cast<native_handle_t*>(handle),
@@ -477,25 +585,49 @@ static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
                         vaddr = ptr;
                     });
     if (err != Error::NONE || vaddr == nullptr) {
-        ALOGE("mapper.lock failed (%d)", static_cast<int>(err));
+        /* Retry with client size only. */
+        rect = IMapper::Rect{0, 0, w, h};
+        d->mapper->lock(const_cast<native_handle_t*>(handle),
+                        static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN), rect, hidl_handle(),
+                        [&](const auto e, void* ptr) {
+                            err = e;
+                            vaddr = ptr;
+                        });
+    }
+    if (err != Error::NONE || vaddr == nullptr) {
+        ALOGE("mapper.lock failed (%d) stride=%d %dx%d flags=0x%x", static_cast<int>(err),
+              stride_px, w, h, flags);
         return false;
     }
 
-    const size_t src_stride_bytes = static_cast<size_t>(w) * 4;
+    const size_t src_stride_bytes = static_cast<size_t>(stride_px) * 4;
     const size_t dst_stride_bytes =
-        d->finfo.line_length ? d->finfo.line_length : static_cast<size_t>(w) * 4;
+        d->finfo.line_length ? d->finfo.line_length : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
+    const size_t copy_w = static_cast<size_t>(w) * 4;
     auto* src = static_cast<const uint8_t*>(vaddr);
     auto* dst = static_cast<uint8_t*>(d->fb_map);
+
+    /*
+     * Panel scanout on mdss is typically BGRA/RGBA 32bpp linear.
+     * Wrong stride (using width instead of aligned width) produces snow.
+     */
     for (int y = 0; y < h; y++) {
         memcpy(dst + static_cast<size_t>(y) * dst_stride_bytes,
-               src + static_cast<size_t>(y) * src_stride_bytes, static_cast<size_t>(w) * 4);
+               src + static_cast<size_t>(y) * src_stride_bytes, copy_w);
+        /* Clear any right padding on the destination line. */
+        if (dst_stride_bytes > copy_w) {
+            memset(dst + static_cast<size_t>(y) * dst_stride_bytes + copy_w, 0,
+                   dst_stride_bytes - copy_w);
+        }
     }
+    msync(d->fb_map, d->fb_map_size, MS_SYNC);
 
     d->mapper->unlock(const_cast<native_handle_t*>(handle),
                       [&](const auto e, const auto&) { err = e; });
 
     d->vinfo.xoffset = 0;
     d->vinfo.yoffset = 0;
+    d->vinfo.activate = FB_ACTIVATE_VBL;
     if (KickFb(d->fb_fd, &d->vinfo) != 0)
         ALOGW("fb1 kick failed: %s", strerror(errno));
     return true;
