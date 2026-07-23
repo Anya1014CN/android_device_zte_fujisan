@@ -1241,9 +1241,11 @@ static struct hw_module_methods_t g_methods = {
 
 }  // namespace
 
+// HWC2 is selected by device API version (HWC_DEVICE_API_VERSION_2_0).
+// Module API remains 0.1 (there is no HWC_MODULE_API_VERSION_2_0).
 hw_module_t HAL_MODULE_INFO_SYM = {
     .tag = HARDWARE_MODULE_TAG,
-    .module_api_version = HWC_MODULE_API_VERSION_2_0,
+    .module_api_version = HWC_MODULE_API_VERSION_0_1,
     .hal_api_version = HARDWARE_HAL_API_VERSION,
     .id = HWC_HARDWARE_MODULE_ID,
     .name = "Fujisan dual-panel HWC2 wrapper",
