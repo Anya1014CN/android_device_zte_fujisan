@@ -1,23 +1,41 @@
-# Force host-visible adb via stock android_usb gadget.
-service fujisan-usb /system/bin/fujisan_usb.sh
-    class core
-    user root
-    group root system shell
-    oneshot
-    disabled
+# Fujisan USB: 4.4 kernel uses configfs (same as Xiaomi msm8996 LOS 19.1).
+# Stock vendor init.qcom.usb.rc creates the gadget + functionfs on boot.
+# Force configfs mode and ensure adb composition binds ffs.adb to UDC.
 
-on post-fs
+on early-init
+    setprop sys.usb.configfs 1
+
+on init
     mkdir /dev/usb-ffs 0775 shell system
     mkdir /dev/usb-ffs/adb 0770 shell system
+    setprop sys.usb.configfs 1
+
+on post-fs
+    setprop sys.usb.configfs 1
     setprop persist.sys.usb.config adb
-    setprop sys.usb.configfs 0
-    setprop sys.usb.config adb
-    start fujisan-usb
 
 on boot
+    setprop sys.usb.configfs 1
     setprop persist.sys.usb.config adb
+    setprop sys.usb.controller 6a00000.dwc3
+    # Re-apply adb after vendor scripts finish gadget setup.
+    setprop sys.usb.config none
     setprop sys.usb.config adb
-    start fujisan-usb
 
-on property:sys.usb.config=adb
-    start fujisan-usb
+# AOSP init.usb.configfs.rc also handles this; keep an explicit fallback
+# so host-visible adb works even if property order races.
+on property:sys.usb.config=adb && property:sys.usb.configfs=1
+    start adbd
+
+on property:sys.usb.ffs.ready=1 && property:sys.usb.config=adb && property:sys.usb.configfs=1
+    write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "adb"
+    rm /config/usb_gadget/g1/configs/b.1/f1
+    rm /config/usb_gadget/g1/configs/b.1/f2
+    rm /config/usb_gadget/g1/configs/b.1/f3
+    rm /config/usb_gadget/g1/configs/b.1/f4
+    rm /config/usb_gadget/g1/configs/b.1/f5
+    write /config/usb_gadget/g1/idVendor 0x18d1
+    write /config/usb_gadget/g1/idProduct 0x4ee7
+    symlink /config/usb_gadget/g1/functions/ffs.adb /config/usb_gadget/g1/configs/b.1/f1
+    write /config/usb_gadget/g1/UDC ${sys.usb.controller}
+    setprop sys.usb.state ${sys.usb.config}

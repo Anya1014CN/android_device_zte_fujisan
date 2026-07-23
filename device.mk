@@ -30,7 +30,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
     sys.usb.config=adb \
-    sys.usb.configfs=0 \
+    sys.usb.configfs=1 \
     sys.usb.controller=6a00000.dwc3 \
 
 # Keep the modern framework-side Bluetooth stack source-built. Fujisan still

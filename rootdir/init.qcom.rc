@@ -1,1 +1,2 @@
-# Placeholder product init. USB is handled by init.fujisan.usb.rc.
+# Product init extras live in fujisan.*.rc.
+# USB: configfs via fujisan.usb.rc + vendor init.qcom.usb.rc
