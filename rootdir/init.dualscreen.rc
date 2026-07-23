@@ -1,1 +1,10 @@
-# Dual-screen routing is handled by the framework/HWC compatibility patches.
+# Fujisan L1 dual-screen bring-up helpers
+on property:sys.boot_completed=1
+    # Ensure secondary MDSS FB is unblanked and has backlight once userspace is up.
+    write /sys/class/graphics/fb1/blank 0
+    write /sys/class/leds/lcd-backlight-2/brightness 180
+    # Keep node permissions for graphics/system to manage later.
+    chown system graphics /sys/class/graphics/fb1/blank
+    chown system graphics /sys/class/leds/lcd-backlight-2/brightness
+    chmod 0664 /sys/class/graphics/fb1/blank
+    chmod 0664 /sys/class/leds/lcd-backlight-2/brightness
