@@ -1,11 +1,19 @@
-# The generic composer service is built into the non-Treble vendor path, but
-# ZTE's stock init rules expect this legacy service name.
+# Stock composer binary path + service name expected by ZTE init rules.
 service hwcomposer-2-1 /vendor/bin/hw/android.hardware.graphics.composer@2.1-service
     class hal animation
     user system
     group graphics drmrpc
     capabilities SYS_NICE
     onrestart restart surfaceflinger
+
+# Android 12 ueventd only reads /vendor/etc/ueventd.rc. Until that file is
+# present and applied, force the GPU/ION node permissions required by
+# SurfaceFlinger and Adreno before graphics HALs start.
+on early-boot
+    chmod 0666 /dev/kgsl-3d0
+    chown system system /dev/kgsl-3d0
+    chmod 0664 /dev/ion
+    chown system system /dev/ion
 
 on property:init.svc.hwservicemanager=running
     start hwcomposer-2-1
