@@ -1,13 +1,18 @@
 # Fujisan L1 dual-screen bring-up helpers
+service fujisan-fb1-fill /vendor/bin/fujisan_fb1_fill 0xFF00AA00
+    class late_start
+    user system
+    group system graphics
+    oneshot
+    disabled
+
 on property:sys.boot_completed=1
     # Ensure secondary MDSS FB is unblanked and has backlight once userspace is up.
     write /sys/class/graphics/fb1/blank 0
     write /sys/class/leds/lcd-backlight-2/brightness 180
-    # Keep node permissions for graphics/system to manage later.
     chown system graphics /sys/class/graphics/fb1/blank
     chown system graphics /sys/class/leds/lcd-backlight-2/brightness
     chmod 0664 /sys/class/graphics/fb1/blank
     chmod 0664 /sys/class/leds/lcd-backlight-2/brightness
-    # Bring-up solid fill on B until HWC multi-display exists.
-    # Safe no-op if binary missing or ioctl fails.
-    exec_background - system system -- /vendor/bin/fujisan_fb1_fill 0xFF00AA00
+    # Solid fill B until HWC multi-display exists. Service stays up.
+    start fujisan-fb1-fill
