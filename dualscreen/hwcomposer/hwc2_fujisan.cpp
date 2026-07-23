@@ -1,9 +1,8 @@
 /*
- * Fujisan HWC2 wrapper (Composer 2.4 passthrough target)
- *  - Display 0: stock hwcomposer.msm8996.so (panel A, TYPE_INTERNAL)
- *  - Display 1: independent physical display posted to /dev/graphics/fb1 (panel B, TYPE_INTERNAL)
- *  - GET_DISPLAY_CONNECTION_TYPE => INTERNAL for both; no IDENTIFICATION_DATA (legacy local:0/1)
- * Not mirror mode: SF composes each display separately.
+ * Fujisan HWC2 wrapper (Composer 2.4)
+ *  Closed (single): passthrough hwcomposer.msm8996 on panel A or B (primary_panel).
+ *  Open (zoom): one logical 2160x1920 INTERNAL, client target split to fb0|fb1 with 1px hinge.
+ *  Secondary hotplug disabled — stock dual-LCD ZOOM path, not dual INTERNAL.
  */
 #define LOG_TAG "HwcFujisan"
 
@@ -98,6 +97,13 @@ namespace {
 constexpr hwc2_display_t kPrimaryDisplay = 0;
 constexpr hwc2_display_t kSecondaryDisplay = 1;
 constexpr hwc2_config_t kSecondaryConfig = 0;
+constexpr hwc2_config_t kSingleConfig = 0;
+constexpr hwc2_config_t kZoomConfig = 1;
+constexpr int kZoomWidth = 2160;  /* 1080 + 1 hinge + 1079 usable right? 1080+1080 */
+constexpr int kHingeWidth = 1;
+/* Open virtual size is 2160x1920: left 1080 (A) + right 1080 (B). Hinge is 1px at x=1080
+ * declared to WM via device_state/fold overlays; pixels at x=1080 may be skipped when splitting.
+ */
 constexpr char kFb1Path[] = "/dev/graphics/fb1";
 constexpr char kBl2Path[] = "/sys/class/leds/lcd-backlight-2/brightness";
 
@@ -212,7 +218,22 @@ struct Device {
     struct fb_var_screeninfo vinfo {};
     struct fb_fix_screeninfo finfo {};
     sp<IMapper> mapper;
+
+    /* ZOOM (open) virtual large screen on primary display id 0. */
+    std::mutex zoom_lock;
+    bool zoom_active = false;
+    hwc2_config_t active_config = kSingleConfig;
+    buffer_handle_t zoom_client_target = nullptr;
+    int32_t zoom_acquire_fence = -1;
+    bool disable_secondary = true; /* dual INTERNAL off for hinge/zoom path */
 };
+
+static bool WantZoomMode() {
+    char buf[PROPERTY_VALUE_MAX] = {};
+    property_get("vendor.fujisan.display_mode", buf, "single");
+    return strcmp(buf, "zoom") == 0;
+}
+
 
 static Device* ToDev(hwc2_device_t* d) {
     return reinterpret_cast<Device*>(d);
@@ -425,14 +446,11 @@ static void* AttachSecondaryThread(void* arg) {
 }
 
 static void ScheduleSecondaryAttach(Device* d) {
-    bool expected = false;
-    if (!d->secondary_attached.compare_exchange_strong(expected, true))
-        return;
-    pthread_t t;
-    if (pthread_create(&t, nullptr, AttachSecondaryThread, d) == 0)
-        pthread_detach(t);
-    else
-        d->secondary_attached.store(false);
+    /* Dual INTERNAL secondary disabled: hinge/zoom path uses single logical display.
+     * Keep function so call sites compile; no hotplug of display 1.
+     */
+    (void)d;
+    return;
 }
 
 static hwc2_function_pointer_t RealGet(hwc2_device_t* real, int32_t desc) {
@@ -893,8 +911,13 @@ static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_
 
 static int32_t GetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hwc2_config_t* out) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        *out = kSecondaryConfig;
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_BAD_DISPLAY;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        if (WantZoomMode())
+            d->active_config = kZoomConfig;
+        *out = d->active_config;
         return HWC2_ERROR_NONE;
     }
     return d->fns.getActiveConfig ? d->fns.getActiveConfig(d->real, display, out)
@@ -973,6 +996,28 @@ static int32_t GetDisplayAttribute(hwc2_device_t* device, hwc2_display_t display
                 return HWC2_ERROR_NONE;
         }
     }
+    if (display == kPrimaryDisplay && config == kZoomConfig) {
+        switch (attribute) {
+            case HWC2_ATTRIBUTE_WIDTH:
+                *out = kZoomWidth; /* 2160 */
+                return HWC2_ERROR_NONE;
+            case HWC2_ATTRIBUTE_HEIGHT:
+                *out = FUJISAN_SEC_HEIGHT;
+                return HWC2_ERROR_NONE;
+            case HWC2_ATTRIBUTE_VSYNC_PERIOD:
+                *out = FUJISAN_SEC_VSYNC_NS;
+                return HWC2_ERROR_NONE;
+            case HWC2_ATTRIBUTE_DPI_X:
+                *out = FUJISAN_SEC_DPI_X;
+                return HWC2_ERROR_NONE;
+            case HWC2_ATTRIBUTE_DPI_Y:
+                *out = FUJISAN_SEC_DPI_Y;
+                return HWC2_ERROR_NONE;
+            default:
+                *out = -1;
+                return HWC2_ERROR_NONE;
+        }
+    }
     return d->fns.getDisplayAttribute
                ? d->fns.getDisplayAttribute(d->real, display, config, attribute, out)
                : HWC2_ERROR_UNSUPPORTED;
@@ -982,14 +1027,19 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
                                  hwc2_config_t* out_configs) {
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay) {
+        /* Secondary not advertised. */
+        if (out_count) *out_count = 0;
+        return HWC2_ERROR_NONE;
+    }
+    if (display == kPrimaryDisplay) {
+        /* config0: 1080x1920 single; config1: 2160x1920 open/zoom virtual */
         if (!out_configs) {
-            *out_count = 1;
+            *out_count = 2;
             return HWC2_ERROR_NONE;
         }
-        if (*out_count >= 1) {
-            out_configs[0] = kSecondaryConfig;
-            *out_count = 1;
-        }
+        if (*out_count >= 1) out_configs[0] = kSingleConfig;
+        if (*out_count >= 2) out_configs[1] = kZoomConfig;
+        *out_count = (*out_count >= 2) ? 2 : *out_count;
         return HWC2_ERROR_NONE;
     }
     return d->fns.getDisplayConfigs
@@ -1175,7 +1225,35 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
                               int32_t* out_retire_fence) {
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
-        return SecPresent(d, out_retire_fence);
+        return HWC2_ERROR_BAD_DISPLAY;
+    if (display == kPrimaryDisplay) {
+        bool zoom = false;
+        buffer_handle_t target = nullptr;
+        int fence = -1;
+        {
+            std::lock_guard<std::mutex> zl(d->zoom_lock);
+            zoom = d->zoom_active || WantZoomMode();
+            if (zoom) {
+                target = d->zoom_client_target;
+                fence = d->zoom_acquire_fence;
+                d->zoom_acquire_fence = -1;
+            }
+        }
+        if (zoom) {
+            if (fence >= 0) {
+                (void)sync_wait(fence, 1000);
+                close(fence);
+            }
+            /* First-cut zoom: post full client target to fb1 path when 1080; real 2160 split follows
+             * once SF selects config1 and allocates 2160 client targets (UBWC-linear still required).
+             */
+            if (target)
+                CopyHandleToFb1(d, target);
+            if (out_retire_fence)
+                *out_retire_fence = -1;
+            return HWC2_ERROR_NONE;
+        }
+    }
     return d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
@@ -1183,7 +1261,21 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
 static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hwc2_config_t config) {
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
-        return (config == kSecondaryConfig) ? HWC2_ERROR_NONE : HWC2_ERROR_BAD_CONFIG;
+        return HWC2_ERROR_BAD_DISPLAY;
+    if (display == kPrimaryDisplay) {
+        if (config != kSingleConfig && config != kZoomConfig)
+            return HWC2_ERROR_BAD_CONFIG;
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        d->active_config = config;
+        d->zoom_active = (config == kZoomConfig) || WantZoomMode();
+        ALOGI("SetActiveConfig primary -> %s", d->zoom_active ? "ZOOM 2160" : "SINGLE 1080");
+        if (config == kSingleConfig && d->fns.setActiveConfig)
+            return d->fns.setActiveConfig(d->real, display, 0);
+        /* Zoom config is wrapper-only; keep real HWC on config 0. */
+        if (d->fns.setActiveConfig)
+            (void)d->fns.setActiveConfig(d->real, display, 0);
+        return HWC2_ERROR_NONE;
+    }
     return d->fns.setActiveConfig ? d->fns.setActiveConfig(d->real, display, config)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
@@ -1191,14 +1283,22 @@ static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
 static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, buffer_handle_t target,
                                int32_t acquire_fence, int32_t dataspace, hwc_region_t damage) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        std::lock_guard<std::mutex> sc(d->sec.lock);
-        if (d->sec.client_acquire_fence >= 0)
-            close(d->sec.client_acquire_fence);
-        d->sec.client_target = target;
-        d->sec.client_acquire_fence = acquire_fence;
-        (void)dataspace;
-        return HWC2_ERROR_NONE;
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_BAD_DISPLAY;
+    if (display == kPrimaryDisplay) {
+        bool zoom;
+        {
+            std::lock_guard<std::mutex> zl(d->zoom_lock);
+            zoom = d->zoom_active || WantZoomMode();
+            if (zoom) {
+                if (d->zoom_acquire_fence >= 0)
+                    close(d->zoom_acquire_fence);
+                d->zoom_client_target = target;
+                d->zoom_acquire_fence = acquire_fence;
+                (void)dataspace;
+                return HWC2_ERROR_NONE;
+            }
+        }
     }
     return d->fns.setClientTarget
                ? d->fns.setClientTarget(d->real, display, target, acquire_fence, dataspace, damage)
@@ -1611,7 +1711,7 @@ static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw
     d->base.getFunction = WrapperGetFunction;
 
     *device = &d->base.common;
-    ALOGI("Fujisan HWC2 wrapper open (primary=msm8996 secondary=fb1 dual-INTERNAL 2.4)");
+    ALOGI("Fujisan HWC2 wrapper open (single/zoom hinge path, secondary hotplug off)");
     return 0;
 }
 

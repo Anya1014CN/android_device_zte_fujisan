@@ -28,8 +28,16 @@
     <integer name="config_autoBrightnessBrighteningLightDebounce">2000</integer>
     <integer name="config_autoBrightnessDarkeningLightDebounce">4000</integer>
 
-    <!-- Dual built-in panels: local:1 is independent INTERNAL, not a mirror of display 0.
-         LocalDisplayAdapter sets FLAG_OWN_CONTENT_ONLY when this is false, so InputDispatcher
-         viewports keep displayId of the logical secondary display (not remapped to 0). -->
+    <!-- Do not mirror local secondary displays onto default. -->
     <bool name="config_localDisplaysMirrorContent">false</bool>
+
+    <!-- Lid (mxm1120 SW_LID) drives fold posture via DeviceState. -->
+    <bool name="config_lidControlsDisplayFold">true</bool>
+    <integer-array name="config_foldedDeviceStates">
+        <item>0</item>
+    </integer-array>
+    <integer-array name="config_openDeviceStates">
+        <item>1</item>
+    </integer-array>
+    <integer-array name="config_halfFoldedDeviceStates" />
 </resources>

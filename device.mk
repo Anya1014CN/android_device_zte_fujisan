@@ -49,6 +49,7 @@ PRODUCT_VENDOR_PROPERTIES += \
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
     fujisan_fb1_fill \
+    fujisan_halld \
     NavigationBarModeGesturalOverlay
 
 PRODUCT_PACKAGES += \
@@ -221,6 +222,8 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.fujisan.bootlog.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bootlog.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
     $(LOCAL_PATH)/rootdir/init.dualscreen.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.dualscreen.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
+    $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \

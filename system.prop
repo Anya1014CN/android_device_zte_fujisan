@@ -76,3 +76,12 @@ ro.sf.lcd_density=480
 
 # Use device HWC wrapper for independent panel B (not mirror)
 ro.hardware.hwcomposer=fujisan
+
+# Fujisan hinge / dual-LCD posture (stock-compatible semantics)
+# hall_status: 1=A closed, 2=B open, 3=C closed(B face)
+vendor.fujisan.hall_status=1
+vendor.fujisan.device_state=closed_a
+vendor.fujisan.display_mode=single
+persist.vendor.fujisan.primary_panel=a
+persist.vendor.fujisan.primary_force=0
+ro.feature.target_dual_display=1

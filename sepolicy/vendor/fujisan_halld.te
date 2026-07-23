@@ -1,0 +1,15 @@
+
+type fujisan_halld, domain;
+type fujisan_halld_exec, exec_type, vendor_file_type, file_type;
+
+init_daemon_domain(fujisan_halld)
+
+allow fujisan_halld vendor_shell_exec:file rx_file_perms;
+allow fujisan_halld vendor_toolbox_exec:file rx_file_perms;
+allow fujisan_halld graphics_device:chr_file rw_file_perms;
+allow fujisan_halld sysfs_graphics:file rw_file_perms;
+allow fujisan_halld sysfs_leds:file rw_file_perms;
+allow fujisan_halld sysfs:file r_file_perms;
+allow fujisan_halld proc:file r_file_perms;
+set_prop(fujisan_halld, vendor_default_prop)
+get_prop(fujisan_halld, vendor_default_prop)
