@@ -153,13 +153,12 @@ PRODUCT_PACKAGES += \
     wpa_supplicant \
     wpa_supplicant.conf
 
-# Gatekeeper is declared in VINTF; without a real service the user stays in
-# BOOTING (lazy start loops forever). Use AOSP software gatekeeper for
-# bring-up — no OEM gatekeeper service binary.
+# Gatekeeper is declared in VINTF. AOSP no longer ships gatekeeper.default on
+# 12L; the HIDL service is passthrough and needs a legacy module. Ship the
+# existing QTI module + AOSP HIDL wrapper so user 0 can leave BOOTING.
 PRODUCT_PACKAGES += \
     android.hardware.gatekeeper@1.0-impl \
     android.hardware.gatekeeper@1.0-service \
-    gatekeeper.default \
     android.hardware.keymaster@4.0-service \
     libhidltransport
 
