@@ -20,8 +20,7 @@ PRODUCT_SOONG_NAMESPACES += \
 
 # Fujisan exposes panel-native color balance through /proc/panel_hue_0_set.
 # This LiveDisplay HAL maps Lineage color balance to that main-panel control.
-PRODUCT_PACKAGES += \
-    vendor.lineage.livedisplay@2.0-service.fujisan
+# LiveDisplay service disabled for bring-up (exits immediately)
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
