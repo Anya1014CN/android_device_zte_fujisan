@@ -604,6 +604,90 @@ static bool GetGrallocStridePx(buffer_handle_t handle, int* out_stride_px, int* 
     return false;
 }
 
+static void* TryGrallocRgbDataAddress(buffer_handle_t handle) {
+    const hw_module_t* module = nullptr;
+    if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module) != 0 || !module)
+        return nullptr;
+    const auto* g = reinterpret_cast<const gralloc_module_t*>(module);
+    if (!g->perform)
+        return nullptr;
+    void* rgb = nullptr;
+    if (g->perform(const_cast<gralloc_module_t*>(g), GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS,
+                   handle, &rgb) == 0 &&
+        rgb != nullptr)
+        return rgb;
+    return nullptr;
+}
+
+static bool MapperLockCpu(Device* d, buffer_handle_t handle, int w, int h, void** out_vaddr) {
+    if (d->mapper == nullptr)
+        d->mapper = IMapper::getService();
+    if (d->mapper == nullptr)
+        return false;
+
+    const uint64_t usages[] = {
+            static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN),
+            static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN) |
+                    static_cast<uint64_t>(BufferUsage::GPU_TEXTURE),
+            static_cast<uint64_t>(BufferUsage::CPU_READ_RARELY),
+    };
+    const IMapper::Rect rects[] = {
+            IMapper::Rect{0, 0, w, h},
+    };
+
+    for (uint64_t usage : usages) {
+        for (const auto& rect : rects) {
+            void* vaddr = nullptr;
+            Error err = Error::NONE;
+            d->mapper->lock(const_cast<native_handle_t*>(handle), usage, rect, hidl_handle(),
+                            [&](const auto e, void* ptr) {
+                                err = e;
+                                vaddr = ptr;
+                            });
+            if (err == Error::NONE && vaddr != nullptr) {
+                *out_vaddr = vaddr;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void CopyRgbaToFb(Device* d, const uint8_t* src, int stride_px, int w, int h, int format) {
+    const size_t src_stride_bytes = static_cast<size_t>(stride_px) * 4;
+    const size_t dst_stride_bytes =
+            d->finfo.line_length ? d->finfo.line_length : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
+    const size_t copy_w = static_cast<size_t>(w) * 4;
+    auto* dst = static_cast<uint8_t*>(d->fb_map);
+
+    /* mdss fb often scans out as BGRA8888 (red offset 16). SF client target is RGBA. */
+    const bool fb_bgra = (d->vinfo.bits_per_pixel == 32 && d->vinfo.red.offset == 16);
+    const bool src_rgba = (format == HAL_PIXEL_FORMAT_RGBA_8888 ||
+                           format == HAL_PIXEL_FORMAT_RGBX_8888 || format == 1);
+    const bool src_bgra = (format == HAL_PIXEL_FORMAT_BGRA_8888 || format == 5);
+    const bool swizzle = fb_bgra ? src_rgba : src_bgra;
+
+    for (int y = 0; y < h; y++) {
+        const uint8_t* srow = src + static_cast<size_t>(y) * src_stride_bytes;
+        uint8_t* drow = dst + static_cast<size_t>(y) * dst_stride_bytes;
+        if (!swizzle) {
+            memcpy(drow, srow, copy_w);
+        } else {
+            for (int x = 0; x < w; x++) {
+                const uint8_t* sp = srow + static_cast<size_t>(x) * 4;
+                uint8_t* dp = drow + static_cast<size_t>(x) * 4;
+                dp[0] = sp[2];
+                dp[1] = sp[1];
+                dp[2] = sp[0];
+                dp[3] = sp[3];
+            }
+        }
+        if (dst_stride_bytes > copy_w)
+            memset(drow + copy_w, 0, dst_stride_bytes - copy_w);
+    }
+    msync(d->fb_map, d->fb_map_size, MS_SYNC);
+}
+
 static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
     if (!handle || !OpenFb1(d) || d->fb_map == MAP_FAILED)
         return false;
@@ -622,78 +706,49 @@ static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
     if (stride_px < w)
         stride_px = w;
 
-    if (flags & PRIV_FLAGS_UBWC_ALIGNED) {
-        ALOGE("client target is UBWC (flags=0x%x fmt=%d) — CPU copy will snow; "
-              "need linear buffer",
-              flags, format);
-        /* Still attempt lock; some stacks decompress on CPU_READ. */
+    const bool ubwc = (flags & PRIV_FLAGS_UBWC_ALIGNED) != 0;
+    if (ubwc) {
+        ALOGW("client target UBWC flags=0x%x fmt=%d — prefer linear (gfx_ubwc_disable=1)", flags,
+              format);
     }
 
-    if (d->mapper == nullptr)
-        d->mapper = IMapper::getService();
-    if (d->mapper == nullptr) {
-        ALOGE("IMapper service missing");
-        return false;
-    }
-
-    /* Lock full aligned height/stride region when possible. */
-    const int lock_w = stride_px;
-    const int lock_h = h;
-    IMapper::Rect rect{0, 0, lock_w, lock_h};
     void* vaddr = nullptr;
-    Error err = Error::NONE;
-    d->mapper->lock(const_cast<native_handle_t*>(handle),
-                    static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN), rect, hidl_handle(),
-                    [&](const auto e, void* ptr) {
-                        err = e;
-                        vaddr = ptr;
-                    });
-    if (err != Error::NONE || vaddr == nullptr) {
-        /* Retry with client size only. */
-        rect = IMapper::Rect{0, 0, w, h};
-        d->mapper->lock(const_cast<native_handle_t*>(handle),
-                        static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN), rect, hidl_handle(),
-                        [&](const auto e, void* ptr) {
-                            err = e;
-                            vaddr = ptr;
-                        });
+    bool locked = false;
+
+    /* Prefer CAF RGB CPU base when available (may decompress for CPU consumers). */
+    vaddr = TryGrallocRgbDataAddress(handle);
+    if (vaddr == nullptr) {
+        locked = MapperLockCpu(d, handle, stride_px, h, &vaddr);
+        if (!locked)
+            locked = MapperLockCpu(d, handle, w, h, &vaddr);
     }
-    if (err != Error::NONE || vaddr == nullptr) {
-        ALOGE("mapper.lock failed (%d) stride=%d %dx%d flags=0x%x", static_cast<int>(err),
-              stride_px, w, h, flags);
+
+    if (vaddr == nullptr) {
+        ALOGE("no CPU-readable base for client target stride=%d %dx%d flags=0x%x", stride_px, w, h,
+              flags);
         return false;
     }
 
-    const size_t src_stride_bytes = static_cast<size_t>(stride_px) * 4;
-    const size_t dst_stride_bytes =
-        d->finfo.line_length ? d->finfo.line_length : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
-    const size_t copy_w = static_cast<size_t>(w) * 4;
-    auto* src = static_cast<const uint8_t*>(vaddr);
-    auto* dst = static_cast<uint8_t*>(d->fb_map);
+    CopyRgbaToFb(d, static_cast<const uint8_t*>(vaddr), stride_px, w, h, format);
 
-    /*
-     * Panel scanout on mdss is typically BGRA/RGBA 32bpp linear.
-     * Wrong stride (using width instead of aligned width) produces snow.
-     */
-    for (int y = 0; y < h; y++) {
-        memcpy(dst + static_cast<size_t>(y) * dst_stride_bytes,
-               src + static_cast<size_t>(y) * src_stride_bytes, copy_w);
-        /* Clear any right padding on the destination line. */
-        if (dst_stride_bytes > copy_w) {
-            memset(dst + static_cast<size_t>(y) * dst_stride_bytes + copy_w, 0,
-                   dst_stride_bytes - copy_w);
-        }
+    if (locked && d->mapper != nullptr) {
+        Error err = Error::NONE;
+        d->mapper->unlock(const_cast<native_handle_t*>(handle),
+                          [&](const auto e, const auto&) { err = e; });
+        (void)err;
     }
-    msync(d->fb_map, d->fb_map_size, MS_SYNC);
-
-    d->mapper->unlock(const_cast<native_handle_t*>(handle),
-                      [&](const auto e, const auto&) { err = e; });
 
     d->vinfo.xoffset = 0;
     d->vinfo.yoffset = 0;
     d->vinfo.activate = FB_ACTIVATE_VBL;
     if (KickFb(d->fb_fd, &d->vinfo) != 0)
         ALOGW("fb1 kick failed: %s", strerror(errno));
+
+    static int once = 0;
+    if (once++ < 5) {
+        ALOGI("fb1 post %dx%d stride=%d fmt=%d flags=0x%x ubwc=%d fb_ro=%u", w, h, stride_px, format,
+              flags, ubwc ? 1 : 0, d->vinfo.red.offset);
+    }
     return true;
 }
 
@@ -716,7 +771,9 @@ static int32_t SecPresent(Device* d, int32_t* out_retire) {
             kv.second.changed = false;
     }
     if (fence >= 0) {
-        sync_wait(fence, 100);
+        /* GPU client-target must finish before CPU post to fb1. */
+        if (sync_wait(fence, 1000) != 0)
+            ALOGW("client target fence wait failed/timeout");
         close(fence);
     }
     if (target)
@@ -858,8 +915,16 @@ static int32_t GetChangedCompositionTypes(hwc2_device_t* device, hwc2_display_t 
 static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t display, uint32_t width,
                                       uint32_t height, int32_t format, int32_t dataspace) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
+    if (display == kSecondaryDisplay) {
+        /* Independent INTERNAL panel B is CPU-posted. Accept common 32bpp linear formats. */
+        (void)width;
+        (void)height;
+        (void)dataspace;
+        if (format == HAL_PIXEL_FORMAT_RGBA_8888 || format == HAL_PIXEL_FORMAT_RGBX_8888 ||
+            format == HAL_PIXEL_FORMAT_BGRA_8888)
+            return HWC2_ERROR_NONE;
+        return HWC2_ERROR_UNSUPPORTED;
+    }
     return d->fns.getClientTargetSupport
                ? d->fns.getClientTargetSupport(d->real, display, width, height, format, dataspace)
                : HWC2_ERROR_UNSUPPORTED;
