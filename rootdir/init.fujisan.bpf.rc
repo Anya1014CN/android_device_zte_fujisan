@@ -1,4 +1,0 @@
-# The stub service is the authoritative bpfloader for this 3.18 kernel.
-on early-init
-    setprop bpf.progs_loaded 1
-    setprop bpf.has_net_cgroup 0

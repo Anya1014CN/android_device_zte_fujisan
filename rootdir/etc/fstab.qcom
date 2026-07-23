@@ -10,8 +10,9 @@
 /dev/block/platform/soc/7464900.sdhci/by-name/cache     /cache            ext4    noatime,nosuid,nodev,barrier=1                                   wait,formattable,check
 /dev/block/platform/soc/7464900.sdhci/by-name/dcmlog    /dcmlog           ext4    noatime,nosuid,nodev,barrier=1                                   wait,check,formattable
 /dev/block/platform/soc/7464900.sdhci/by-name/persist   /persist          ext4    noatime,nosuid,nodev,barrier=1                                   wait,check,formattable
-/dev/block/platform/soc/7464900.sdhci/by-name/userdata  /data             f2fs    noatime,nosuid,nodev,discard,resuid=1000,resgid=1000             latemount,wait,formattable,check,reservedsize=104857600,encryptable=footer,quota
-/devices/soc/74a4900.sdhci/mmc_host*                    /storage/sdcard1  vfat    nosuid,nodev                                                     wait,voldmanaged=sdcard1:auto,encryptable=footer
+# Bring-up: leave /data unencrypted. A12 FDE (encryptable=footer) fails after wipe.
+/dev/block/platform/soc/7464900.sdhci/by-name/userdata  /data             f2fs    noatime,nosuid,nodev,discard,resuid=1000,resgid=1000             latemount,wait,formattable,check,reservedsize=104857600,quota
+/devices/soc/74a4900.sdhci/mmc_host*                    /storage/sdcard1  vfat    nosuid,nodev                                                     wait,voldmanaged=sdcard1:auto
 /dev/block/platform/soc/7464900.sdhci/by-name/misc      /misc             emmc    defaults                                                         defaults
 /dev/block/platform/soc/7464900.sdhci/by-name/dsp       /dsp              ext4    ro,nosuid,nodev,barrier=1                                        wait
 /dev/block/platform/soc/7464900.sdhci/by-name/modem     /firmware         vfat    ro,shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337,context=u:object_r:firmware_file:s0  wait

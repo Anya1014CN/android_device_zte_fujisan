@@ -1,0 +1,13 @@
+# Software vibrator shim: no haptic driver exposed on this kernel build.
+on early-boot
+    exec_start fujisan-vibrator-shim
+
+service fujisan-vibrator-shim /system/bin/fujisan_vibrator
+    class core
+    user root
+    group root system
+    oneshot
+    disabled
+
+on property:init.svc.zygote=running
+    start vibrator-1-0

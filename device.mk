@@ -25,7 +25,6 @@ PRODUCT_PACKAGES += \
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
-    bpf.progs_loaded=1 \
     audio.smartpa.channel=right \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
@@ -214,7 +213,8 @@ PRODUCT_PACKAGES += \
     android.hardware.health@2.1-service \
     android.hardware.health@2.1-impl
 
-# Framework blocks in VibratorManagerService without this HIDL service.
+# No haptic HW node on this kernel build; keep the AOSP HIDL service with a
+# fake timed_output shim so SystemServer does not block on IVibrator.
 PRODUCT_PACKAGES += \
     android.hardware.vibrator@1.0-impl \
     android.hardware.vibrator@1.0-service
@@ -243,13 +243,12 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
     $(LOCAL_PATH)/rootdir/bin/fujisan_bootlog.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_bootlog.sh \
     $(LOCAL_PATH)/rootdir/bin/fujisan_usb.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_usb.sh \
-    $(LOCAL_PATH)/rootdir/bin/fujisan_bpfloader.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_bpfloader \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bootlog.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bootlog.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
-    $(LOCAL_PATH)/rootdir/etc/init/a-fujisan-bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/a-fujisan-bpfloader.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.vibrator.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.vibrator.rc \
+    $(LOCAL_PATH)/rootdir/bin/fujisan_vibrator.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_vibrator \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \

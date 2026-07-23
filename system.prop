@@ -65,5 +65,4 @@ sys.usb.controller=6a00000.dwc3
 ro.adb.secure=0
 
 
-# eBPF bring-up shim; USB uses configfs on 4.4.
-bpf.progs_loaded=1
+# USB uses configfs on 4.4.
