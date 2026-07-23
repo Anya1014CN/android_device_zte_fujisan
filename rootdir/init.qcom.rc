@@ -1,8 +1,6 @@
-# Legacy android_usb gadget setup. Boot stage logging lives in
-# init.fujisan.bootlog.rc so breadcrumbs remain even if USB setup fails.
+# USB functionfs mount for configfs adb.
+# Gadget bind is handled by init.fujisan.usb.rc.
 
 on init
-    mkdir /dev/usb-ffs 0770 shell shell
-    mkdir /dev/usb-ffs/adb 0770 shell shell
-    mount functionfs adb /dev/usb-ffs/adb uid=2000,gid=2000
-    write /sys/class/android_usb/android0/f_ffs/aliases adb
+    mkdir /dev/usb-ffs 0775 shell system
+    mkdir /dev/usb-ffs/adb 0770 shell system

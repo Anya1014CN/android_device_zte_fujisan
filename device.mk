@@ -30,6 +30,8 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
     sys.usb.config=adb \
+    sys.usb.configfs=1 \
+    sys.usb.controller=6a00000.dwc3 \
 
 # Keep the modern framework-side Bluetooth stack source-built. Fujisan still
 # uses the legacy wcnss_filter userspace path, so BoardConfigVendor enables the
@@ -232,6 +234,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
     $(LOCAL_PATH)/rootdir/etc/init/a-fujisan-bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/a-fujisan-bpfloader.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
