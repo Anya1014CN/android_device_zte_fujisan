@@ -1,5 +1,6 @@
-# Extremely early boot breadcrumbs + persistent bootlog dump.
-# Uses /dev/pmsg0 (ramoops), /cache, and the stock /dcmlog partition.
+# Early boot breadcrumbs + persistent bootlog dump.
+# Do NOT call mount_all here: that belongs to AOSP/init.target and must be
+# the only path that sets ro.crypto.state / triggers nonencrypted.
 
 on early-init
     write /dev/kmsg "fujisan: early-init\n"
@@ -8,7 +9,6 @@ on early-init
 on init
     write /dev/kmsg "fujisan: init\n"
     write /dev/pmsg0 "fujisan: init\n"
-    # First-stage may already have mounted these. Create dirs for breadcrumbs.
     mkdir /cache 0771 system cache
     mkdir /dcmlog 0771 root system
     mkdir /dcmlog/lineage 0775 root system
@@ -16,26 +16,16 @@ on init
     write /dcmlog/lineage/stage_init "init\n"
 
 on fs
-    write /dev/kmsg "fujisan: fs before mount_all\n"
-    write /dev/pmsg0 "fujisan: fs before mount_all\n"
-    write /cache/fujisan-init-stage "fs-enter\n"
-    write /dcmlog/lineage/stage_fs_enter "fs-enter\n"
-    mount_all /vendor/etc/fstab.qcom --early
-    write /dev/kmsg "fujisan: fs after mount_all early\n"
-    write /dev/pmsg0 "fujisan: fs after mount_all early\n"
-    write /cache/fujisan-init-stage "fs-early-done\n"
-    write /dcmlog/lineage/stage_fs_early "fs-early-done\n"
+    write /dev/kmsg "fujisan: fs\n"
+    write /dev/pmsg0 "fujisan: fs\n"
+    write /cache/fujisan-init-stage "fs\n"
+    write /dcmlog/lineage/stage_fs "fs\n"
 
 on late-fs
-    write /dev/kmsg "fujisan: late-fs before mount_all\n"
-    write /dev/pmsg0 "fujisan: late-fs before mount_all\n"
-    write /cache/fujisan-init-stage "late-fs-enter\n"
-    write /dcmlog/lineage/stage_late_fs_enter "late-fs-enter\n"
-    mount_all /vendor/etc/fstab.qcom --late
-    write /dev/kmsg "fujisan: late-fs after mount_all late\n"
-    write /dev/pmsg0 "fujisan: late-fs after mount_all late\n"
-    write /cache/fujisan-init-stage "late-fs-done\n"
-    write /dcmlog/lineage/stage_late_fs "late-fs-done\n"
+    write /dev/kmsg "fujisan: late-fs\n"
+    write /dev/pmsg0 "fujisan: late-fs\n"
+    write /cache/fujisan-init-stage "late-fs\n"
+    write /dcmlog/lineage/stage_late_fs "late-fs\n"
 
 on post-fs
     write /dev/kmsg "fujisan: post-fs\n"
@@ -46,7 +36,6 @@ on post-fs
     restorecon_recursive /dcmlog
     insmod /lib/modules/wlan.ko
     setprop wlan.driver.status ok
-    # Capture logs as soon as /system is available and partitions are mounted.
     start fujisan-bootlog
 
 on post-fs-data
@@ -54,19 +43,14 @@ on post-fs-data
     write /dev/pmsg0 "fujisan: post-fs-data\n"
     write /cache/fujisan-init-stage "post-fs-data\n"
     write /dcmlog/lineage/stage_post_fs_data "post-fs-data\n"
-    # Re-run after userdata is up so logcat/getprop are more complete.
     start fujisan-bootlog
 
 on boot
-    write /dev/kmsg "fujisan:boot\n"
-    write /dev/pmsg0 "fujisan:boot\n"
+    write /dev/kmsg "fujisan: boot\n"
+    write /dev/pmsg0 "fujisan: boot\n"
     write /cache/fujisan-init-stage "boot\n"
     write /dcmlog/lineage/stage_boot "boot\n"
-    write /sys/class/android_usb/android0/iSerial ${ro.serialno}
     write /sys/module/zte_touch_expand/parameters/separate_inputs 1
-    write /sys/class/gpio/export 1015
-    write /sys/class/gpio/gpio1015/direction out
-    write /sys/class/gpio/gpio1015/value 1
     start fujisan-bootlog
 
 service fujisan-bootlog /system/bin/fujisan_bootlog.sh
