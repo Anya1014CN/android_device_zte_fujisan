@@ -73,3 +73,6 @@ ro.hardware.gatekeeper=msm8996
 # Dual-panel L1 (independent secondary FB / display)
 persist.vendor.display.primary_first=1
 ro.sf.lcd_density=480
+
+# Use device HWC wrapper for independent panel B (not mirror)
+ro.hardware.hwcomposer=fujisan

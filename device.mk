@@ -57,6 +57,7 @@ PRODUCT_PACKAGES += \
     copybit.msm8996 \
     gralloc.msm8996 \
     hwcomposer.msm8996 \
+    hwcomposer.fujisan \
     memtrack.msm8996 \
     libdisplayconfig \
     liboverlay \

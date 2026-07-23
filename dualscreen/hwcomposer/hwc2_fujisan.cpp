@@ -1,0 +1,1252 @@
+/*
+ * Fujisan HWC2 wrapper
+ *  - Display 0: stock hwcomposer.msm8996.so (panel A)
+ *  - Display 1: independent physical display posted to /dev/graphics/fb1 (panel B)
+ * Not mirror mode: SF composes each display separately.
+ */
+#define LOG_TAG "HwcFujisan"
+
+#include <android/hardware/graphics/common/1.0/types.h>
+#include <android/hardware/graphics/mapper/2.0/IMapper.h>
+#include <cutils/native_handle.h>
+#include <hardware/hardware.h>
+#include <hardware/hwcomposer2.h>
+#include <system/graphics.h>
+#include <cutils/properties.h>
+#include <log/log.h>
+#include <sync/sync.h>
+
+#include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/fb.h>
+#include <pthread.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/prctl.h>
+#include <time.h>
+#include <unistd.h>
+
+#include <atomic>
+#include <map>
+#include <mutex>
+
+using android::hardware::hidl_handle;
+using android::hardware::graphics::common::V1_0::BufferUsage;
+using android::hardware::graphics::mapper::V2_0::Error;
+using android::hardware::graphics::mapper::V2_0::IMapper;
+using android::sp;
+
+#ifndef FUJISAN_SEC_WIDTH
+#define FUJISAN_SEC_WIDTH 1080
+#endif
+#ifndef FUJISAN_SEC_HEIGHT
+#define FUJISAN_SEC_HEIGHT 1920
+#endif
+#ifndef FUJISAN_SEC_DPI_X
+#define FUJISAN_SEC_DPI_X 428625
+#endif
+#ifndef FUJISAN_SEC_DPI_Y
+#define FUJISAN_SEC_DPI_Y 427789
+#endif
+#ifndef FUJISAN_SEC_VSYNC_NS
+#define FUJISAN_SEC_VSYNC_NS 16666667
+#endif
+
+namespace {
+
+constexpr hwc2_display_t kPrimaryDisplay = 0;
+constexpr hwc2_display_t kSecondaryDisplay = 1;
+constexpr hwc2_config_t kSecondaryConfig = 0;
+constexpr char kFb1Path[] = "/dev/graphics/fb1";
+constexpr char kBl2Path[] = "/sys/class/leds/lcd-backlight-2/brightness";
+
+#ifndef MSMFB_DISPLAY_COMMIT
+#define MSMFB_IOCTL_MAGIC 'm'
+#define MSMFB_DISPLAY_COMMIT _IOW(MSMFB_IOCTL_MAGIC, 164, void *)
+#endif
+
+struct MdpDisplayCommit {
+    uint32_t flags;
+    uint32_t wait_for_finish;
+    struct fb_var_screeninfo var;
+    struct {
+        int32_t x, y, w, h;
+    } l_roi, r_roi;
+};
+
+struct RealFns {
+    HWC2_PFN_ACCEPT_DISPLAY_CHANGES acceptDisplayChanges = nullptr;
+    HWC2_PFN_CREATE_LAYER createLayer = nullptr;
+    HWC2_PFN_CREATE_VIRTUAL_DISPLAY createVirtualDisplay = nullptr;
+    HWC2_PFN_DESTROY_LAYER destroyLayer = nullptr;
+    HWC2_PFN_DESTROY_VIRTUAL_DISPLAY destroyVirtualDisplay = nullptr;
+    HWC2_PFN_DUMP dump = nullptr;
+    HWC2_PFN_GET_ACTIVE_CONFIG getActiveConfig = nullptr;
+    HWC2_PFN_GET_CHANGED_COMPOSITION_TYPES getChangedCompositionTypes = nullptr;
+    HWC2_PFN_GET_CLIENT_TARGET_SUPPORT getClientTargetSupport = nullptr;
+    HWC2_PFN_GET_COLOR_MODES getColorModes = nullptr;
+    HWC2_PFN_GET_DISPLAY_ATTRIBUTE getDisplayAttribute = nullptr;
+    HWC2_PFN_GET_DISPLAY_CONFIGS getDisplayConfigs = nullptr;
+    HWC2_PFN_GET_DISPLAY_NAME getDisplayName = nullptr;
+    HWC2_PFN_GET_DISPLAY_REQUESTS getDisplayRequests = nullptr;
+    HWC2_PFN_GET_DISPLAY_TYPE getDisplayType = nullptr;
+    HWC2_PFN_GET_DOZE_SUPPORT getDozeSupport = nullptr;
+    HWC2_PFN_GET_HDR_CAPABILITIES getHdrCapabilities = nullptr;
+    HWC2_PFN_GET_MAX_VIRTUAL_DISPLAY_COUNT getMaxVirtualDisplayCount = nullptr;
+    HWC2_PFN_GET_RELEASE_FENCES getReleaseFences = nullptr;
+    HWC2_PFN_PRESENT_DISPLAY presentDisplay = nullptr;
+    HWC2_PFN_REGISTER_CALLBACK registerCallback = nullptr;
+    HWC2_PFN_SET_ACTIVE_CONFIG setActiveConfig = nullptr;
+    HWC2_PFN_SET_CLIENT_TARGET setClientTarget = nullptr;
+    HWC2_PFN_SET_COLOR_MODE setColorMode = nullptr;
+    HWC2_PFN_SET_COLOR_TRANSFORM setColorTransform = nullptr;
+    HWC2_PFN_SET_CURSOR_POSITION setCursorPosition = nullptr;
+    HWC2_PFN_SET_LAYER_BLEND_MODE setLayerBlendMode = nullptr;
+    HWC2_PFN_SET_LAYER_BUFFER setLayerBuffer = nullptr;
+    HWC2_PFN_SET_LAYER_COLOR setLayerColor = nullptr;
+    HWC2_PFN_SET_LAYER_COMPOSITION_TYPE setLayerCompositionType = nullptr;
+    HWC2_PFN_SET_LAYER_DATASPACE setLayerDataspace = nullptr;
+    HWC2_PFN_SET_LAYER_DISPLAY_FRAME setLayerDisplayFrame = nullptr;
+    HWC2_PFN_SET_LAYER_PLANE_ALPHA setLayerPlaneAlpha = nullptr;
+    HWC2_PFN_SET_LAYER_SIDEBAND_STREAM setLayerSidebandStream = nullptr;
+    HWC2_PFN_SET_LAYER_SOURCE_CROP setLayerSourceCrop = nullptr;
+    HWC2_PFN_SET_LAYER_SURFACE_DAMAGE setLayerSurfaceDamage = nullptr;
+    HWC2_PFN_SET_LAYER_TRANSFORM setLayerTransform = nullptr;
+    HWC2_PFN_SET_LAYER_VISIBLE_REGION setLayerVisibleRegion = nullptr;
+    HWC2_PFN_SET_LAYER_Z_ORDER setLayerZOrder = nullptr;
+    HWC2_PFN_SET_OUTPUT_BUFFER setOutputBuffer = nullptr;
+    HWC2_PFN_SET_POWER_MODE setPowerMode = nullptr;
+    HWC2_PFN_SET_VSYNC_ENABLED setVsyncEnabled = nullptr;
+    HWC2_PFN_VALIDATE_DISPLAY validateDisplay = nullptr;
+};
+
+struct SecLayer {
+    int32_t requested = HWC2_COMPOSITION_CLIENT;
+    int32_t validated = HWC2_COMPOSITION_CLIENT;
+    bool changed = false;
+};
+
+struct SecondaryState {
+    std::mutex lock;
+    std::map<hwc2_layer_t, SecLayer> layers;
+    hwc2_layer_t next_layer = 1000;
+    bool validated = false;
+    bool power_on = true;
+    bool vsync_on = false;
+    bool hotplugged = false;
+    buffer_handle_t client_target = nullptr;
+    int32_t client_acquire_fence = -1;
+};
+
+struct Device {
+    hwc2_device_t base{};
+    hwc2_device_t* real = nullptr;
+    void* real_so = nullptr;
+    RealFns fn{};
+    SecondaryState sec{};
+
+    hwc2_callback_data_t hotplug_data = nullptr;
+    HWC2_PFN_HOTPLUG hotplug_fn = nullptr;
+    hwc2_callback_data_t vsync_data = nullptr;
+    HWC2_PFN_VSYNC vsync_fn = nullptr;
+    hwc2_callback_data_t refresh_data = nullptr;
+    HWC2_PFN_REFRESH refresh_fn = nullptr;
+
+    std::mutex cb_lock;
+    pthread_t vsync_thread{};
+    std::atomic<bool> vsync_thread_run{false};
+    std::atomic<bool> secondary_attached{false};
+
+    int fb_fd = -1;
+    void* fb_map = MAP_FAILED;
+    size_t fb_map_size = 0;
+    struct fb_var_screeninfo vinfo {};
+    struct fb_fix_screeninfo finfo {};
+    sp<IMapper> mapper;
+};
+
+static Device* ToDev(hwc2_device_t* d) {
+    return reinterpret_cast<Device*>(d);
+}
+
+static int WriteSysfs(const char* path, const char* value) {
+    int fd = open(path, O_WRONLY | O_CLOEXEC);
+    if (fd < 0)
+        return -errno;
+    ssize_t n = write(fd, value, strlen(value));
+    close(fd);
+    return n < 0 ? -errno : 0;
+}
+
+static int KickFb(int fd, struct fb_var_screeninfo* vinfo) {
+    MdpDisplayCommit commit;
+    memset(&commit, 0, sizeof(commit));
+    commit.wait_for_finish = 1;
+    commit.var = *vinfo;
+    commit.var.activate = FB_ACTIVATE_VBL;
+    if (ioctl(fd, MSMFB_DISPLAY_COMMIT, &commit) == 0)
+        return 0;
+    vinfo->activate = FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
+    return ioctl(fd, FBIOPAN_DISPLAY, vinfo);
+}
+
+static bool OpenFb1(Device* d) {
+    if (d->fb_fd >= 0)
+        return true;
+    d->fb_fd = open(kFb1Path, O_RDWR | O_CLOEXEC);
+    if (d->fb_fd < 0) {
+        ALOGE("open %s failed: %s", kFb1Path, strerror(errno));
+        return false;
+    }
+    if (ioctl(d->fb_fd, FBIOGET_VSCREENINFO, &d->vinfo) < 0 ||
+        ioctl(d->fb_fd, FBIOGET_FSCREENINFO, &d->finfo) < 0) {
+        ALOGE("fb1 get screeninfo failed: %s", strerror(errno));
+        close(d->fb_fd);
+        d->fb_fd = -1;
+        return false;
+    }
+    if (d->vinfo.xres == 0)
+        d->vinfo.xres = FUJISAN_SEC_WIDTH;
+    if (d->vinfo.yres == 0)
+        d->vinfo.yres = FUJISAN_SEC_HEIGHT;
+    if (d->vinfo.bits_per_pixel == 0)
+        d->vinfo.bits_per_pixel = 32;
+    if (d->vinfo.xres_virtual < d->vinfo.xres)
+        d->vinfo.xres_virtual = d->vinfo.xres;
+    if (d->vinfo.yres_virtual < d->vinfo.yres * 2)
+        d->vinfo.yres_virtual = d->vinfo.yres * 2;
+    d->vinfo.xoffset = 0;
+    d->vinfo.yoffset = 0;
+    d->vinfo.activate = FB_ACTIVATE_NOW;
+    ioctl(d->fb_fd, FBIOPUT_VSCREENINFO, &d->vinfo);
+    ioctl(d->fb_fd, FBIOGET_FSCREENINFO, &d->finfo);
+    ioctl(d->fb_fd, FBIOGET_VSCREENINFO, &d->vinfo);
+
+    d->fb_map_size = d->finfo.smem_len;
+    if (d->fb_map_size == 0) {
+        d->fb_map_size = (size_t)d->vinfo.xres_virtual * d->vinfo.yres_virtual *
+                         (d->vinfo.bits_per_pixel / 8);
+    }
+    d->fb_map = mmap(nullptr, d->fb_map_size, PROT_READ | PROT_WRITE, MAP_SHARED, d->fb_fd, 0);
+    if (d->fb_map == MAP_FAILED) {
+        ALOGE("fb1 mmap failed: %s", strerror(errno));
+        close(d->fb_fd);
+        d->fb_fd = -1;
+        return false;
+    }
+    int blank = FB_BLANK_UNBLANK;
+    ioctl(d->fb_fd, FBIOBLANK, blank);
+    WriteSysfs(kBl2Path, "180");
+    ALOGI("fb1 ready %ux%u bpp=%u line=%u smem=%zu", d->vinfo.xres, d->vinfo.yres,
+          d->vinfo.bits_per_pixel, d->finfo.line_length, d->fb_map_size);
+    return true;
+}
+
+static void CloseFb1(Device* d) {
+    if (d->fb_map != MAP_FAILED) {
+        munmap(d->fb_map, d->fb_map_size);
+        d->fb_map = MAP_FAILED;
+        d->fb_map_size = 0;
+    }
+    if (d->fb_fd >= 0) {
+        close(d->fb_fd);
+        d->fb_fd = -1;
+    }
+}
+
+static void* VsyncThreadMain(void* arg) {
+    auto* d = static_cast<Device*>(arg);
+    prctl(PR_SET_NAME, "fujisan-sec-vsync", 0, 0, 0);
+    while (d->vsync_thread_run.load()) {
+        bool fire = false;
+        {
+            std::lock_guard<std::mutex> sc(d->sec.lock);
+            fire = d->sec.vsync_on && d->sec.power_on && d->sec.hotplugged;
+        }
+        HWC2_PFN_VSYNC fn = nullptr;
+        hwc2_callback_data_t data = nullptr;
+        {
+            std::lock_guard<std::mutex> cl(d->cb_lock);
+            fn = d->vsync_fn;
+            data = d->vsync_data;
+        }
+        if (fire && fn) {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            int64_t t = int64_t(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
+            fn(data, kSecondaryDisplay, t);
+        }
+        usleep(FUJISAN_SEC_VSYNC_NS / 1000);
+    }
+    return nullptr;
+}
+
+static void EnsureVsyncThread(Device* d) {
+    bool expected = false;
+    if (d->vsync_thread_run.compare_exchange_strong(expected, true)) {
+        if (pthread_create(&d->vsync_thread, nullptr, VsyncThreadMain, d) != 0) {
+            d->vsync_thread_run.store(false);
+            ALOGE("secondary vsync thread create failed");
+        }
+    }
+}
+
+static void HotplugSecondary(Device* d, bool connected) {
+    HWC2_PFN_HOTPLUG fn = nullptr;
+    hwc2_callback_data_t data = nullptr;
+    {
+        std::lock_guard<std::mutex> cl(d->cb_lock);
+        fn = d->hotplug_fn;
+        data = d->hotplug_data;
+    }
+    if (!fn)
+        return;
+    {
+        std::lock_guard<std::mutex> sc(d->sec.lock);
+        if (d->sec.hotplugged == connected)
+            return;
+        d->sec.hotplugged = connected;
+    }
+    if (connected)
+        OpenFb1(d);
+    ALOGI("secondary display hotplug %s", connected ? "connected" : "disconnected");
+    if (connected)
+        property_set("vendor.fujisan.sec_display", "1");
+    fn(data, kSecondaryDisplay,
+       connected ? HWC2_CONNECTION_CONNECTED : HWC2_CONNECTION_DISCONNECTED);
+}
+
+static void* AttachSecondaryThread(void* arg) {
+    auto* d = static_cast<Device*>(arg);
+    prctl(PR_SET_NAME, "fujisan-sec-attach", 0, 0, 0);
+    // Wait for SF to finish primary registration.
+    usleep(700 * 1000);
+    HotplugSecondary(d, true);
+    return nullptr;
+}
+
+static void ScheduleSecondaryAttach(Device* d) {
+    bool expected = false;
+    if (!d->secondary_attached.compare_exchange_strong(expected, true))
+        return;
+    pthread_t t;
+    if (pthread_create(&t, nullptr, AttachSecondaryThread, d) == 0)
+        pthread_detach(t);
+    else
+        d->secondary_attached.store(false);
+}
+
+static hwc2_function_pointer_t RealGet(hwc2_device_t* real, int32_t desc) {
+    return real->getFunction(real, desc);
+}
+
+static void LoadRealFns(Device* d) {
+    auto g = [&](int32_t desc) { return RealGet(d->real, desc); };
+#define LOAD(fn, DESC) d->fn.fn = reinterpret_cast<HWC2_PFN_##DESC>(g(HWC2_FUNCTION_##DESC))
+    LOAD(acceptDisplayChanges, ACCEPT_DISPLAY_CHANGES);
+    LOAD(createLayer, CREATE_LAYER);
+    LOAD(createVirtualDisplay, CREATE_VIRTUAL_DISPLAY);
+    LOAD(destroyLayer, DESTROY_LAYER);
+    LOAD(destroyVirtualDisplay, DESTROY_VIRTUAL_DISPLAY);
+    LOAD(dump, DUMP);
+    LOAD(getActiveConfig, GET_ACTIVE_CONFIG);
+    LOAD(getChangedCompositionTypes, GET_CHANGED_COMPOSITION_TYPES);
+    LOAD(getClientTargetSupport, GET_CLIENT_TARGET_SUPPORT);
+    LOAD(getColorModes, GET_COLOR_MODES);
+    LOAD(getDisplayAttribute, GET_DISPLAY_ATTRIBUTE);
+    LOAD(getDisplayConfigs, GET_DISPLAY_CONFIGS);
+    LOAD(getDisplayName, GET_DISPLAY_NAME);
+    LOAD(getDisplayRequests, GET_DISPLAY_REQUESTS);
+    LOAD(getDisplayType, GET_DISPLAY_TYPE);
+    LOAD(getDozeSupport, GET_DOZE_SUPPORT);
+    LOAD(getHdrCapabilities, GET_HDR_CAPABILITIES);
+    LOAD(getMaxVirtualDisplayCount, GET_MAX_VIRTUAL_DISPLAY_COUNT);
+    LOAD(getReleaseFences, GET_RELEASE_FENCES);
+    LOAD(presentDisplay, PRESENT_DISPLAY);
+    LOAD(registerCallback, REGISTER_CALLBACK);
+    LOAD(setActiveConfig, SET_ACTIVE_CONFIG);
+    LOAD(setClientTarget, SET_CLIENT_TARGET);
+    LOAD(setColorMode, SET_COLOR_MODE);
+    LOAD(setColorTransform, SET_COLOR_TRANSFORM);
+    LOAD(setCursorPosition, SET_CURSOR_POSITION);
+    LOAD(setLayerBlendMode, SET_LAYER_BLEND_MODE);
+    LOAD(setLayerBuffer, SET_LAYER_BUFFER);
+    LOAD(setLayerColor, SET_LAYER_COLOR);
+    LOAD(setLayerCompositionType, SET_LAYER_COMPOSITION_TYPE);
+    LOAD(setLayerDataspace, SET_LAYER_DATASPACE);
+    LOAD(setLayerDisplayFrame, SET_LAYER_DISPLAY_FRAME);
+    LOAD(setLayerPlaneAlpha, SET_LAYER_PLANE_ALPHA);
+    LOAD(setLayerSidebandStream, SET_LAYER_SIDEBAND_STREAM);
+    LOAD(setLayerSourceCrop, SET_LAYER_SOURCE_CROP);
+    LOAD(setLayerSurfaceDamage, SET_LAYER_SURFACE_DAMAGE);
+    LOAD(setLayerTransform, SET_LAYER_TRANSFORM);
+    LOAD(setLayerVisibleRegion, SET_LAYER_VISIBLE_REGION);
+    LOAD(setLayerZOrder, SET_LAYER_Z_ORDER);
+    LOAD(setOutputBuffer, SET_OUTPUT_BUFFER);
+    LOAD(setPowerMode, SET_POWER_MODE);
+    LOAD(setVsyncEnabled, SET_VSYNC_ENABLED);
+    LOAD(validateDisplay, VALIDATE_DISPLAY);
+#undef LOAD
+}
+
+static int32_t SecCreateLayer(Device* d, hwc2_layer_t* out_layer) {
+    std::lock_guard<std::mutex> sc(d->sec.lock);
+    hwc2_layer_t id = d->sec.next_layer++;
+    d->sec.layers[id] = SecLayer{};
+    d->sec.validated = false;
+    *out_layer = id;
+    return HWC2_ERROR_NONE;
+}
+
+static int32_t SecDestroyLayer(Device* d, hwc2_layer_t layer) {
+    std::lock_guard<std::mutex> sc(d->sec.lock);
+    d->sec.layers.erase(layer);
+    d->sec.validated = false;
+    return HWC2_ERROR_NONE;
+}
+
+static int32_t SecValidate(Device* d, uint32_t* out_num_types, uint32_t* out_num_requests) {
+    std::lock_guard<std::mutex> sc(d->sec.lock);
+    uint32_t changes = 0;
+    for (auto& kv : d->sec.layers) {
+        auto& L = kv.second;
+        const int32_t want = HWC2_COMPOSITION_CLIENT;
+        L.changed = (L.requested != want);
+        L.validated = want;
+        if (L.changed)
+            changes++;
+    }
+    d->sec.validated = true;
+    if (out_num_types)
+        *out_num_types = changes;
+    if (out_num_requests)
+        *out_num_requests = 0;
+    return changes ? HWC2_ERROR_HAS_CHANGES : HWC2_ERROR_NONE;
+}
+
+static int32_t SecGetChanged(Device* d, uint32_t* out_count, hwc2_layer_t* out_layers,
+                             int32_t* out_types) {
+    std::lock_guard<std::mutex> sc(d->sec.lock);
+    uint32_t need = 0;
+    for (auto& kv : d->sec.layers) {
+        if (kv.second.changed)
+            need++;
+    }
+    if (!out_layers || !out_types) {
+        if (out_count)
+            *out_count = need;
+        return HWC2_ERROR_NONE;
+    }
+    if (*out_count < need) {
+        *out_count = need;
+        return HWC2_ERROR_NONE;
+    }
+    uint32_t i = 0;
+    for (auto& kv : d->sec.layers) {
+        if (!kv.second.changed)
+            continue;
+        out_layers[i] = kv.first;
+        out_types[i] = kv.second.validated;
+        i++;
+    }
+    *out_count = i;
+    return HWC2_ERROR_NONE;
+}
+
+static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
+    if (!handle || !OpenFb1(d) || d->fb_map == MAP_FAILED)
+        return false;
+    if (d->mapper == nullptr)
+        d->mapper = IMapper::getService();
+    if (d->mapper == nullptr) {
+        ALOGE("IMapper service missing");
+        return false;
+    }
+
+    const int w = FUJISAN_SEC_WIDTH;
+    const int h = FUJISAN_SEC_HEIGHT;
+    IMapper::Rect rect{0, 0, w, h};
+    void* vaddr = nullptr;
+    Error err = Error::NONE;
+    d->mapper->lock(const_cast<native_handle_t*>(handle),
+                    static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN), rect, hidl_handle(),
+                    [&](const auto e, void* ptr) {
+                        err = e;
+                        vaddr = ptr;
+                    });
+    if (err != Error::NONE || vaddr == nullptr) {
+        ALOGE("mapper.lock failed (%d)", static_cast<int>(err));
+        return false;
+    }
+
+    const size_t src_stride_bytes = static_cast<size_t>(w) * 4;
+    const size_t dst_stride_bytes =
+        d->finfo.line_length ? d->finfo.line_length : static_cast<size_t>(w) * 4;
+    auto* src = static_cast<const uint8_t*>(vaddr);
+    auto* dst = static_cast<uint8_t*>(d->fb_map);
+    for (int y = 0; y < h; y++) {
+        memcpy(dst + static_cast<size_t>(y) * dst_stride_bytes,
+               src + static_cast<size_t>(y) * src_stride_bytes, static_cast<size_t>(w) * 4);
+    }
+
+    d->mapper->unlock(const_cast<native_handle_t*>(handle),
+                      [&](const auto e, const auto&) { err = e; });
+
+    d->vinfo.xoffset = 0;
+    d->vinfo.yoffset = 0;
+    if (KickFb(d->fb_fd, &d->vinfo) != 0)
+        ALOGW("fb1 kick failed: %s", strerror(errno));
+    return true;
+}
+
+static int32_t SecPresent(Device* d, int32_t* out_retire) {
+    buffer_handle_t target = nullptr;
+    int fence = -1;
+    {
+        std::lock_guard<std::mutex> sc(d->sec.lock);
+        if (!d->sec.validated)
+            return HWC2_ERROR_NOT_VALIDATED;
+        if (!d->sec.power_on) {
+            if (out_retire)
+                *out_retire = -1;
+            return HWC2_ERROR_NONE;
+        }
+        target = d->sec.client_target;
+        fence = d->sec.client_acquire_fence;
+        d->sec.client_acquire_fence = -1;
+        for (auto& kv : d->sec.layers)
+            kv.second.changed = false;
+    }
+    if (fence >= 0) {
+        sync_wait(fence, 100);
+        close(fence);
+    }
+    if (target)
+        CopyHandleToFb1(d, target);
+    if (out_retire)
+        *out_retire = -1;
+    return HWC2_ERROR_NONE;
+}
+
+static void WrapperGetCapabilities(struct hwc2_device* device, uint32_t* out_count,
+                                   int32_t* out_capabilities) {
+    auto* d = ToDev(device);
+    d->real->getCapabilities(d->real, out_count, out_capabilities);
+}
+
+static void HotplugTrampoline(hwc2_callback_data_t cb_data, hwc2_display_t display,
+                              int32_t connected) {
+    auto* dev = reinterpret_cast<Device*>(cb_data);
+    HWC2_PFN_HOTPLUG fn = nullptr;
+    hwc2_callback_data_t user = nullptr;
+    {
+        std::lock_guard<std::mutex> cl(dev->cb_lock);
+        fn = dev->hotplug_fn;
+        user = dev->hotplug_data;
+    }
+    if (fn && display != kSecondaryDisplay)
+        fn(user, display, connected);
+    if (display == kPrimaryDisplay && connected == HWC2_CONNECTION_CONNECTED)
+        ScheduleSecondaryAttach(dev);
+}
+
+static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
+                                hwc2_callback_data_t data, hwc2_function_pointer_t pointer) {
+    auto* d = ToDev(device);
+    {
+        std::lock_guard<std::mutex> cl(d->cb_lock);
+        switch (descriptor) {
+            case HWC2_CALLBACK_HOTPLUG:
+                d->hotplug_data = data;
+                d->hotplug_fn = reinterpret_cast<HWC2_PFN_HOTPLUG>(pointer);
+                break;
+            case HWC2_CALLBACK_VSYNC:
+                d->vsync_data = data;
+                d->vsync_fn = reinterpret_cast<HWC2_PFN_VSYNC>(pointer);
+                EnsureVsyncThread(d);
+                break;
+            case HWC2_CALLBACK_REFRESH:
+                d->refresh_data = data;
+                d->refresh_fn = reinterpret_cast<HWC2_PFN_REFRESH>(pointer);
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (descriptor == HWC2_CALLBACK_HOTPLUG) {
+        int32_t err =
+            d->fn.registerCallback
+                ? d->fn.registerCallback(d->real, descriptor, d,
+                                         reinterpret_cast<hwc2_function_pointer_t>(HotplugTrampoline))
+                : HWC2_ERROR_UNSUPPORTED;
+        // Also schedule attach in case primary hotplug already fired.
+        if (err == HWC2_ERROR_NONE)
+            ScheduleSecondaryAttach(d);
+        return err;
+    }
+
+    return d->fn.registerCallback ? d->fn.registerCallback(d->real, descriptor, data, pointer)
+                                  : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t AcceptDisplayChanges(hwc2_device_t* device, hwc2_display_t display) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        std::lock_guard<std::mutex> sc(d->sec.lock);
+        for (auto& kv : d->sec.layers)
+            kv.second.changed = false;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.acceptDisplayChanges ? d->fn.acceptDisplayChanges(d->real, display)
+                                      : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t CreateLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t* out) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return SecCreateLayer(d, out);
+    return d->fn.createLayer ? d->fn.createLayer(d->real, display, out) : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return SecDestroyLayer(d, layer);
+    return d->fn.destroyLayer ? d->fn.destroyLayer(d->real, display, layer)
+                              : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hwc2_config_t* out) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        *out = kSecondaryConfig;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getActiveConfig ? d->fn.getActiveConfig(d->real, display, out)
+                                 : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetChangedCompositionTypes(hwc2_device_t* device, hwc2_display_t display,
+                                          uint32_t* out_count, hwc2_layer_t* out_layers,
+                                          int32_t* out_types) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return SecGetChanged(d, out_count, out_layers, out_types);
+    return d->fn.getChangedCompositionTypes
+               ? d->fn.getChangedCompositionTypes(d->real, display, out_count, out_layers, out_types)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t display, uint32_t width,
+                                      uint32_t height, int32_t format, int32_t dataspace) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.getClientTargetSupport
+               ? d->fn.getClientTargetSupport(d->real, display, width, height, format, dataspace)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetColorModes(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_count,
+                             int32_t* out_modes) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        if (!out_modes) {
+            *out_count = 1;
+            return HWC2_ERROR_NONE;
+        }
+        if (*out_count >= 1) {
+            out_modes[0] = HAL_COLOR_MODE_NATIVE;
+            *out_count = 1;
+        }
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getColorModes ? d->fn.getColorModes(d->real, display, out_count, out_modes)
+                               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetDisplayAttribute(hwc2_device_t* device, hwc2_display_t display,
+                                   hwc2_config_t config, int32_t attribute, int32_t* out) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        switch (attribute) {
+            case HWC2_ATTRIBUTE_WIDTH:
+                *out = FUJISAN_SEC_WIDTH;
+                return HWC2_ERROR_NONE;
+            case HWC2_ATTRIBUTE_HEIGHT:
+                *out = FUJISAN_SEC_HEIGHT;
+                return HWC2_ERROR_NONE;
+            case HWC2_ATTRIBUTE_VSYNC_PERIOD:
+                *out = FUJISAN_SEC_VSYNC_NS;
+                return HWC2_ERROR_NONE;
+            case HWC2_ATTRIBUTE_DPI_X:
+                *out = FUJISAN_SEC_DPI_X;
+                return HWC2_ERROR_NONE;
+            case HWC2_ATTRIBUTE_DPI_Y:
+                *out = FUJISAN_SEC_DPI_Y;
+                return HWC2_ERROR_NONE;
+            default:
+                *out = -1;
+                return HWC2_ERROR_NONE;
+        }
+    }
+    return d->fn.getDisplayAttribute
+               ? d->fn.getDisplayAttribute(d->real, display, config, attribute, out)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_count,
+                                 hwc2_config_t* out_configs) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        if (!out_configs) {
+            *out_count = 1;
+            return HWC2_ERROR_NONE;
+        }
+        if (*out_count >= 1) {
+            out_configs[0] = kSecondaryConfig;
+            *out_count = 1;
+        }
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getDisplayConfigs
+               ? d->fn.getDisplayConfigs(d->real, display, out_count, out_configs)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetDisplayName(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_size,
+                              char* out_name) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        const char* name = "Fujisan Panel B";
+        size_t len = strlen(name) + 1;
+        if (!out_name) {
+            *out_size = static_cast<uint32_t>(len);
+            return HWC2_ERROR_NONE;
+        }
+        if (*out_size == 0)
+            return HWC2_ERROR_NONE;
+        strncpy(out_name, name, *out_size - 1);
+        out_name[*out_size - 1] = 0;
+        *out_size = static_cast<uint32_t>(strlen(out_name) + 1);
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getDisplayName ? d->fn.getDisplayName(d->real, display, out_size, out_name)
+                                : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetDisplayRequests(hwc2_device_t* device, hwc2_display_t display,
+                                  int32_t* out_display_requests, uint32_t* out_num_elements,
+                                  hwc2_layer_t* out_layers, int32_t* out_layer_requests) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        if (out_display_requests)
+            *out_display_requests = 0;
+        if (out_num_elements)
+            *out_num_elements = 0;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getDisplayRequests
+               ? d->fn.getDisplayRequests(d->real, display, out_display_requests, out_num_elements,
+                                          out_layers, out_layer_requests)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetDisplayType(hwc2_device_t* device, hwc2_display_t display, int32_t* out_type) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        *out_type = HWC2_DISPLAY_TYPE_PHYSICAL;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getDisplayType ? d->fn.getDisplayType(d->real, display, out_type)
+                                : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetDozeSupport(hwc2_device_t* device, hwc2_display_t display, int32_t* out) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        *out = 0;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getDozeSupport ? d->fn.getDozeSupport(d->real, display, out)
+                                : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_num,
+                                  int32_t* types, float* max_l, float* max_avg, float* min_l) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        if (out_num)
+            *out_num = 0;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getHdrCapabilities
+               ? d->fn.getHdrCapabilities(d->real, display, out_num, types, max_l, max_avg, min_l)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetReleaseFences(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_num,
+                                hwc2_layer_t* layers, int32_t* fences) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        if (out_num)
+            *out_num = 0;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.getReleaseFences
+               ? d->fn.getReleaseFences(d->real, display, out_num, layers, fences)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
+                              int32_t* out_retire_fence) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return SecPresent(d, out_retire_fence);
+    return d->fn.presentDisplay ? d->fn.presentDisplay(d->real, display, out_retire_fence)
+                                : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hwc2_config_t config) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return (config == kSecondaryConfig) ? HWC2_ERROR_NONE : HWC2_ERROR_BAD_CONFIG;
+    return d->fn.setActiveConfig ? d->fn.setActiveConfig(d->real, display, config)
+                                 : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, buffer_handle_t target,
+                               int32_t acquire_fence, int32_t dataspace, hwc_region_t damage) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        std::lock_guard<std::mutex> sc(d->sec.lock);
+        if (d->sec.client_acquire_fence >= 0)
+            close(d->sec.client_acquire_fence);
+        d->sec.client_target = target;
+        d->sec.client_acquire_fence = acquire_fence;
+        (void)dataspace;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.setClientTarget
+               ? d->fn.setClientTarget(d->real, display, target, acquire_fence, dataspace, damage)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetColorMode(hwc2_device_t* device, hwc2_display_t display, int32_t mode) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return (mode == HAL_COLOR_MODE_NATIVE) ? HWC2_ERROR_NONE : HWC2_ERROR_UNSUPPORTED;
+    return d->fn.setColorMode ? d->fn.setColorMode(d->real, display, mode) : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetColorTransform(hwc2_device_t* device, hwc2_display_t display, const float* m,
+                                 int32_t hint) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setColorTransform ? d->fn.setColorTransform(d->real, display, m, hint)
+                                   : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetCursorPosition(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                                 int32_t x, int32_t y) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setCursorPosition ? d->fn.setCursorPosition(d->real, display, layer, x, y)
+                                   : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerBlendMode(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                                 int32_t mode) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerBlendMode ? d->fn.setLayerBlendMode(d->real, display, layer, mode)
+                                   : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerBuffer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                              buffer_handle_t buffer, int32_t acquire_fence) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        if (acquire_fence >= 0)
+            close(acquire_fence);
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.setLayerBuffer
+               ? d->fn.setLayerBuffer(d->real, display, layer, buffer, acquire_fence)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerColor(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                             hwc_color_t color) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerColor ? d->fn.setLayerColor(d->real, display, layer, color)
+                               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerCompositionType(hwc2_device_t* device, hwc2_display_t display,
+                                       hwc2_layer_t layer, int32_t type) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        std::lock_guard<std::mutex> sc(d->sec.lock);
+        auto it = d->sec.layers.find(layer);
+        if (it == d->sec.layers.end())
+            return HWC2_ERROR_BAD_LAYER;
+        it->second.requested = type;
+        d->sec.validated = false;
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.setLayerCompositionType
+               ? d->fn.setLayerCompositionType(d->real, display, layer, type)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerDataspace(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                                 int32_t dataspace) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerDataspace ? d->fn.setLayerDataspace(d->real, display, layer, dataspace)
+                                   : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerDisplayFrame(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                                    hwc_rect_t frame) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerDisplayFrame
+               ? d->fn.setLayerDisplayFrame(d->real, display, layer, frame)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerPlaneAlpha(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                                  float alpha) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerPlaneAlpha ? d->fn.setLayerPlaneAlpha(d->real, display, layer, alpha)
+                                    : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerSidebandStream(hwc2_device_t* device, hwc2_display_t display,
+                                      hwc2_layer_t layer, const native_handle_t* stream) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerSidebandStream
+               ? d->fn.setLayerSidebandStream(d->real, display, layer, stream)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerSourceCrop(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                                  hwc_frect_t crop) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerSourceCrop ? d->fn.setLayerSourceCrop(d->real, display, layer, crop)
+                                    : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerSurfaceDamage(hwc2_device_t* device, hwc2_display_t display,
+                                     hwc2_layer_t layer, hwc_region_t damage) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerSurfaceDamage
+               ? d->fn.setLayerSurfaceDamage(d->real, display, layer, damage)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerTransform(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                                 int32_t transform) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerTransform ? d->fn.setLayerTransform(d->real, display, layer, transform)
+                                   : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerVisibleRegion(hwc2_device_t* device, hwc2_display_t display,
+                                     hwc2_layer_t layer, hwc_region_t visible) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerVisibleRegion
+               ? d->fn.setLayerVisibleRegion(d->real, display, layer, visible)
+               : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetLayerZOrder(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
+                              uint32_t z) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_NONE;
+    return d->fn.setLayerZOrder ? d->fn.setLayerZOrder(d->real, display, layer, z)
+                                : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetOutputBuffer(hwc2_device_t* device, hwc2_display_t display, buffer_handle_t buffer,
+                               int32_t release_fence) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        if (release_fence >= 0)
+            close(release_fence);
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.setOutputBuffer ? d->fn.setOutputBuffer(d->real, display, buffer, release_fence)
+                                 : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32_t mode) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        bool on = (mode == HWC2_POWER_MODE_ON);
+        {
+            std::lock_guard<std::mutex> sc(d->sec.lock);
+            d->sec.power_on = on;
+        }
+        if (OpenFb1(d)) {
+            int blank = on ? FB_BLANK_UNBLANK : FB_BLANK_POWERDOWN;
+            ioctl(d->fb_fd, FBIOBLANK, blank);
+            WriteSysfs(kBl2Path, on ? "180" : "0");
+        }
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.setPowerMode ? d->fn.setPowerMode(d->real, display, mode)
+                              : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t SetVsyncEnabled(hwc2_device_t* device, hwc2_display_t display, int32_t enabled) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        std::lock_guard<std::mutex> sc(d->sec.lock);
+        d->sec.vsync_on = (enabled == HWC2_VSYNC_ENABLE);
+        EnsureVsyncThread(d);
+        return HWC2_ERROR_NONE;
+    }
+    return d->fn.setVsyncEnabled ? d->fn.setVsyncEnabled(d->real, display, enabled)
+                                 : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t ValidateDisplay(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_types,
+                               uint32_t* out_requests) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return SecValidate(d, out_types, out_requests);
+    return d->fn.validateDisplay ? d->fn.validateDisplay(d->real, display, out_types, out_requests)
+                                 : HWC2_ERROR_UNSUPPORTED;
+}
+
+static void Dump(hwc2_device_t* device, uint32_t* out_size, char* out_buffer) {
+    auto* d = ToDev(device);
+    if (d->fn.dump)
+        d->fn.dump(d->real, out_size, out_buffer);
+}
+
+static int32_t CreateVirtualDisplay(hwc2_device_t* device, uint32_t w, uint32_t h, int32_t* format,
+                                    hwc2_display_t* out) {
+    auto* d = ToDev(device);
+    return d->fn.createVirtualDisplay ? d->fn.createVirtualDisplay(d->real, w, h, format, out)
+                                      : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t DestroyVirtualDisplay(hwc2_device_t* device, hwc2_display_t display) {
+    auto* d = ToDev(device);
+    return d->fn.destroyVirtualDisplay ? d->fn.destroyVirtualDisplay(d->real, display)
+                                       : HWC2_ERROR_UNSUPPORTED;
+}
+
+static uint32_t GetMaxVirtualDisplayCount(hwc2_device_t* device) {
+    auto* d = ToDev(device);
+    return d->fn.getMaxVirtualDisplayCount ? d->fn.getMaxVirtualDisplayCount(d->real) : 0;
+}
+
+static hwc2_function_pointer_t WrapperGetFunction(struct hwc2_device* /*device*/,
+                                                  int32_t descriptor) {
+    switch (descriptor) {
+        case HWC2_FUNCTION_ACCEPT_DISPLAY_CHANGES:
+            return reinterpret_cast<hwc2_function_pointer_t>(AcceptDisplayChanges);
+        case HWC2_FUNCTION_CREATE_LAYER:
+            return reinterpret_cast<hwc2_function_pointer_t>(CreateLayer);
+        case HWC2_FUNCTION_CREATE_VIRTUAL_DISPLAY:
+            return reinterpret_cast<hwc2_function_pointer_t>(CreateVirtualDisplay);
+        case HWC2_FUNCTION_DESTROY_LAYER:
+            return reinterpret_cast<hwc2_function_pointer_t>(DestroyLayer);
+        case HWC2_FUNCTION_DESTROY_VIRTUAL_DISPLAY:
+            return reinterpret_cast<hwc2_function_pointer_t>(DestroyVirtualDisplay);
+        case HWC2_FUNCTION_DUMP:
+            return reinterpret_cast<hwc2_function_pointer_t>(Dump);
+        case HWC2_FUNCTION_GET_ACTIVE_CONFIG:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetActiveConfig);
+        case HWC2_FUNCTION_GET_CHANGED_COMPOSITION_TYPES:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetChangedCompositionTypes);
+        case HWC2_FUNCTION_GET_CLIENT_TARGET_SUPPORT:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetClientTargetSupport);
+        case HWC2_FUNCTION_GET_COLOR_MODES:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetColorModes);
+        case HWC2_FUNCTION_GET_DISPLAY_ATTRIBUTE:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayAttribute);
+        case HWC2_FUNCTION_GET_DISPLAY_CONFIGS:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayConfigs);
+        case HWC2_FUNCTION_GET_DISPLAY_NAME:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayName);
+        case HWC2_FUNCTION_GET_DISPLAY_REQUESTS:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayRequests);
+        case HWC2_FUNCTION_GET_DISPLAY_TYPE:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayType);
+        case HWC2_FUNCTION_GET_DOZE_SUPPORT:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDozeSupport);
+        case HWC2_FUNCTION_GET_HDR_CAPABILITIES:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetHdrCapabilities);
+        case HWC2_FUNCTION_GET_MAX_VIRTUAL_DISPLAY_COUNT:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetMaxVirtualDisplayCount);
+        case HWC2_FUNCTION_GET_RELEASE_FENCES:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetReleaseFences);
+        case HWC2_FUNCTION_PRESENT_DISPLAY:
+            return reinterpret_cast<hwc2_function_pointer_t>(PresentDisplay);
+        case HWC2_FUNCTION_REGISTER_CALLBACK:
+            return reinterpret_cast<hwc2_function_pointer_t>(RegisterCallback);
+        case HWC2_FUNCTION_SET_ACTIVE_CONFIG:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetActiveConfig);
+        case HWC2_FUNCTION_SET_CLIENT_TARGET:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetClientTarget);
+        case HWC2_FUNCTION_SET_COLOR_MODE:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetColorMode);
+        case HWC2_FUNCTION_SET_COLOR_TRANSFORM:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetColorTransform);
+        case HWC2_FUNCTION_SET_CURSOR_POSITION:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetCursorPosition);
+        case HWC2_FUNCTION_SET_LAYER_BLEND_MODE:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerBlendMode);
+        case HWC2_FUNCTION_SET_LAYER_BUFFER:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerBuffer);
+        case HWC2_FUNCTION_SET_LAYER_COLOR:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerColor);
+        case HWC2_FUNCTION_SET_LAYER_COMPOSITION_TYPE:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerCompositionType);
+        case HWC2_FUNCTION_SET_LAYER_DATASPACE:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerDataspace);
+        case HWC2_FUNCTION_SET_LAYER_DISPLAY_FRAME:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerDisplayFrame);
+        case HWC2_FUNCTION_SET_LAYER_PLANE_ALPHA:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerPlaneAlpha);
+        case HWC2_FUNCTION_SET_LAYER_SIDEBAND_STREAM:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerSidebandStream);
+        case HWC2_FUNCTION_SET_LAYER_SOURCE_CROP:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerSourceCrop);
+        case HWC2_FUNCTION_SET_LAYER_SURFACE_DAMAGE:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerSurfaceDamage);
+        case HWC2_FUNCTION_SET_LAYER_TRANSFORM:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerTransform);
+        case HWC2_FUNCTION_SET_LAYER_VISIBLE_REGION:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerVisibleRegion);
+        case HWC2_FUNCTION_SET_LAYER_Z_ORDER:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetLayerZOrder);
+        case HWC2_FUNCTION_SET_OUTPUT_BUFFER:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetOutputBuffer);
+        case HWC2_FUNCTION_SET_POWER_MODE:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetPowerMode);
+        case HWC2_FUNCTION_SET_VSYNC_ENABLED:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetVsyncEnabled);
+        case HWC2_FUNCTION_VALIDATE_DISPLAY:
+            return reinterpret_cast<hwc2_function_pointer_t>(ValidateDisplay);
+        default:
+            return nullptr;
+    }
+}
+
+static int OpenRealComposer(hwc2_device_t** out_real, void** out_so) {
+    const char* paths[] = {
+        "/vendor/lib64/hw/hwcomposer.msm8996.so",
+        "/vendor/lib/hw/hwcomposer.msm8996.so",
+        "hwcomposer.msm8996.so",
+    };
+    void* so = nullptr;
+    for (const char* p : paths) {
+        so = dlopen(p, RTLD_NOW | RTLD_LOCAL);
+        if (so)
+            break;
+    }
+    if (!so) {
+        ALOGE("dlopen hwcomposer.msm8996 failed: %s", dlerror());
+        return -ENOENT;
+    }
+    auto* hmi = reinterpret_cast<hw_module_t*>(dlsym(so, HAL_MODULE_INFO_SYM_AS_STR));
+    if (!hmi || !hmi->methods || !hmi->methods->open) {
+        ALOGE("HMI missing in hwcomposer.msm8996");
+        dlclose(so);
+        return -EINVAL;
+    }
+    hw_device_t* dev = nullptr;
+    int err = hmi->methods->open(hmi, HWC_HARDWARE_COMPOSER, &dev);
+    if (err || !dev) {
+        ALOGE("open real HWC failed: %d", err);
+        dlclose(so);
+        return err ? err : -EIO;
+    }
+    *out_real = reinterpret_cast<hwc2_device_t*>(dev);
+    *out_so = so;
+    return 0;
+}
+
+static int HwcClose(hw_device_t* dev) {
+    auto* d = reinterpret_cast<Device*>(dev);
+    d->vsync_thread_run.store(false);
+    if (d->vsync_thread)
+        pthread_join(d->vsync_thread, nullptr);
+    CloseFb1(d);
+    if (d->real && d->real->common.close)
+        d->real->common.close(reinterpret_cast<hw_device_t*>(d->real));
+    if (d->real_so)
+        dlclose(d->real_so);
+    delete d;
+    return 0;
+}
+
+static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw_device_t** device) {
+    if (!name || strcmp(name, HWC_HARDWARE_COMPOSER) != 0)
+        return -EINVAL;
+
+    auto* d = new Device();
+    int err = OpenRealComposer(&d->real, &d->real_so);
+    if (err) {
+        delete d;
+        return err;
+    }
+    LoadRealFns(d);
+
+    d->base.common.tag = HARDWARE_DEVICE_TAG;
+    d->base.common.version = HWC_DEVICE_API_VERSION_2_0;
+    d->base.common.module = const_cast<hw_module_t*>(module);
+    d->base.common.close = HwcClose;
+    d->base.getCapabilities = WrapperGetCapabilities;
+    d->base.getFunction = WrapperGetFunction;
+
+    *device = &d->base.common;
+    ALOGI("Fujisan HWC2 wrapper open (primary=msm8996 secondary=fb1 independent)");
+    return 0;
+}
+
+static struct hw_module_methods_t g_methods = {
+    .open = HwcOpen,
+};
+
+}  // namespace
+
+hw_module_t HAL_MODULE_INFO_SYM = {
+    .tag = HARDWARE_MODULE_TAG,
+    .module_api_version = HWC_MODULE_API_VERSION_2_0,
+    .hal_api_version = HARDWARE_HAL_API_VERSION,
+    .id = HWC_HARDWARE_MODULE_ID,
+    .name = "Fujisan dual-panel HWC2 wrapper",
+    .author = "Fujisan bring-up",
+    .methods = &g_methods,
+};
