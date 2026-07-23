@@ -1,7 +1,8 @@
 /*
- * Fujisan HWC2 wrapper
- *  - Display 0: stock hwcomposer.msm8996.so (panel A)
- *  - Display 1: independent physical display posted to /dev/graphics/fb1 (panel B)
+ * Fujisan HWC2 wrapper (Composer 2.4 passthrough target)
+ *  - Display 0: stock hwcomposer.msm8996.so (panel A, TYPE_INTERNAL)
+ *  - Display 1: independent physical display posted to /dev/graphics/fb1 (panel B, TYPE_INTERNAL)
+ *  - GET_DISPLAY_CONNECTION_TYPE => INTERNAL for both; no IDENTIFICATION_DATA (legacy local:0/1)
  * Not mirror mode: SF composes each display separately.
  */
 #define LOG_TAG "HwcFujisan"
@@ -158,6 +159,12 @@ struct RealFns {
     HWC2_PFN_SET_POWER_MODE setPowerMode = nullptr;
     HWC2_PFN_SET_VSYNC_ENABLED setVsyncEnabled = nullptr;
     HWC2_PFN_VALIDATE_DISPLAY validateDisplay = nullptr;
+    /* Composer 2.3/2.4 (optional on stock msm8996). */
+    HWC2_PFN_GET_DISPLAY_CAPABILITIES getDisplayCapabilities = nullptr;
+    HWC2_PFN_SET_DISPLAY_BRIGHTNESS setDisplayBrightness = nullptr;
+    HWC2_PFN_GET_DISPLAY_CONNECTION_TYPE getDisplayConnectionType = nullptr;
+    HWC2_PFN_GET_DISPLAY_VSYNC_PERIOD getDisplayVsyncPeriod = nullptr;
+    HWC2_PFN_SET_ACTIVE_CONFIG_WITH_CONSTRAINTS setActiveConfigWithConstraints = nullptr;
 };
 
 struct SecLayer {
@@ -189,6 +196,8 @@ struct Device {
     HWC2_PFN_HOTPLUG hotplug_fn = nullptr;
     hwc2_callback_data_t vsync_data = nullptr;
     HWC2_PFN_VSYNC vsync_fn = nullptr;
+    hwc2_callback_data_t vsync24_data = nullptr;
+    HWC2_PFN_VSYNC_2_4 vsync24_fn = nullptr;
     hwc2_callback_data_t refresh_data = nullptr;
     HWC2_PFN_REFRESH refresh_fn = nullptr;
 
@@ -294,6 +303,49 @@ static void CloseFb1(Device* d) {
     }
 }
 
+static hwc2_vsync_period_t PrimaryVsyncPeriodNs(Device* d, hwc2_display_t display) {
+    hwc2_config_t cfg = 0;
+    if (d->fns.getActiveConfig)
+        d->fns.getActiveConfig(d->real, display, &cfg);
+    int32_t period = 0;
+    if (d->fns.getDisplayAttribute) {
+        d->fns.getDisplayAttribute(d->real, display, cfg, HWC2_ATTRIBUTE_VSYNC_PERIOD, &period);
+    }
+    if (period <= 0)
+        period = FUJISAN_SEC_VSYNC_NS;
+    return static_cast<hwc2_vsync_period_t>(period);
+}
+
+/* Stock msm8996 only emits legacy VSYNC. Composer 2.4 needs VSYNC_2_4. */
+static void PrimaryVsyncTrampoline(hwc2_callback_data_t cb_data, hwc2_display_t display,
+                                   int64_t timestamp) {
+    auto* dev = reinterpret_cast<Device*>(cb_data);
+    HWC2_PFN_VSYNC_2_4 fn24 = nullptr;
+    HWC2_PFN_VSYNC fn = nullptr;
+    hwc2_callback_data_t data24 = nullptr;
+    hwc2_callback_data_t data = nullptr;
+    {
+        std::lock_guard<std::mutex> cl(dev->cb_lock);
+        fn24 = dev->vsync24_fn;
+        data24 = dev->vsync24_data;
+        fn = dev->vsync_fn;
+        data = dev->vsync_data;
+    }
+    if (fn24) {
+        fn24(data24, display, timestamp, PrimaryVsyncPeriodNs(dev, display));
+    }
+    if (fn) {
+        fn(data, display, timestamp);
+    }
+}
+
+static int32_t WirePrimaryVsync(Device* d) {
+    if (!d->fns.registerCallback)
+        return HWC2_ERROR_UNSUPPORTED;
+    return d->fns.registerCallback(d->real, HWC2_CALLBACK_VSYNC, d,
+                                   reinterpret_cast<hwc2_function_pointer_t>(PrimaryVsyncTrampoline));
+}
+
 static void* VsyncThreadMain(void* arg) {
     auto* d = static_cast<Device*>(arg);
     prctl(PR_SET_NAME, "fujisan-sec-vsync", 0, 0, 0);
@@ -303,18 +355,25 @@ static void* VsyncThreadMain(void* arg) {
             std::lock_guard<std::mutex> sc(d->sec.lock);
             fire = d->sec.vsync_on && d->sec.power_on && d->sec.hotplugged;
         }
+        HWC2_PFN_VSYNC_2_4 fn24 = nullptr;
         HWC2_PFN_VSYNC fn = nullptr;
+        hwc2_callback_data_t data24 = nullptr;
         hwc2_callback_data_t data = nullptr;
         {
             std::lock_guard<std::mutex> cl(d->cb_lock);
+            fn24 = d->vsync24_fn;
+            data24 = d->vsync24_data;
             fn = d->vsync_fn;
             data = d->vsync_data;
         }
-        if (fire && fn) {
+        if (fire && (fn24 || fn)) {
             struct timespec ts;
             clock_gettime(CLOCK_MONOTONIC, &ts);
             int64_t t = int64_t(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
-            fn(data, kSecondaryDisplay, t);
+            if (fn24)
+                fn24(data24, kSecondaryDisplay, t, FUJISAN_SEC_VSYNC_NS);
+            if (fn)
+                fn(data, kSecondaryDisplay, t);
         }
         usleep(FUJISAN_SEC_VSYNC_NS / 1000);
     }
@@ -426,6 +485,11 @@ static void LoadRealFns(Device* d) {
     LOAD(setPowerMode, SET_POWER_MODE);
     LOAD(setVsyncEnabled, SET_VSYNC_ENABLED);
     LOAD(validateDisplay, VALIDATE_DISPLAY);
+    LOAD(getDisplayCapabilities, GET_DISPLAY_CAPABILITIES);
+    LOAD(setDisplayBrightness, SET_DISPLAY_BRIGHTNESS);
+    LOAD(getDisplayConnectionType, GET_DISPLAY_CONNECTION_TYPE);
+    LOAD(getDisplayVsyncPeriod, GET_DISPLAY_VSYNC_PERIOD);
+    LOAD(setActiveConfigWithConstraints, SET_ACTIVE_CONFIG_WITH_CONSTRAINTS);
 #undef LOAD
 }
 
@@ -699,10 +763,19 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
                 d->vsync_fn = reinterpret_cast<HWC2_PFN_VSYNC>(pointer);
                 EnsureVsyncThread(d);
                 break;
+            case HWC2_CALLBACK_VSYNC_2_4:
+                d->vsync24_data = data;
+                d->vsync24_fn = reinterpret_cast<HWC2_PFN_VSYNC_2_4>(pointer);
+                EnsureVsyncThread(d);
+                break;
             case HWC2_CALLBACK_REFRESH:
                 d->refresh_data = data;
                 d->refresh_fn = reinterpret_cast<HWC2_PFN_REFRESH>(pointer);
                 break;
+            case HWC2_CALLBACK_VSYNC_PERIOD_TIMING_CHANGED:
+            case HWC2_CALLBACK_SEAMLESS_POSSIBLE:
+                /* Optional 2.4 callbacks; accept no-op. */
+                return HWC2_ERROR_NONE;
             default:
                 break;
         }
@@ -718,6 +791,16 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
         if (err == HWC2_ERROR_NONE)
             ScheduleSecondaryAttach(d);
         return err;
+    }
+
+    if (descriptor == HWC2_CALLBACK_VSYNC || descriptor == HWC2_CALLBACK_VSYNC_2_4) {
+        /* Always bridge primary legacy VSYNC -> optional VSYNC / VSYNC_2_4. */
+        return WirePrimaryVsync(d);
+    }
+
+    if (descriptor == HWC2_CALLBACK_REFRESH) {
+        return d->fns.registerCallback ? d->fns.registerCallback(d->real, descriptor, data, pointer)
+                                       : HWC2_ERROR_UNSUPPORTED;
     }
 
     return d->fns.registerCallback ? d->fns.registerCallback(d->real, descriptor, data, pointer)
@@ -885,6 +968,96 @@ static int32_t GetDisplayRequests(hwc2_device_t* device, hwc2_display_t display,
                ? d->fns.getDisplayRequests(d->real, display, out_display_requests, out_num_elements,
                                           out_layers, out_layer_requests)
                : HWC2_ERROR_UNSUPPORTED;
+}
+
+static int32_t GetDisplayCapabilities(hwc2_device_t* device, hwc2_display_t display,
+                                        uint32_t* out_num, uint32_t* out_caps) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay) {
+        if (out_num)
+            *out_num = 0;
+        return HWC2_ERROR_NONE;
+    }
+    if (d->fns.getDisplayCapabilities)
+        return d->fns.getDisplayCapabilities(d->real, display, out_num, out_caps);
+    if (out_num)
+        *out_num = 0;
+    return HWC2_ERROR_NONE;
+}
+
+static int32_t SetDisplayBrightness(hwc2_device_t* device, hwc2_display_t display, float brightness) {
+    auto* d = ToDev(device);
+    if (display == kSecondaryDisplay)
+        return HWC2_ERROR_UNSUPPORTED;
+    if (d->fns.setDisplayBrightness)
+        return d->fns.setDisplayBrightness(d->real, display, brightness);
+    return HWC2_ERROR_UNSUPPORTED;
+}
+
+/* Both built-in panels are INTERNAL. Do not implement GET_DISPLAY_IDENTIFICATION_DATA:
+ * SF stays in legacy multi-display mode and keeps secondary as local:1. */
+static int32_t GetDisplayConnectionType(hwc2_device_t* device, hwc2_display_t display,
+                                        uint32_t* out_type) {
+    if (!out_type)
+        return HWC2_ERROR_BAD_PARAMETER;
+    if (display == kPrimaryDisplay || display == kSecondaryDisplay) {
+        *out_type = HWC2_DISPLAY_CONNECTION_TYPE_INTERNAL;
+        return HWC2_ERROR_NONE;
+    }
+    return HWC2_ERROR_BAD_DISPLAY;
+}
+
+static int32_t GetDisplayVsyncPeriod(hwc2_device_t* device, hwc2_display_t display,
+                                     hwc2_vsync_period_t* out_period) {
+    auto* d = ToDev(device);
+    if (!out_period)
+        return HWC2_ERROR_BAD_PARAMETER;
+    if (display == kSecondaryDisplay) {
+        *out_period = FUJISAN_SEC_VSYNC_NS;
+        return HWC2_ERROR_NONE;
+    }
+    if (d->fns.getDisplayVsyncPeriod)
+        return d->fns.getDisplayVsyncPeriod(d->real, display, out_period);
+    *out_period = PrimaryVsyncPeriodNs(d, display);
+    return HWC2_ERROR_NONE;
+}
+
+static int32_t SetActiveConfigWithConstraints(
+        hwc2_device_t* device, hwc2_display_t display, hwc2_config_t config,
+        hwc_vsync_period_change_constraints_t* constraints,
+        hwc_vsync_period_change_timeline_t* out_timeline) {
+    auto* d = ToDev(device);
+    if (!out_timeline)
+        return HWC2_ERROR_BAD_PARAMETER;
+
+    if (display != kSecondaryDisplay && d->fns.setActiveConfigWithConstraints) {
+        return d->fns.setActiveConfigWithConstraints(d->real, display, config, constraints,
+                                                     out_timeline);
+    }
+
+    int32_t err;
+    if (display == kSecondaryDisplay) {
+        if (config != kSecondaryConfig)
+            return HWC2_ERROR_BAD_CONFIG;
+        err = HWC2_ERROR_NONE;
+    } else if (d->fns.setActiveConfig) {
+        err = d->fns.setActiveConfig(d->real, display, config);
+    } else {
+        err = HWC2_ERROR_UNSUPPORTED;
+    }
+    if (err != HWC2_ERROR_NONE)
+        return err;
+
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    int64_t now = int64_t(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
+    int64_t desired = constraints ? constraints->desiredTimeNanos : now;
+    if (desired < now)
+        desired = now;
+    out_timeline->newVsyncAppliedTimeNanos = desired;
+    out_timeline->refreshRequired = false;
+    out_timeline->refreshTimeNanos = 0;
+    return HWC2_ERROR_NONE;
 }
 
 static int32_t GetDisplayType(hwc2_device_t* device, hwc2_display_t display, int32_t* out_type) {
@@ -1234,6 +1407,16 @@ static hwc2_function_pointer_t WrapperGetFunction(struct hwc2_device* /*device*/
             return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayRequests);
         case HWC2_FUNCTION_GET_DISPLAY_TYPE:
             return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayType);
+        case HWC2_FUNCTION_GET_DISPLAY_CAPABILITIES:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayCapabilities);
+        case HWC2_FUNCTION_SET_DISPLAY_BRIGHTNESS:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetDisplayBrightness);
+        case HWC2_FUNCTION_GET_DISPLAY_CONNECTION_TYPE:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayConnectionType);
+        case HWC2_FUNCTION_GET_DISPLAY_VSYNC_PERIOD:
+            return reinterpret_cast<hwc2_function_pointer_t>(GetDisplayVsyncPeriod);
+        case HWC2_FUNCTION_SET_ACTIVE_CONFIG_WITH_CONSTRAINTS:
+            return reinterpret_cast<hwc2_function_pointer_t>(SetActiveConfigWithConstraints);
         case HWC2_FUNCTION_GET_DOZE_SUPPORT:
             return reinterpret_cast<hwc2_function_pointer_t>(GetDozeSupport);
         case HWC2_FUNCTION_GET_HDR_CAPABILITIES:
@@ -1363,7 +1546,7 @@ static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw
     d->base.getFunction = WrapperGetFunction;
 
     *device = &d->base.common;
-    ALOGI("Fujisan HWC2 wrapper open (primary=msm8996 secondary=fb1 independent)");
+    ALOGI("Fujisan HWC2 wrapper open (primary=msm8996 secondary=fb1 dual-INTERNAL 2.4)");
     return 0;
 }
 

@@ -1,5 +1,5 @@
-# AOSP installs vendor.hwcomposer-2-1 via
-# android.hardware.graphics.composer@2.1-service. Keep only early GPU/ION
+# AOSP installs vendor.hwcomposer-2-4 via
+# android.hardware.graphics.composer@2.4-service. Keep only early GPU/ION
 # node permissions required by SurfaceFlinger/Adreno on this legacy kernel.
 on early-boot
     chmod 0666 /dev/kgsl-3d0
