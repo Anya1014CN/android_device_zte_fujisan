@@ -48,6 +48,7 @@ PRODUCT_VENDOR_PROPERTIES += \
 
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
+    fujisan_fb1_fill \
     NavigationBarModeGesturalOverlay
 
 PRODUCT_PACKAGES += \
@@ -233,6 +234,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/usr/idc/synaptics_dsx.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/synaptics_dsx.idc \
     $(LOCAL_PATH)/system/usr/idc/zte-touchscreen.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchscreen.idc \
     $(LOCAL_PATH)/system/usr/idc/zte-touchscreen-2nd.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchscreen-2nd.idc \
+    $(LOCAL_PATH)/system/usr/idc/zte-touchsrceen-3nd.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchsrceen-3nd.idc \
     $(LOCAL_PATH)/system/usr/keylayout/gpio-keys.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/gpio-keys.kl \
     $(LOCAL_PATH)/system/usr/keylayout/qpnp_pon.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/qpnp_pon.kl \
     $(LOCAL_PATH)/system/usr/keylayout/synaptics_dsx.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/synaptics_dsx.kl \
