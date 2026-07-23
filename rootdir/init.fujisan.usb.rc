@@ -1,6 +1,12 @@
-# Fujisan USB: 4.4 kernel uses configfs (same as Xiaomi msm8996 LOS 19.1).
-# Stock vendor init.qcom.usb.rc creates the gadget + functionfs on boot.
-# Force configfs mode and ensure adb composition binds ffs.adb to UDC.
+# Fujisan USB: 4.4 configfs adb (msm8996).
+# Stock vendor creates gadget/ffs; this forces peripheral + clean UDC bind.
+
+service fujisan-usb /system/bin/sh /system/bin/fujisan_usb.sh
+    class core
+    user root
+    group root system shell
+    oneshot
+    disabled
 
 on early-init
     setprop sys.usb.configfs 1
@@ -9,33 +15,23 @@ on init
     mkdir /dev/usb-ffs 0775 shell system
     mkdir /dev/usb-ffs/adb 0770 shell system
     setprop sys.usb.configfs 1
+    setprop persist.sys.usb.config adb
 
 on post-fs
     setprop sys.usb.configfs 1
     setprop persist.sys.usb.config adb
+    write /sys/devices/soc/6a00000.ssusb/mode peripheral
 
 on boot
     setprop sys.usb.configfs 1
     setprop persist.sys.usb.config adb
     setprop sys.usb.controller 6a00000.dwc3
-    # Re-apply adb after vendor scripts finish gadget setup.
-    setprop sys.usb.config none
+    write /sys/devices/soc/6a00000.ssusb/mode peripheral
     setprop sys.usb.config adb
+    start fujisan-usb
 
-# AOSP init.usb.configfs.rc also handles this; keep an explicit fallback
-# so host-visible adb works even if property order races.
-on property:sys.usb.config=adb && property:sys.usb.configfs=1
-    start adbd
+on property:sys.usb.ffs.ready=1
+    start fujisan-usb
 
-on property:sys.usb.ffs.ready=1 && property:sys.usb.config=adb && property:sys.usb.configfs=1
-    write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "adb"
-    rm /config/usb_gadget/g1/configs/b.1/f1
-    rm /config/usb_gadget/g1/configs/b.1/f2
-    rm /config/usb_gadget/g1/configs/b.1/f3
-    rm /config/usb_gadget/g1/configs/b.1/f4
-    rm /config/usb_gadget/g1/configs/b.1/f5
-    write /config/usb_gadget/g1/idVendor 0x18d1
-    write /config/usb_gadget/g1/idProduct 0x4ee7
-    symlink /config/usb_gadget/g1/functions/ffs.adb /config/usb_gadget/g1/configs/b.1/f1
-    write /config/usb_gadget/g1/UDC ${sys.usb.controller}
-    setprop sys.usb.state ${sys.usb.config}
+on property:init.svc.bootanim=running
+    start fujisan-usb

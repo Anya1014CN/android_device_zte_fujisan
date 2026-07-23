@@ -1,39 +1,53 @@
 #!/system/bin/sh
-# Force host-visible adb on this msm8996 kernel.
-# Prefer the stock android_usb gadget nodes that this kernel exposes.
+# Clean configfs adb bind for msm8996 4.4.
+# AOSP composition can leave UDC busy / f1 already linked; rebind once.
 
-export PATH=/system/bin:/system/xbin:/vendor/bin:/sbin:/bin
+export PATH=/system/bin:/system/xbin:/vendor/bin
 
-log() {
-    echo "fujisan-usb: $*" > /dev/kmsg 2>/dev/null
-    echo "fujisan-usb: $*" > /dev/pmsg0 2>/dev/null
-}
+G=/config/usb_gadget/g1
+MODE=/sys/devices/soc/6a00000.ssusb/mode
+CTRL="$(getprop sys.usb.controller)"
+[ -n "$CTRL" ] || CTRL=6a00000.dwc3
 
+setprop sys.usb.configfs 1
+setprop persist.sys.usb.config adb
+setprop sys.usb.controller "$CTRL"
+
+[ -e "$MODE" ] && echo peripheral > "$MODE" 2>/dev/null
+
+if [ ! -d /config/usb_gadget ]; then
+    mount -t configfs none /config 2>/dev/null
+fi
+
+mkdir -p "$G/strings/0x409" 2>/dev/null
+mkdir -p "$G/configs/b.1/strings/0x409" 2>/dev/null
+mkdir -p "$G/functions/ffs.adb" 2>/dev/null
 mkdir -p /dev/usb-ffs/adb 2>/dev/null
 mount -t functionfs adb /dev/usb-ffs/adb -o uid=2000,gid=2000 2>/dev/null \
     || mount -t functionfs adb /dev/usb-ffs/adb 2>/dev/null
 
-USB=/sys/class/android_usb/android0
-if [ ! -e "$USB/enable" ]; then
-    log "android_usb nodes missing"
-    exit 0
-fi
+[ -d "$G" ] || exit 0
 
-# Drop any multi-function persist state that stock scripts reapply.
-setprop persist.sys.usb.config adb
-setprop sys.usb.configfs 0
+echo none > "$G/UDC" 2>/dev/null
+usleep 200000 2>/dev/null || sleep 0.2
+rm -f "$G/configs/b.1/f1" "$G/configs/b.1/f2" "$G/configs/b.1/f3" \
+      "$G/configs/b.1/f4" "$G/configs/b.1/f5" 2>/dev/null
+
+echo 0x18d1 > "$G/idVendor" 2>/dev/null
+echo 0x4ee7 > "$G/idProduct" 2>/dev/null
+echo 0x0200 > "$G/bcdUSB" 2>/dev/null
+echo "Google" > "$G/strings/0x409/manufacturer" 2>/dev/null
+echo "Android" > "$G/strings/0x409/product" 2>/dev/null
+echo "$(getprop ro.serialno)" > "$G/strings/0x409/serialnumber" 2>/dev/null
+echo "adb" > "$G/configs/b.1/strings/0x409/configuration" 2>/dev/null
+
+ln -s "$G/functions/ffs.adb" "$G/configs/b.1/f1" 2>/dev/null \
+    || ln -sf "$G/functions/ffs.adb" "$G/configs/b.1/f1" 2>/dev/null
+
 setprop sys.usb.config adb
-setprop sys.usb.controller 6a00000.dwc3
-
-echo 0 > "$USB/enable" 2>/dev/null
-echo 18D1 > "$USB/idVendor" 2>/dev/null
-echo 4EE7 > "$USB/idProduct" 2>/dev/null
-echo adb > "$USB/f_ffs/aliases" 2>/dev/null
-echo adb > "$USB/functions" 2>/dev/null || echo ffs > "$USB/functions" 2>/dev/null
-echo Fujisan > "$USB/iManufacturer" 2>/dev/null
-echo AxonM > "$USB/iProduct" 2>/dev/null
-echo 1 > "$USB/enable" 2>/dev/null
-
 start adbd 2>/dev/null
-log "forced android_usb functions=$(cat $USB/functions 2>/dev/null) enable=$(cat $USB/enable 2>/dev/null) state=$(cat $USB/state 2>/dev/null)"
+usleep 400000 2>/dev/null || sleep 0.4
+
+echo "$CTRL" > "$G/UDC" 2>/dev/null
+setprop sys.usb.state adb
 exit 0

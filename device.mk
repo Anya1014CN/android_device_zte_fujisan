@@ -33,6 +33,15 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     sys.usb.configfs=1 \
     sys.usb.controller=6a00000.dwc3 \
 
+# product/system_ext defaults ship persist.sys.usb.config=none; override them.
+PRODUCT_PRODUCT_PROPERTIES += \
+    persist.sys.usb.config=adb \
+    sys.usb.configfs=1 \
+
+PRODUCT_SYSTEM_EXT_PROPERTIES += \
+    persist.sys.usb.config=adb \
+    sys.usb.configfs=1 \
+
 # Keep the modern framework-side Bluetooth stack source-built. Fujisan still
 # uses the legacy wcnss_filter userspace path, so BoardConfigVendor enables the
 # old wc_transport property contract for the source-built libbt-vendor.
