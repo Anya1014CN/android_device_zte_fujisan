@@ -99,34 +99,19 @@ PRODUCT_PACKAGES += \
     libhidltransport.vendor \
     libhwbinder.vendor
 
-# Follow the msm8996 LineageOS pattern: keep the legacy HIDL service stack
-# and the primary/amplifier audio HALs source-built, while shipping only the
-# device-specific calibration, mixer, firmware, and smartpa userspace blobs.
+# Bring-up: drop msm/qcom audio path (mixer open can hang AudioPolicy and
+# block SystemServer). Ship AOSP default primary so media.audio_policy
+# registers immediately; restore real HALs later.
 PRODUCT_PACKAGES += \
-    audiod \
-    android.hardware.audio@2.0 \
-    android.hardware.audio.common@2.0 \
-    android.hardware.audio.effect@2.0 \
-    android.hardware.audio@2.0-impl \
-    android.hardware.audio.effect@2.0-impl \
-    android.hardware.audio@2.0-service \
-    android.hardware.audio@6.0 \
-    android.hardware.audio.common@6.0 \
-    android.hardware.audio.common@6.0-util \
     android.hardware.audio@6.0-impl \
-    android.hardware.audio.effect@6.0 \
     android.hardware.audio.effect@6.0-impl \
+    android.hardware.audio.service \
     audio.bluetooth.default \
-    audio.primary.msm8996 \
+    audio.primary.default \
     audio.r_submix.default \
     audio.usb.default \
-    audio_amplifier.msm8996 \
     libaudio-resampler \
     libaudioroute \
-    libqcompostprocbundle \
-    libqcomvisualizer \
-    libqcomvoiceprocessing \
-    libvolumelistener \
     tinymix
 
 # The legacy vendor manifest exposes IPower 1.0.  SystemServer waits for this
@@ -168,9 +153,13 @@ PRODUCT_PACKAGES += \
     wpa_supplicant \
     wpa_supplicant.conf
 
-# Keep the framework-side Gatekeeper interface available for Keystore.
+# Gatekeeper is declared in VINTF; without a real service the user stays in
+# BOOTING (lazy start loops forever). Use AOSP software gatekeeper for
+# bring-up — no OEM gatekeeper service binary.
 PRODUCT_PACKAGES += \
-    android.hardware.gatekeeper@1.0 \
+    android.hardware.gatekeeper@1.0-impl \
+    android.hardware.gatekeeper@1.0-service \
+    gatekeeper.default \
     android.hardware.keymaster@4.0-service \
     libhidltransport
 
@@ -215,18 +204,10 @@ PRODUCT_PACKAGES += \
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/audio_effects.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_effects.xml \
-    $(LOCAL_PATH)/audio/audio_output_policy.conf:$(TARGET_COPY_OUT_VENDOR)/etc/audio_output_policy.conf \
-    $(LOCAL_PATH)/audio/audio_platform_info.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_platform_info.xml \
-    $(LOCAL_PATH)/audio/audio_platform_info_i2s.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_platform_info_i2s.xml \
     $(LOCAL_PATH)/audio/audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy_configuration.xml \
-    $(LOCAL_PATH)/audio/audio_tuning_mixer.txt:$(TARGET_COPY_OUT_VENDOR)/etc/audio_tuning_mixer.txt \
-    $(LOCAL_PATH)/audio/mixer_paths.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths.xml \
-    $(LOCAL_PATH)/audio/sound_trigger_mixer_paths.xml:$(TARGET_COPY_OUT_VENDOR)/etc/sound_trigger_mixer_paths.xml \
-    $(LOCAL_PATH)/audio/sound_trigger_mixer_paths_wcd9330.xml:$(TARGET_COPY_OUT_VENDOR)/etc/sound_trigger_mixer_paths_wcd9330.xml \
-    $(LOCAL_PATH)/audio/sound_trigger_platform_info.xml:$(TARGET_COPY_OUT_VENDOR)/etc/sound_trigger_platform_info.xml \
     frameworks/av/services/audiopolicy/config/audio_policy_volumes.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy_volumes.xml \
     frameworks/av/services/audiopolicy/config/default_volume_tables.xml:$(TARGET_COPY_OUT_VENDOR)/etc/default_volume_tables.xml \
-    frameworks/av/services/audiopolicy/config/a2dp_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/a2dp_audio_policy_configuration.xml \
+    frameworks/av/services/audiopolicy/config/bluetooth_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/bluetooth_audio_policy_configuration.xml \
     frameworks/av/services/audiopolicy/config/usb_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/usb_audio_policy_configuration.xml \
     frameworks/av/services/audiopolicy/config/r_submix_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/r_submix_audio_policy_configuration.xml \
     system/core/libprocessgroup/profiles/cgroups_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \

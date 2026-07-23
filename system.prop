@@ -66,3 +66,6 @@ ro.adb.secure=0
 
 
 # USB uses configfs on 4.4.
+
+# Software gatekeeper for bring-up
+ro.hardware.gatekeeper=default
