@@ -1,6 +1,1 @@
-# USB functionfs mount for configfs adb.
-# Gadget bind is handled by init.fujisan.usb.rc.
-
-on init
-    mkdir /dev/usb-ffs 0775 shell system
-    mkdir /dev/usb-ffs/adb 0770 shell system
+# Placeholder product init. USB is handled by init.fujisan.usb.rc.

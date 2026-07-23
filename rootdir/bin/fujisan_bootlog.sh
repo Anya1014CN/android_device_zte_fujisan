@@ -83,4 +83,23 @@ fi
 echo "${run_dir}" > "${logdir}/latest" 2>/dev/null
 echo "ok ${stamp} ${run_dir}" > "${logdir}/stage_bootlog_done" 2>/dev/null
 mark "done ${run_dir}"
+
+# Late captures: boot animation hang often happens after zygote preload.
+for wait_s in 30 90; do
+    sleep "$wait_s" 2>/dev/null
+    late_dir="${logdir}/boot_${stamp}_late${wait_s}s"
+    mkdir -p "$late_dir" 2>/dev/null || continue
+    uptime_s="$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)"
+    mark "late snapshot ${wait_s}s -> ${late_dir}"
+    getprop > "${late_dir}/getprop.txt" 2>/dev/null
+    ps -A > "${late_dir}/ps.txt" 2>/dev/null || ps > "${late_dir}/ps.txt" 2>/dev/null
+    if command -v logcat >/dev/null 2>&1; then
+        timeout 5 logcat -b all -d > "${late_dir}/logcat.txt" 2>/dev/null ||             logcat -b all -d -t 2000 > "${late_dir}/logcat.txt" 2>/dev/null
+    fi
+    if command -v dmesg >/dev/null 2>&1; then
+        dmesg -T > "${late_dir}/dmesg.txt" 2>/dev/null || dmesg > "${late_dir}/dmesg.txt" 2>/dev/null
+    fi
+    echo "${late_dir}" > "${logdir}/latest" 2>/dev/null
+done
+
 exit 0

@@ -30,7 +30,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
     sys.usb.config=adb \
-    sys.usb.configfs=1 \
+    sys.usb.configfs=0 \
     sys.usb.controller=6a00000.dwc3 \
 
 # Keep the modern framework-side Bluetooth stack source-built. Fujisan still
@@ -228,6 +228,7 @@ PRODUCT_COPY_FILES += \
     frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml \
     $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
     $(LOCAL_PATH)/rootdir/bin/fujisan_bootlog.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_bootlog.sh \
+    $(LOCAL_PATH)/rootdir/bin/fujisan_usb.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_usb.sh \
     $(LOCAL_PATH)/rootdir/bin/fujisan_bpfloader.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/fujisan_bpfloader \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bootlog.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bootlog.rc \
