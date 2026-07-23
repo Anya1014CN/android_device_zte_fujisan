@@ -144,7 +144,7 @@ struct Device {
     hwc2_device_t base{};
     hwc2_device_t* real = nullptr;
     void* real_so = nullptr;
-    RealFns fn{};
+    RealFns fns{};
     SecondaryState sec{};
 
     hwc2_callback_data_t hotplug_data = nullptr;
@@ -344,7 +344,7 @@ static hwc2_function_pointer_t RealGet(hwc2_device_t* real, int32_t desc) {
 
 static void LoadRealFns(Device* d) {
     auto g = [&](int32_t desc) { return RealGet(d->real, desc); };
-#define LOAD(fn, DESC) d->fn.fn = reinterpret_cast<HWC2_PFN_##DESC>(g(HWC2_FUNCTION_##DESC))
+#define LOAD(name, DESC) d->fns.name = reinterpret_cast<HWC2_PFN_##DESC>(g(HWC2_FUNCTION_##DESC))
     LOAD(acceptDisplayChanges, ACCEPT_DISPLAY_CHANGES);
     LOAD(createLayer, CREATE_LAYER);
     LOAD(createVirtualDisplay, CREATE_VIRTUAL_DISPLAY);
@@ -578,8 +578,8 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
 
     if (descriptor == HWC2_CALLBACK_HOTPLUG) {
         int32_t err =
-            d->fn.registerCallback
-                ? d->fn.registerCallback(d->real, descriptor, d,
+            d->fns.registerCallback
+                ? d->fns.registerCallback(d->real, descriptor, d,
                                          reinterpret_cast<hwc2_function_pointer_t>(HotplugTrampoline))
                 : HWC2_ERROR_UNSUPPORTED;
         // Also schedule attach in case primary hotplug already fired.
@@ -588,7 +588,7 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
         return err;
     }
 
-    return d->fn.registerCallback ? d->fn.registerCallback(d->real, descriptor, data, pointer)
+    return d->fns.registerCallback ? d->fns.registerCallback(d->real, descriptor, data, pointer)
                                   : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -600,7 +600,7 @@ static int32_t AcceptDisplayChanges(hwc2_device_t* device, hwc2_display_t displa
             kv.second.changed = false;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.acceptDisplayChanges ? d->fn.acceptDisplayChanges(d->real, display)
+    return d->fns.acceptDisplayChanges ? d->fns.acceptDisplayChanges(d->real, display)
                                       : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -608,14 +608,14 @@ static int32_t CreateLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_l
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecCreateLayer(d, out);
-    return d->fn.createLayer ? d->fn.createLayer(d->real, display, out) : HWC2_ERROR_UNSUPPORTED;
+    return d->fns.createLayer ? d->fns.createLayer(d->real, display, out) : HWC2_ERROR_UNSUPPORTED;
 }
 
 static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer) {
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecDestroyLayer(d, layer);
-    return d->fn.destroyLayer ? d->fn.destroyLayer(d->real, display, layer)
+    return d->fns.destroyLayer ? d->fns.destroyLayer(d->real, display, layer)
                               : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -625,7 +625,7 @@ static int32_t GetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
         *out = kSecondaryConfig;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getActiveConfig ? d->fn.getActiveConfig(d->real, display, out)
+    return d->fns.getActiveConfig ? d->fns.getActiveConfig(d->real, display, out)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -635,8 +635,8 @@ static int32_t GetChangedCompositionTypes(hwc2_device_t* device, hwc2_display_t 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecGetChanged(d, out_count, out_layers, out_types);
-    return d->fn.getChangedCompositionTypes
-               ? d->fn.getChangedCompositionTypes(d->real, display, out_count, out_layers, out_types)
+    return d->fns.getChangedCompositionTypes
+               ? d->fns.getChangedCompositionTypes(d->real, display, out_count, out_layers, out_types)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -645,8 +645,8 @@ static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t disp
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.getClientTargetSupport
-               ? d->fn.getClientTargetSupport(d->real, display, width, height, format, dataspace)
+    return d->fns.getClientTargetSupport
+               ? d->fns.getClientTargetSupport(d->real, display, width, height, format, dataspace)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -664,7 +664,7 @@ static int32_t GetColorModes(hwc2_device_t* device, hwc2_display_t display, uint
         }
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getColorModes ? d->fn.getColorModes(d->real, display, out_count, out_modes)
+    return d->fns.getColorModes ? d->fns.getColorModes(d->real, display, out_count, out_modes)
                                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -693,8 +693,8 @@ static int32_t GetDisplayAttribute(hwc2_device_t* device, hwc2_display_t display
                 return HWC2_ERROR_NONE;
         }
     }
-    return d->fn.getDisplayAttribute
-               ? d->fn.getDisplayAttribute(d->real, display, config, attribute, out)
+    return d->fns.getDisplayAttribute
+               ? d->fns.getDisplayAttribute(d->real, display, config, attribute, out)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -712,8 +712,8 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
         }
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getDisplayConfigs
-               ? d->fn.getDisplayConfigs(d->real, display, out_count, out_configs)
+    return d->fns.getDisplayConfigs
+               ? d->fns.getDisplayConfigs(d->real, display, out_count, out_configs)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -734,7 +734,7 @@ static int32_t GetDisplayName(hwc2_device_t* device, hwc2_display_t display, uin
         *out_size = static_cast<uint32_t>(strlen(out_name) + 1);
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getDisplayName ? d->fn.getDisplayName(d->real, display, out_size, out_name)
+    return d->fns.getDisplayName ? d->fns.getDisplayName(d->real, display, out_size, out_name)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -749,8 +749,8 @@ static int32_t GetDisplayRequests(hwc2_device_t* device, hwc2_display_t display,
             *out_num_elements = 0;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getDisplayRequests
-               ? d->fn.getDisplayRequests(d->real, display, out_display_requests, out_num_elements,
+    return d->fns.getDisplayRequests
+               ? d->fns.getDisplayRequests(d->real, display, out_display_requests, out_num_elements,
                                           out_layers, out_layer_requests)
                : HWC2_ERROR_UNSUPPORTED;
 }
@@ -761,7 +761,7 @@ static int32_t GetDisplayType(hwc2_device_t* device, hwc2_display_t display, int
         *out_type = HWC2_DISPLAY_TYPE_PHYSICAL;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getDisplayType ? d->fn.getDisplayType(d->real, display, out_type)
+    return d->fns.getDisplayType ? d->fns.getDisplayType(d->real, display, out_type)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -771,7 +771,7 @@ static int32_t GetDozeSupport(hwc2_device_t* device, hwc2_display_t display, int
         *out = 0;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getDozeSupport ? d->fn.getDozeSupport(d->real, display, out)
+    return d->fns.getDozeSupport ? d->fns.getDozeSupport(d->real, display, out)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -783,8 +783,8 @@ static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display,
             *out_num = 0;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getHdrCapabilities
-               ? d->fn.getHdrCapabilities(d->real, display, out_num, types, max_l, max_avg, min_l)
+    return d->fns.getHdrCapabilities
+               ? d->fns.getHdrCapabilities(d->real, display, out_num, types, max_l, max_avg, min_l)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -796,8 +796,8 @@ static int32_t GetReleaseFences(hwc2_device_t* device, hwc2_display_t display, u
             *out_num = 0;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.getReleaseFences
-               ? d->fn.getReleaseFences(d->real, display, out_num, layers, fences)
+    return d->fns.getReleaseFences
+               ? d->fns.getReleaseFences(d->real, display, out_num, layers, fences)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -806,7 +806,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecPresent(d, out_retire_fence);
-    return d->fn.presentDisplay ? d->fn.presentDisplay(d->real, display, out_retire_fence)
+    return d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -814,7 +814,7 @@ static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return (config == kSecondaryConfig) ? HWC2_ERROR_NONE : HWC2_ERROR_BAD_CONFIG;
-    return d->fn.setActiveConfig ? d->fn.setActiveConfig(d->real, display, config)
+    return d->fns.setActiveConfig ? d->fns.setActiveConfig(d->real, display, config)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -830,8 +830,8 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
         (void)dataspace;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.setClientTarget
-               ? d->fn.setClientTarget(d->real, display, target, acquire_fence, dataspace, damage)
+    return d->fns.setClientTarget
+               ? d->fns.setClientTarget(d->real, display, target, acquire_fence, dataspace, damage)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -839,7 +839,7 @@ static int32_t SetColorMode(hwc2_device_t* device, hwc2_display_t display, int32
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return (mode == HAL_COLOR_MODE_NATIVE) ? HWC2_ERROR_NONE : HWC2_ERROR_UNSUPPORTED;
-    return d->fn.setColorMode ? d->fn.setColorMode(d->real, display, mode) : HWC2_ERROR_UNSUPPORTED;
+    return d->fns.setColorMode ? d->fns.setColorMode(d->real, display, mode) : HWC2_ERROR_UNSUPPORTED;
 }
 
 static int32_t SetColorTransform(hwc2_device_t* device, hwc2_display_t display, const float* m,
@@ -847,7 +847,7 @@ static int32_t SetColorTransform(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setColorTransform ? d->fn.setColorTransform(d->real, display, m, hint)
+    return d->fns.setColorTransform ? d->fns.setColorTransform(d->real, display, m, hint)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -856,7 +856,7 @@ static int32_t SetCursorPosition(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setCursorPosition ? d->fn.setCursorPosition(d->real, display, layer, x, y)
+    return d->fns.setCursorPosition ? d->fns.setCursorPosition(d->real, display, layer, x, y)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -865,7 +865,7 @@ static int32_t SetLayerBlendMode(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerBlendMode ? d->fn.setLayerBlendMode(d->real, display, layer, mode)
+    return d->fns.setLayerBlendMode ? d->fns.setLayerBlendMode(d->real, display, layer, mode)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -877,8 +877,8 @@ static int32_t SetLayerBuffer(hwc2_device_t* device, hwc2_display_t display, hwc
             close(acquire_fence);
         return HWC2_ERROR_NONE;
     }
-    return d->fn.setLayerBuffer
-               ? d->fn.setLayerBuffer(d->real, display, layer, buffer, acquire_fence)
+    return d->fns.setLayerBuffer
+               ? d->fns.setLayerBuffer(d->real, display, layer, buffer, acquire_fence)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -887,7 +887,7 @@ static int32_t SetLayerColor(hwc2_device_t* device, hwc2_display_t display, hwc2
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerColor ? d->fn.setLayerColor(d->real, display, layer, color)
+    return d->fns.setLayerColor ? d->fns.setLayerColor(d->real, display, layer, color)
                                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -903,8 +903,8 @@ static int32_t SetLayerCompositionType(hwc2_device_t* device, hwc2_display_t dis
         d->sec.validated = false;
         return HWC2_ERROR_NONE;
     }
-    return d->fn.setLayerCompositionType
-               ? d->fn.setLayerCompositionType(d->real, display, layer, type)
+    return d->fns.setLayerCompositionType
+               ? d->fns.setLayerCompositionType(d->real, display, layer, type)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -913,7 +913,7 @@ static int32_t SetLayerDataspace(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerDataspace ? d->fn.setLayerDataspace(d->real, display, layer, dataspace)
+    return d->fns.setLayerDataspace ? d->fns.setLayerDataspace(d->real, display, layer, dataspace)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -922,8 +922,8 @@ static int32_t SetLayerDisplayFrame(hwc2_device_t* device, hwc2_display_t displa
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerDisplayFrame
-               ? d->fn.setLayerDisplayFrame(d->real, display, layer, frame)
+    return d->fns.setLayerDisplayFrame
+               ? d->fns.setLayerDisplayFrame(d->real, display, layer, frame)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -932,7 +932,7 @@ static int32_t SetLayerPlaneAlpha(hwc2_device_t* device, hwc2_display_t display,
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerPlaneAlpha ? d->fn.setLayerPlaneAlpha(d->real, display, layer, alpha)
+    return d->fns.setLayerPlaneAlpha ? d->fns.setLayerPlaneAlpha(d->real, display, layer, alpha)
                                     : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -941,8 +941,8 @@ static int32_t SetLayerSidebandStream(hwc2_device_t* device, hwc2_display_t disp
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerSidebandStream
-               ? d->fn.setLayerSidebandStream(d->real, display, layer, stream)
+    return d->fns.setLayerSidebandStream
+               ? d->fns.setLayerSidebandStream(d->real, display, layer, stream)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -951,7 +951,7 @@ static int32_t SetLayerSourceCrop(hwc2_device_t* device, hwc2_display_t display,
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerSourceCrop ? d->fn.setLayerSourceCrop(d->real, display, layer, crop)
+    return d->fns.setLayerSourceCrop ? d->fns.setLayerSourceCrop(d->real, display, layer, crop)
                                     : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -960,8 +960,8 @@ static int32_t SetLayerSurfaceDamage(hwc2_device_t* device, hwc2_display_t displ
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerSurfaceDamage
-               ? d->fn.setLayerSurfaceDamage(d->real, display, layer, damage)
+    return d->fns.setLayerSurfaceDamage
+               ? d->fns.setLayerSurfaceDamage(d->real, display, layer, damage)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -970,7 +970,7 @@ static int32_t SetLayerTransform(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerTransform ? d->fn.setLayerTransform(d->real, display, layer, transform)
+    return d->fns.setLayerTransform ? d->fns.setLayerTransform(d->real, display, layer, transform)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -979,8 +979,8 @@ static int32_t SetLayerVisibleRegion(hwc2_device_t* device, hwc2_display_t displ
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerVisibleRegion
-               ? d->fn.setLayerVisibleRegion(d->real, display, layer, visible)
+    return d->fns.setLayerVisibleRegion
+               ? d->fns.setLayerVisibleRegion(d->real, display, layer, visible)
                : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -989,7 +989,7 @@ static int32_t SetLayerZOrder(hwc2_device_t* device, hwc2_display_t display, hwc
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fn.setLayerZOrder ? d->fn.setLayerZOrder(d->real, display, layer, z)
+    return d->fns.setLayerZOrder ? d->fns.setLayerZOrder(d->real, display, layer, z)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -1001,7 +1001,7 @@ static int32_t SetOutputBuffer(hwc2_device_t* device, hwc2_display_t display, bu
             close(release_fence);
         return HWC2_ERROR_NONE;
     }
-    return d->fn.setOutputBuffer ? d->fn.setOutputBuffer(d->real, display, buffer, release_fence)
+    return d->fns.setOutputBuffer ? d->fns.setOutputBuffer(d->real, display, buffer, release_fence)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -1020,7 +1020,7 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
         }
         return HWC2_ERROR_NONE;
     }
-    return d->fn.setPowerMode ? d->fn.setPowerMode(d->real, display, mode)
+    return d->fns.setPowerMode ? d->fns.setPowerMode(d->real, display, mode)
                               : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -1032,7 +1032,7 @@ static int32_t SetVsyncEnabled(hwc2_device_t* device, hwc2_display_t display, in
         EnsureVsyncThread(d);
         return HWC2_ERROR_NONE;
     }
-    return d->fn.setVsyncEnabled ? d->fn.setVsyncEnabled(d->real, display, enabled)
+    return d->fns.setVsyncEnabled ? d->fns.setVsyncEnabled(d->real, display, enabled)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -1041,32 +1041,32 @@ static int32_t ValidateDisplay(hwc2_device_t* device, hwc2_display_t display, ui
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecValidate(d, out_types, out_requests);
-    return d->fn.validateDisplay ? d->fn.validateDisplay(d->real, display, out_types, out_requests)
+    return d->fns.validateDisplay ? d->fns.validateDisplay(d->real, display, out_types, out_requests)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
 
 static void Dump(hwc2_device_t* device, uint32_t* out_size, char* out_buffer) {
     auto* d = ToDev(device);
-    if (d->fn.dump)
-        d->fn.dump(d->real, out_size, out_buffer);
+    if (d->fns.dump)
+        d->fns.dump(d->real, out_size, out_buffer);
 }
 
 static int32_t CreateVirtualDisplay(hwc2_device_t* device, uint32_t w, uint32_t h, int32_t* format,
                                     hwc2_display_t* out) {
     auto* d = ToDev(device);
-    return d->fn.createVirtualDisplay ? d->fn.createVirtualDisplay(d->real, w, h, format, out)
+    return d->fns.createVirtualDisplay ? d->fns.createVirtualDisplay(d->real, w, h, format, out)
                                       : HWC2_ERROR_UNSUPPORTED;
 }
 
 static int32_t DestroyVirtualDisplay(hwc2_device_t* device, hwc2_display_t display) {
     auto* d = ToDev(device);
-    return d->fn.destroyVirtualDisplay ? d->fn.destroyVirtualDisplay(d->real, display)
+    return d->fns.destroyVirtualDisplay ? d->fns.destroyVirtualDisplay(d->real, display)
                                        : HWC2_ERROR_UNSUPPORTED;
 }
 
 static uint32_t GetMaxVirtualDisplayCount(hwc2_device_t* device) {
     auto* d = ToDev(device);
-    return d->fn.getMaxVirtualDisplayCount ? d->fn.getMaxVirtualDisplayCount(d->real) : 0;
+    return d->fns.getMaxVirtualDisplayCount ? d->fns.getMaxVirtualDisplayCount(d->real) : 0;
 }
 
 static hwc2_function_pointer_t WrapperGetFunction(struct hwc2_device* /*device*/,
