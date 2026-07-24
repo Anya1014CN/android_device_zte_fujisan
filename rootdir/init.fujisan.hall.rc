@@ -4,5 +4,7 @@ service fujisan_halld /vendor/bin/fujisan_halld
     group system graphics input
     disabled
 
-on property:sys.boot_completed=1
+# Panel posture must be available before SystemServer finishes boot; waiting for
+# sys.boot_completed keeps B dark for roughly 30 seconds after every reboot.
+on early-boot
     start fujisan_halld
