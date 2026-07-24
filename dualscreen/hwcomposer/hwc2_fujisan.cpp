@@ -100,7 +100,6 @@ constexpr hwc2_config_t kSecondaryConfig = 0;
 constexpr hwc2_config_t kSingleConfig = 0;
 constexpr hwc2_config_t kZoomConfig = 1;
 constexpr int kZoomWidth = 2160;  /* 1080 + 1 hinge + 1079 usable right? 1080+1080 */
-constexpr int kHingeWidth = 1;
 /* Open virtual size is 2160x1920: left 1080 (A) + right 1080 (B). Hinge is 1px at x=1080
  * declared to WM via device_state/fold overlays; pixels at x=1080 may be skipped when splitting.
  */
@@ -409,40 +408,6 @@ static void EnsureVsyncThread(Device* d) {
             ALOGE("secondary vsync thread create failed");
         }
     }
-}
-
-static void HotplugSecondary(Device* d, bool connected) {
-    HWC2_PFN_HOTPLUG fn = nullptr;
-    hwc2_callback_data_t data = nullptr;
-    {
-        std::lock_guard<std::mutex> cl(d->cb_lock);
-        fn = d->hotplug_fn;
-        data = d->hotplug_data;
-    }
-    if (!fn)
-        return;
-    {
-        std::lock_guard<std::mutex> sc(d->sec.lock);
-        if (d->sec.hotplugged == connected)
-            return;
-        d->sec.hotplugged = connected;
-    }
-    if (connected)
-        OpenFb1(d);
-    ALOGI("secondary display hotplug %s", connected ? "connected" : "disconnected");
-    if (connected)
-        property_set("vendor.fujisan.sec_display", "1");
-    fn(data, kSecondaryDisplay,
-       connected ? HWC2_CONNECTION_CONNECTED : HWC2_CONNECTION_DISCONNECTED);
-}
-
-static void* AttachSecondaryThread(void* arg) {
-    auto* d = static_cast<Device*>(arg);
-    prctl(PR_SET_NAME, "fujisan-sec-attach", 0, 0, 0);
-    // Wait for SF to finish primary registration.
-    usleep(700 * 1000);
-    HotplugSecondary(d, true);
-    return nullptr;
 }
 
 static void ScheduleSecondaryAttach(Device* d) {
@@ -770,7 +735,7 @@ static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
     return true;
 }
 
-static int32_t SecPresent(Device* d, int32_t* out_retire) {
+static int32_t __attribute__((unused)) SecPresent(Device* d, int32_t* out_retire) {
     buffer_handle_t target = nullptr;
     int fence = -1;
     {
