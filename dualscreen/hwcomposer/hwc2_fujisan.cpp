@@ -278,7 +278,8 @@ static bool SecondaryPanelAvailable() {
 
     char hall[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.hall_status", hall, "1");
-    return hall[0] == '2';
+    /* A(1) is folded; B(2) is mid-open and C(3) is fully open. */
+    return hall[0] == '2' || hall[0] == '3';
 }
 
 static int64_t MonotonicNs() {
