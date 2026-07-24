@@ -131,6 +131,8 @@ int main() {
         property_get("persist.vendor.fujisan.primary_force", force, "0");
         char force_b[PROPERTY_VALUE_MAX] = "0";
         property_get("persist.vendor.fujisan.force_b_on", force_b, "0");
+        char force_mode[PROPERTY_VALUE_MAX] = "";
+        property_get("persist.vendor.fujisan.force_mode", force_mode, "");
 
         int st = read_int_file("/sys/module/ah1898/parameters/hall_status", -1);
         if (st < 0)
@@ -146,7 +148,20 @@ int main() {
         const char* mode = "single";
         char primary[8] = "a";
 
-        if (force_b[0] == '1') {
+        if (force_mode[0] == 'z') { /* zoom */
+            state = "open";
+            mode = "zoom";
+            snprintf(primary, sizeof(primary), "%s", preferred[0] == 'b' ? "b" : "a");
+        } else if (force_mode[0] == 'a') {
+            state = "closed_a";
+            mode = "single";
+            snprintf(primary, sizeof(primary), "a");
+        } else if (force_mode[0] == 'b' && force_mode[1] != 'o') {
+            /* "b" => closed_b */
+            state = "closed_b";
+            mode = "single";
+            snprintf(primary, sizeof(primary), "b");
+        } else if (force_b[0] == '1') {
             state = "force_b";
             mode = "single";
             snprintf(primary, sizeof(primary), "b");
@@ -178,7 +193,7 @@ int main() {
         if (!power_on) {
             /* Sleep: leave primary to HWC/SF; ensure B stays off. */
             secondary_off();
-        } else if (st == 2 || force_b[0] == '1') {
+        } else if (st == 2 || force_b[0] == '1' || mode[0] == 'z') {
             /* Open/zoom: both panels powered. */
             primary_keep_alive();
             secondary_on(180);
