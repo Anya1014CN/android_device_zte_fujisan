@@ -303,10 +303,8 @@ static bool OpenFb1(Device* d) {
         d->fb_fd = -1;
         return false;
     }
-    int blank = FB_BLANK_UNBLANK;
-    ioctl(d->fb_fd, FBIOBLANK, blank);
-    WriteSysfs(kBl2Path, "180");
-    ALOGI("fb1 ready %ux%u bpp=%u line=%u smem=%zu", d->vinfo.xres, d->vinfo.yres,
+    /* Map only — do not force unblank/backlight (halld owns B power in single mode). */
+    ALOGI("fb1 mapped %ux%u bpp=%u line=%u smem=%zu", d->vinfo.xres, d->vinfo.yres,
           d->vinfo.bits_per_pixel, d->finfo.line_length, d->fb_map_size);
     return true;
 }
@@ -1212,8 +1210,13 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             /* First-cut zoom: post full client target to fb1 path when 1080; real 2160 split follows
              * once SF selects config1 and allocates 2160 client targets (UBWC-linear still required).
              */
-            if (target)
-                CopyHandleToFb1(d, target);
+            if (target) {
+                if (CopyHandleToFb1(d, target)) {
+                    if (d->fb_fd >= 0)
+                        ioctl(d->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+                    WriteSysfs(kBl2Path, "180");
+                }
+            }
             if (out_retire_fence)
                 *out_retire_fence = -1;
             return HWC2_ERROR_NONE;
@@ -1448,15 +1451,18 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
             std::lock_guard<std::mutex> sc(d->sec.lock);
             d->sec.power_on = on;
         }
-        if (OpenFb1(d)) {
-            int blank = on ? FB_BLANK_UNBLANK : FB_BLANK_POWERDOWN;
-            ioctl(d->fb_fd, FBIOBLANK, blank);
-            WriteSysfs(kBl2Path, on ? "180" : "0");
-        }
+        WriteSysfs(kBl2Path, on ? "180" : "0");
+        WriteSysfs("/sys/class/graphics/fb1/blank", on ? "0" : "4");
         return HWC2_ERROR_NONE;
     }
-    return d->fns.setPowerMode ? d->fns.setPowerMode(d->real, display, mode)
-                              : HWC2_ERROR_UNSUPPORTED;
+    int32_t ret = d->fns.setPowerMode ? d->fns.setPowerMode(d->real, display, mode)
+                                      : HWC2_ERROR_UNSUPPORTED;
+    /* Primary sleep/doze: always kill panel B so power key works with dual BL. */
+    if (display == kPrimaryDisplay && mode != HWC2_POWER_MODE_ON) {
+        WriteSysfs(kBl2Path, "0");
+        WriteSysfs("/sys/class/graphics/fb1/blank", "4");
+    }
+    return ret;
 }
 
 static int32_t SetVsyncEnabled(hwc2_device_t* device, hwc2_display_t display, int32_t enabled) {

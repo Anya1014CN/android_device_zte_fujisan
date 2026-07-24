@@ -1,9 +1,7 @@
-# Hall posture -> vendor props + panel blanking for single/zoom.
 service fujisan_halld /vendor/bin/fujisan_halld
     class late_start
     user system
     group system graphics input
-    oneshot
     disabled
 
 on property:sys.boot_completed=1

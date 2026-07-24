@@ -48,7 +48,6 @@ PRODUCT_VENDOR_PROPERTIES += \
 
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
-    fujisan_fb1_fill \
     fujisan_halld \
     NavigationBarModeGesturalOverlay
 

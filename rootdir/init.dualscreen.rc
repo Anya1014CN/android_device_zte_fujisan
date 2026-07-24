@@ -1,4 +1,4 @@
-# Fujisan L1 dual-screen helpers
+# Dual-panel sysfs permissions only. Do not force fb1 on (pink/black backlight bugs).
 service fujisan-fb1-fill /vendor/bin/fujisan_fb1_fill 0xFF00AA00
     class late_start
     user system
@@ -6,11 +6,20 @@ service fujisan-fb1-fill /vendor/bin/fujisan_fb1_fill 0xFF00AA00
     oneshot
     disabled
 
-on property:sys.boot_completed=1
-    # Keep panel B powered; independent content comes from HWC display 1.
-    write /sys/class/graphics/fb1/blank 0
-    write /sys/class/leds/lcd-backlight-2/brightness 180
+on early-boot
+    # Default B off until halld/zoom explicitly enables it.
+    write /sys/class/graphics/fb1/blank 4
+    write /sys/class/leds/lcd-backlight-2/brightness 0
+
+on boot
     chown system graphics /sys/class/graphics/fb1/blank
     chown system graphics /sys/class/leds/lcd-backlight-2/brightness
     chmod 0664 /sys/class/graphics/fb1/blank
     chmod 0664 /sys/class/leds/lcd-backlight-2/brightness
+    write /sys/class/graphics/fb1/blank 4
+    write /sys/class/leds/lcd-backlight-2/brightness 0
+
+on property:sys.boot_completed=1
+    # Re-assert default off; halld will enable B only when needed.
+    write /sys/class/graphics/fb1/blank 4
+    write /sys/class/leds/lcd-backlight-2/brightness 0
