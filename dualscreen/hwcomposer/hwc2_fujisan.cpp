@@ -266,11 +266,12 @@ static int WriteSysfs(const char* path, const char* value) {
 }
 
 static int KickFb(int fd, struct fb_var_screeninfo* vinfo) {
+    /* Non-blocking: wait_for_finish deadlocks composer when posting fb1 from Present. */
     MdpDisplayCommit commit;
     memset(&commit, 0, sizeof(commit));
-    commit.wait_for_finish = 1;
+    commit.wait_for_finish = 0;
     commit.var = *vinfo;
-    commit.var.activate = FB_ACTIVATE_VBL;
+    commit.var.activate = FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
     if (ioctl(fd, MSMFB_DISPLAY_COMMIT, &commit) == 0)
         return 0;
     vinfo->activate = FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
