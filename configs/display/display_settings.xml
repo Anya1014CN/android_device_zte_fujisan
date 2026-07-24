@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--
+     Android's local-display policy reads this vendor file before the mutable
+     /data override.  B is a real, trusted internal panel (SurfaceFlinger
+     unique id local:1), so it needs its own SystemUI decorations while
+     retaining independent app content.
+-->
+<display-settings>
+    <config identifier="0" />
+    <display name="local:1" shouldShowSystemDecors="true" shouldShowIme="true" />
+</display-settings>

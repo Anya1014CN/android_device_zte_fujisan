@@ -57,6 +57,7 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/fb.h>
+#include <linux/msm_mdp.h>
 #include <pthread.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -69,6 +70,7 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #include <cstdint>
 #include <map>
 #include <mutex>
+#include <vector>
 
 using android::hardware::hidl_handle;
 using android::hardware::graphics::common::V1_0::BufferUsage;
@@ -108,7 +110,9 @@ constexpr char kBl2Path[] = "/sys/class/leds/lcd-backlight-2/brightness";
 
 #ifndef MSMFB_DISPLAY_COMMIT
 #define MSMFB_IOCTL_MAGIC 'm'
-#define MSMFB_DISPLAY_COMMIT _IOW(MSMFB_IOCTL_MAGIC, 164, void *)
+/* ioctl numbers include the full argument size; void* is not interchangeable
+ * with mdp_display_commit here. */
+#define MSMFB_DISPLAY_COMMIT _IOW(MSMFB_IOCTL_MAGIC, 164, struct MdpDisplayCommit)
 #endif
 
 struct MdpDisplayCommit {
@@ -216,6 +220,7 @@ struct Device {
     size_t fb_map_size = 0;
     struct fb_var_screeninfo vinfo {};
     struct fb_fix_screeninfo finfo {};
+    uint32_t sec_overlay_id = MSMFB_NEW_REQUEST;
     sp<IMapper> mapper;
 
     /* ZOOM (open) virtual large screen on primary display id 0. */
@@ -235,7 +240,15 @@ struct Device {
     char last_mode[16] = "single";
 };
 
+static bool DualInternalEnabled() {
+    char dual[PROPERTY_VALUE_MAX] = {};
+    property_get("persist.vendor.fujisan.dual_internal", dual, "0");
+    return dual[0] == '1';
+}
+
 static bool WantZoomMode() {
+    if (DualInternalEnabled())
+        return false;
     char buf[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.display_mode", buf, "single");
     return strcmp(buf, "zoom") == 0;
@@ -329,6 +342,11 @@ static bool OpenFb1(Device* d) {
 }
 
 static void CloseFb1(Device* d) {
+    if (d->fb_fd >= 0 && d->sec_overlay_id != MSMFB_NEW_REQUEST) {
+        uint32_t id = d->sec_overlay_id;
+        (void)ioctl(d->fb_fd, MSMFB_OVERLAY_UNSET, &id);
+        d->sec_overlay_id = MSMFB_NEW_REQUEST;
+    }
     if (d->fb_map != MAP_FAILED) {
         munmap(d->fb_map, d->fb_map_size);
         d->fb_map = MAP_FAILED;
@@ -460,11 +478,27 @@ static void EnsureVsyncThread(Device* d) {
 }
 
 static void ScheduleSecondaryAttach(Device* d) {
-    /* Dual INTERNAL secondary disabled: hinge/zoom path uses single logical display.
-     * Keep function so call sites compile; no hotplug of display 1.
-     */
-    (void)d;
-    return;
+    if (d->secondary_attached.exchange(true))
+        return;
+
+    HWC2_PFN_HOTPLUG fn = nullptr;
+    hwc2_callback_data_t data = nullptr;
+    {
+        std::lock_guard<std::mutex> cl(d->cb_lock);
+        fn = d->hotplug_fn;
+        data = d->hotplug_data;
+    }
+    if (!fn)
+        return;
+
+    {
+        std::lock_guard<std::mutex> sc(d->sec.lock);
+        d->sec.hotplugged = true;
+        d->sec.power_on = true;
+    }
+    EnsureVsyncThread(d);
+    ALOGI("attach independent INTERNAL display 1");
+    fn(data, kSecondaryDisplay, HWC2_CONNECTION_CONNECTED);
 }
 
 static hwc2_function_pointer_t RealGet(hwc2_device_t* real, int32_t desc) {
@@ -523,6 +557,37 @@ static void LoadRealFns(Device* d) {
     LOAD(getDisplayVsyncPeriod, GET_DISPLAY_VSYNC_PERIOD);
     LOAD(setActiveConfigWithConstraints, SET_ACTIVE_CONFIG_WITH_CONSTRAINTS);
 #undef LOAD
+}
+
+/* Read-only probe: determine whether the Qualcomm composer owns fb1 itself. */
+static void ProbeRealSecondary(Device* d) {
+    if (!d->fns.getDisplayConfigs)
+        return;
+
+    uint32_t count = 0;
+    int32_t err = d->fns.getDisplayConfigs(d->real, kSecondaryDisplay, &count, nullptr);
+    ALOGI("real display 1 probe: getConfigs err=%d count=%u", err, count);
+    if (err != HWC2_ERROR_NONE || count == 0)
+        return;
+
+    std::vector<hwc2_config_t> configs(count);
+    uint32_t returned = count;
+    err = d->fns.getDisplayConfigs(d->real, kSecondaryDisplay, &returned, configs.data());
+    ALOGI("real display 1 probe: fill err=%d count=%u first=%u", err, returned,
+          returned ? configs[0] : 0);
+    if (err != HWC2_ERROR_NONE || returned == 0)
+        return;
+
+    if (d->fns.getDisplayType) {
+        int32_t type = -1;
+        int32_t type_err = d->fns.getDisplayType(d->real, kSecondaryDisplay, &type);
+        ALOGI("real display 1 probe: type err=%d type=%d", type_err, type);
+    }
+    if (d->fns.getActiveConfig) {
+        hwc2_config_t active = 0;
+        int32_t active_err = d->fns.getActiveConfig(d->real, kSecondaryDisplay, &active);
+        ALOGI("real display 1 probe: active err=%d config=%u", active_err, active);
+    }
 }
 
 static int32_t SecCreateLayer(Device* d, hwc2_layer_t* out_layer) {
@@ -685,7 +750,8 @@ static bool MapperLockCpu(Device* d, buffer_handle_t handle, int w, int h, void*
     return false;
 }
 
-static void CopyRgbaToFb(Device* d, const uint8_t* src, int stride_px, int w, int h, int format) {
+static void __attribute__((unused)) CopyRgbaToFb(Device* d, const uint8_t* src, int stride_px,
+                                                 int w, int h, int format) {
     const size_t src_stride_bytes = static_cast<size_t>(stride_px) * 4;
     const size_t dst_stride_bytes =
             d->finfo.line_length ? d->finfo.line_length : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
@@ -720,8 +786,14 @@ static void CopyRgbaToFb(Device* d, const uint8_t* src, int stride_px, int w, in
     msync(d->fb_map, d->fb_map_size, MS_SYNC);
 }
 
-static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
-    if (!handle || !OpenFb1(d) || d->fb_map == MAP_FAILED)
+/*
+ * fb1 is a real MDSS panel.  Its contents must be submitted as an MDP overlay
+ * using the client target dma-buf.  Writing its fbdev mmap then pan_display
+ * allocates transient base pipes, which collides with the primary HWC and
+ * eventually exhausts all SSPPs.
+ */
+static bool PostHandleOverlayToFb1(Device* d, buffer_handle_t handle) {
+    if (!handle || !OpenFb1(d))
         return false;
 
     int stride_px = FUJISAN_SEC_WIDTH;
@@ -739,47 +811,68 @@ static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
         stride_px = w;
 
     const bool ubwc = (flags & PRIV_FLAGS_UBWC_ALIGNED) != 0;
-    if (ubwc) {
-        ALOGW("client target UBWC flags=0x%x fmt=%d — prefer linear (gfx_ubwc_disable=1)", flags,
-              format);
-    }
 
-    void* vaddr = nullptr;
-    bool locked = false;
-
-    /* Prefer CAF RGB CPU base when available (may decompress for CPU consumers). */
-    vaddr = TryGrallocRgbDataAddress(handle);
-    if (vaddr == nullptr) {
-        locked = MapperLockCpu(d, handle, stride_px, h, &vaddr);
-        if (!locked)
-            locked = MapperLockCpu(d, handle, w, h, &vaddr);
-    }
-
-    if (vaddr == nullptr) {
-        ALOGE("no CPU-readable base for client target stride=%d %dx%d flags=0x%x", stride_px, w, h,
-              flags);
+    const auto* gralloc = reinterpret_cast<const FujisanPrivateHandle*>(handle);
+    if (gralloc->magic != kFujisanGrallocMagic || gralloc->fd < 0) {
+        ALOGE("invalid fb1 client target handle magic=0x%x fd=%d", gralloc->magic, gralloc->fd);
         return false;
     }
 
-    CopyRgbaToFb(d, static_cast<const uint8_t*>(vaddr), stride_px, w, h, format);
-
-    if (locked && d->mapper != nullptr) {
-        Error err = Error::NONE;
-        d->mapper->unlock(const_cast<native_handle_t*>(handle),
-                          [&](const auto e, const auto&) { err = e; });
-        (void)err;
+    if (d->sec_overlay_id == MSMFB_NEW_REQUEST) {
+        mdp_overlay overlay {};
+        overlay.src.width = static_cast<uint32_t>(stride_px);
+        overlay.src.height = static_cast<uint32_t>(h);
+        /* The MDSS legacy overlay API imports the complete gralloc dma-buf,
+         * including UBWC metadata, so preserve the producer's real layout. */
+        overlay.src.format = ubwc ? MDP_RGBA_8888_UBWC : MDP_RGBA_8888;
+        overlay.src_rect = {0, 0, static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
+        overlay.dst_rect = overlay.src_rect;
+        overlay.z_order = 0;
+        overlay.is_fg = 1;
+        overlay.alpha = MDP_ALPHA_NOP;
+        overlay.blend_op = BLEND_OP_OPAQUE;
+        overlay.transp_mask = MDP_TRANSP_NOP;
+        /* Let MDSS choose a pipe compatible with panel B and the imported
+         * UBWC target.  fbdev's forced-DMA base-pipe path is exactly what
+         * exhausted the SSPP pool in the previous implementation. */
+        overlay.pipe_type = PIPE_TYPE_AUTO;
+        overlay.id = MSMFB_NEW_REQUEST;
+        if (ioctl(d->fb_fd, MSMFB_OVERLAY_SET, &overlay) != 0) {
+            ALOGE("fb1 overlay set failed: %s", strerror(errno));
+            return false;
+        }
+        d->sec_overlay_id = overlay.id;
+        ALOGI("fb1 overlay configured id=0x%x src=%dx%d dst=%dx%d ubwc=%d", overlay.id, stride_px,
+              h, w, h, ubwc ? 1 : 0);
     }
 
-    d->vinfo.xoffset = 0;
-    d->vinfo.yoffset = 0;
-    d->vinfo.activate = FB_ACTIVATE_VBL;
-    if (KickFb(d->fb_fd, &d->vinfo) != 0)
-        ALOGW("fb1 kick failed: %s", strerror(errno));
+    msmfb_overlay_data post {};
+    post.id = d->sec_overlay_id;
+    post.data.memory_id = gralloc->fd;
+    post.data.offset = gralloc->offset;
+    if (ioctl(d->fb_fd, MSMFB_OVERLAY_PLAY, &post) != 0) {
+        const int err = errno;
+        ALOGE("fb1 overlay play id=0x%x failed: %s", post.id, strerror(err));
+        /* fb1 can be blanked/re-enabled by the display power path after the
+         * logical display is attached.  MDSS then drops its legacy pipes;
+         * recreate this one on the next client-target frame. */
+        if (err == ENODEV || err == EPERM)
+            d->sec_overlay_id = MSMFB_NEW_REQUEST;
+        return false;
+    }
+
+    MdpDisplayCommit commit {};
+    commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+    commit.wait_for_finish = 0;
+    if (ioctl(d->fb_fd, MSMFB_DISPLAY_COMMIT, &commit) != 0) {
+        ALOGE("fb1 overlay commit failed: %s", strerror(errno));
+        return false;
+    }
 
     static int once = 0;
     if (once++ < 5) {
-        ALOGI("fb1 post %dx%d stride=%d fmt=%d flags=0x%x ubwc=%d fb_ro=%u", w, h, stride_px, format,
-              flags, ubwc ? 1 : 0, d->vinfo.red.offset);
+        ALOGI("fb1 overlay post id=0x%x %dx%d stride=%d fmt=%d flags=0x%x ubwc=%d",
+              d->sec_overlay_id, w, h, stride_px, format, flags, ubwc ? 1 : 0);
     }
     return true;
 }
@@ -793,10 +886,10 @@ static bool PostClientToFb1(Device* d, buffer_handle_t handle, int fence) {
         (void)sync_wait(fence, 1000);
         close(fence);
     }
-    if (!CopyHandleToFb1(d, handle))
+    if (!PostHandleOverlayToFb1(d, handle))
         return false;
-    if (d->fb_fd >= 0)
-        ioctl(d->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+    /* Power mode owns fb1 blanking.  Issuing FBIOBLANK for every frame can
+     * tear down an otherwise valid legacy overlay pipe. */
     WriteSysfs(kBl2Path, "180");
     return true;
 }
@@ -911,7 +1004,7 @@ static int32_t __attribute__((unused)) SecPresent(Device* d, int32_t* out_retire
         close(fence);
     }
     if (target)
-        CopyHandleToFb1(d, target);
+        PostHandleOverlayToFb1(d, target);
     if (out_retire)
         *out_retire = -1;
     return HWC2_ERROR_NONE;
@@ -1027,8 +1120,12 @@ static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_
 
 static int32_t GetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hwc2_config_t* out) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_BAD_DISPLAY;
+    if (display == kSecondaryDisplay) {
+        if (!out)
+            return HWC2_ERROR_BAD_PARAMETER;
+        *out = kSecondaryConfig;
+        return HWC2_ERROR_NONE;
+    }
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         if (WantZoomMode())
@@ -1143,8 +1240,18 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
                                  hwc2_config_t* out_configs) {
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay) {
-        /* Secondary not advertised. */
-        if (out_count) *out_count = 0;
+        if (!out_count)
+            return HWC2_ERROR_BAD_PARAMETER;
+        if (!out_configs) {
+            *out_count = 1;
+            return HWC2_ERROR_NONE;
+        }
+        if (*out_count < 1) {
+            *out_count = 1;
+            return HWC2_ERROR_NONE;
+        }
+        out_configs[0] = kSecondaryConfig;
+        *out_count = 1;
         return HWC2_ERROR_NONE;
     }
     if (display == kPrimaryDisplay) {
@@ -1341,7 +1448,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
                               int32_t* out_retire_fence) {
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
-        return HWC2_ERROR_BAD_DISPLAY;
+        return SecPresent(d, out_retire_fence);
     if (display == kPrimaryDisplay) {
         bool zoom = WantZoomMode();
         bool primary_b = WantPrimaryB();
@@ -1418,8 +1525,16 @@ static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
 static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, buffer_handle_t target,
                                int32_t acquire_fence, int32_t dataspace, hwc_region_t damage) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_BAD_DISPLAY;
+    if (display == kSecondaryDisplay) {
+        std::lock_guard<std::mutex> sc(d->sec.lock);
+        if (d->sec.client_acquire_fence >= 0)
+            close(d->sec.client_acquire_fence);
+        d->sec.client_target = target;
+        d->sec.client_acquire_fence = acquire_fence;
+        (void)dataspace;
+        (void)damage;
+        return HWC2_ERROR_NONE;
+    }
     if (display == kPrimaryDisplay) {
         const bool zoom = WantZoomMode();
         {
@@ -1864,6 +1979,9 @@ static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw
     if (!name || strcmp(name, HWC_HARDWARE_COMPOSER) != 0)
         return -EINVAL;
 
+    if (DualInternalEnabled())
+        property_set("debug.gralloc.gfx_ubwc_disable", "1");
+
     auto* d = new Device();
     int err = OpenRealComposer(&d->real, &d->real_so);
     if (err) {
@@ -1871,6 +1989,7 @@ static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw
         return err;
     }
     LoadRealFns(d);
+    ProbeRealSecondary(d);
 
     d->base.common.tag = HARDWARE_DEVICE_TAG;
     d->base.common.version = HWC_DEVICE_API_VERSION_2_0;

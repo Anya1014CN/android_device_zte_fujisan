@@ -124,6 +124,8 @@ int main() {
         property_get("persist.vendor.fujisan.force_b_on", force_b, "0");
         char force_mode[PROPERTY_VALUE_MAX] = "";
         property_get("persist.vendor.fujisan.force_mode", force_mode, "");
+        char dual_internal[PROPERTY_VALUE_MAX] = "0";
+        property_get("persist.vendor.fujisan.dual_internal", dual_internal, "0");
 
         int st = read_int_file("/sys/module/ah1898/parameters/hall_status", -1);
         if (st < 0)
@@ -139,7 +141,12 @@ int main() {
         const char* mode = "single";
         char primary[8] = "a";
 
-        if (force_mode[0] == 'z') {
+        if (dual_internal[0] == '1') {
+            /* Two independent INTERNAL displays.  HWC owns B's client target;
+             * keep its rails up instead of entering the single-display zoom path. */
+            state = "dual";
+            mode = "dual";
+        } else if (force_mode[0] == 'z') {
             state = "open";
             mode = "zoom";
             snprintf(primary, sizeof(primary), "%s", preferred[0] == 'b' ? "b" : "a");
@@ -182,7 +189,8 @@ int main() {
         property_set("vendor.fujisan.active_primary", primary);
 
         const bool power_on = display_is_on();
-        const bool want_b = power_on && (mode[0] == 'z' || force_b[0] == '1');
+        const bool want_b = power_on &&
+                            (mode[0] == 'z' || mode[0] == 'd' || force_b[0] == '1');
 
         if (!power_on || !want_b) {
             secondary_off();

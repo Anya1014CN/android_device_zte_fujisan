@@ -9,7 +9,8 @@ LOCAL_SRC_FILES := hwc2_fujisan.cpp
 LOCAL_C_INCLUDES += \
     system/core/libsync \
     system/core/libsync/include \
-    hardware/libhardware/include
+    hardware/libhardware/include \
+    $(OUT_DIR)/soong/.intermediates/vendor/lineage/build/soong/generated_kernel_includes/gen/usr/include
 
 LOCAL_SHARED_LIBRARIES := \
     liblog \
