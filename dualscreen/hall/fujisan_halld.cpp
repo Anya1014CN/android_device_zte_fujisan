@@ -78,6 +78,10 @@ static void secondary_off() {
 }
 
 static void secondary_on(int bl) {
+    if (bl < 0)
+        bl = 0;
+    if (bl > 255)
+        bl = 255;
     char b[16];
     snprintf(b, sizeof(b), "%d", bl);
     /* B may still be blanked by the initial fbdev setup.  Unblanking (0) is
@@ -212,6 +216,7 @@ int main() {
     char last_mode[16] = {};
     int last_power = -1;
     int last_bl1 = -1;
+    int last_bl0 = -1;
     int last_want_b = -1;
     bool boot_panel_reconciled = false;
     bool touch_mode_initialized = false;
@@ -324,6 +329,7 @@ int main() {
                              (mode[0] == 'd' && st != 1) ||
                              force_b[0] == '1');
 
+        const int bl0 = read_int_file("/sys/class/leds/lcd-backlight/brightness", -1);
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
         const int want_b_int = want_b ? 1 : 0;
         /* MDSS may acknowledge an unblank before its initial boot setup is
@@ -334,7 +340,9 @@ int main() {
         if (boot_done &&
             (!boot_panel_reconciled || want_b_int != last_want_b)) {
             if (want_b)
-                secondary_on(180);
+                /* Both panels expose the same 0..255 range.  Bring B up at
+                 * the current system brightness, never at a fixed level. */
+                secondary_on(bl0 >= 0 ? bl0 : 180);
             else
                 secondary_off();
             last_want_b = want_b_int;
@@ -344,6 +352,18 @@ int main() {
          * does not stall the hall worker or tear down the MDP overlay. */
         if (boot_done && !want_b && bl1 > 0)
             secondary_off();
+
+        /* HWC mirrors slider/auto-brightness changes immediately.  This is
+         * only a recovery path for legacy composer brightness writes and for
+         * B coming online after the main brightness update; it reuses the
+         * existing hinge loop and writes only when A actually changed. */
+        if (boot_done && want_b && bl0 >= 0 && bl0 != last_bl0) {
+            char brightness[16];
+            snprintf(brightness, sizeof(brightness), "%d", bl0);
+            write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", brightness);
+        }
+        if (bl0 >= 0)
+            last_bl0 = bl0;
 
         if (boot_done &&
             (!touch_mode_initialized || strcmp(mode, touch_mode) != 0)) {

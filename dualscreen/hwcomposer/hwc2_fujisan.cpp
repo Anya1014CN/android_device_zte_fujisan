@@ -108,6 +108,7 @@ constexpr int kZoomWidth = 2160;  /* 1080 + 1 hinge + 1079 usable right? 1080+10
  */
 constexpr char kFb1Path[] = "/dev/graphics/fb1";
 constexpr char kBl2Path[] = "/sys/class/leds/lcd-backlight-2/brightness";
+constexpr int kBacklightMax = 255;
 
 #ifndef MSMFB_DISPLAY_COMMIT
 #define MSMFB_IOCTL_MAGIC 'm'
@@ -1467,9 +1468,27 @@ static int32_t SetDisplayBrightness(hwc2_device_t* device, hwc2_display_t displa
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_UNSUPPORTED;
-    if (d->fns.setDisplayBrightness)
-        return d->fns.setDisplayBrightness(d->real, display, brightness);
-    return HWC2_ERROR_UNSUPPORTED;
+    if (!d->fns.setDisplayBrightness)
+        return HWC2_ERROR_UNSUPPORTED;
+
+    const int32_t ret = d->fns.setDisplayBrightness(d->real, display, brightness);
+    if (ret != HWC2_ERROR_NONE)
+        return ret;
+
+    /* The physical panels use matching 0..255 backlight ranges.  In either
+     * open posture, DisplayPowerController only sends this request to logical
+     * primary A, so mirror the exact normalized value to B here rather than
+     * waiting for a separate display or a polling worker. */
+    if ((WantZoomMode() || SecondaryPanelAvailable()) &&
+        brightness >= 0.0f && brightness <= 1.0f) {
+        const int level = std::max(0, std::min(kBacklightMax,
+                static_cast<int>(brightness * kBacklightMax + 0.5f)));
+        char value[16];
+        snprintf(value, sizeof(value), "%d", level);
+        if (WriteSysfs(kBl2Path, value) != 0)
+            ALOGW("failed to mirror brightness %d to B", level);
+    }
+    return HWC2_ERROR_NONE;
 }
 
 /* Both built-in panels are INTERNAL. Do not implement GET_DISPLAY_IDENTIFICATION_DATA:
