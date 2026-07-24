@@ -95,17 +95,18 @@ static void primary_bl_off() {
 }
 
 static bool display_is_on() {
+    /* HWC may set this; not always reachable due to sepolicy. */
     char p[PROPERTY_VALUE_MAX] = "1";
     property_get("vendor.fujisan.display_power", p, "1");
     if (p[0] == '0')
         return false;
-    /* Fallback: if primary panel is fully powered down and power prop missing. */
-    int fd = open("/sys/class/graphics/fb0/msm_fb_panel_status", O_RDONLY | O_CLOEXEC);
-    if (fd >= 0) {
-        char buf[64] = {};
-        (void)read(fd, buf, sizeof(buf) - 1);
-        close(fd);
-        if (strstr(buf, "suspend") && p[0] != '1')
+
+    /* Reliable on LOS19 / Android 12: Display.STATE_OFF=1, STATE_ON=2. */
+    char ss[PROPERTY_VALUE_MAX] = "2";
+    property_get("debug.tracing.screen_state", ss, "2");
+    int state = 2;
+    if (sscanf(ss, "%d", &state) == 1) {
+        if (state == 1 /* OFF */ || state == 3 /* DOZE */ || state == 4 /* DOZE_SUSPEND */)
             return false;
     }
     return true;
