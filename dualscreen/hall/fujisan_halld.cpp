@@ -1,24 +1,20 @@
 /*
  * Fujisan hall / panel power helper.
  *
- * hall_status (mxm1120 / ah1898):
- *   1 = closed, A face out
- *   2 = open (flat) -> ZOOM large screen
- *   3 = closed, B face out
+ * hall_status: 1=closed A, 2=open(zoom), 3=closed B face
  *
- * Panel policy:
- *   closed_a: A on (SF), B off
- *   closed_b: keep A panel powered for composition, A BL=0, B on (HWC copies UI to fb1)
- *   open/zoom: both panels on (HWC splits 2160 or mirrors until SF picks zoom)
+ * Panel power policy (bring-up, stable power key first):
+ *   - Always leave panel A to SurfaceFlinger / Lights (never force A BL off).
+ *   - B is OFF in single mode (closed_a and closed_b).
+ *   - B is ON only for open/zoom (or debug force flags).
+ *   - Sleep (screen_state OFF/DOZE): force B off; do not touch A.
  *
- * Display sleep: HWC sets vendor.fujisan.display_power=0 and blanks B.
- * halld must NOT re-light B while asleep; on wake re-apply posture every loop.
+ * Content routing for closed_b / real 2160 zoom comes later; do not break power.
  */
 #define LOG_TAG "FujisanHalld"
 #include <cutils/properties.h>
 #include <log/log.h>
 #include <dirent.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -73,8 +69,10 @@ static void enable_m1120() {
 }
 
 static void secondary_off() {
+    /* Brightness first, then panel powerdown; write both paths twice for stubborn BL. */
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
     write_sysfs("/sys/class/graphics/fb1/blank", "4");
+    write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
 }
 
 static void secondary_on(int bl) {
@@ -85,35 +83,25 @@ static void secondary_on(int bl) {
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
 }
 
-/* Keep composition alive: only unblank, never powerdown fb0 from halld. */
-static void primary_keep_alive() {
-    write_sysfs("/sys/class/graphics/fb0/blank", "0");
-}
-
-static void primary_bl_off() {
-    write_sysfs("/sys/class/leds/lcd-backlight/brightness", "0");
-}
-
 static bool display_is_on() {
-    /* HWC may set this; not always reachable due to sepolicy. */
     char p[PROPERTY_VALUE_MAX] = "1";
     property_get("vendor.fujisan.display_power", p, "1");
     if (p[0] == '0')
         return false;
 
-    /* Reliable on LOS19 / Android 12: Display.STATE_OFF=1, STATE_ON=2. */
+    /* Display.STATE_OFF=1, ON=2, DOZE=3, DOZE_SUSPEND=4, VR=5 */
     char ss[PROPERTY_VALUE_MAX] = "2";
     property_get("debug.tracing.screen_state", ss, "2");
     int state = 2;
     if (sscanf(ss, "%d", &state) == 1) {
-        if (state == 1 /* OFF */ || state == 3 /* DOZE */ || state == 4 /* DOZE_SUSPEND */)
+        if (state != 2 /* ON */ && state != 5 /* VR */)
             return false;
     }
     return true;
 }
 
 int main() {
-    ALOGI("fujisan_halld start (single/zoom posture)");
+    ALOGI("fujisan_halld start (A-primary stable power; B only for zoom)");
     enable_m1120();
     usleep(100 * 1000);
 
@@ -121,9 +109,12 @@ int main() {
     char last_primary[8] = {};
     char last_mode[16] = {};
     int last_power = -1;
+    int last_bl1 = -1;
 
     for (;;) {
-        enable_m1120();
+        static int tick;
+        if ((tick++ % 25) == 0)
+            enable_m1120();
 
         char preferred[PROPERTY_VALUE_MAX] = "a";
         property_get("persist.vendor.fujisan.primary_panel", preferred, "a");
@@ -148,7 +139,7 @@ int main() {
         const char* mode = "single";
         char primary[8] = "a";
 
-        if (force_mode[0] == 'z') { /* zoom */
+        if (force_mode[0] == 'z') {
             state = "open";
             mode = "zoom";
             snprintf(primary, sizeof(primary), "%s", preferred[0] == 'b' ? "b" : "a");
@@ -157,14 +148,14 @@ int main() {
             mode = "single";
             snprintf(primary, sizeof(primary), "a");
         } else if (force_mode[0] == 'b' && force_mode[1] != 'o') {
-            /* "b" => closed_b */
             state = "closed_b";
             mode = "single";
-            snprintf(primary, sizeof(primary), "b");
+            /* Still drive content on A until B path is solid. */
+            snprintf(primary, sizeof(primary), "a");
         } else if (force_b[0] == '1') {
             state = "force_b";
             mode = "single";
-            snprintf(primary, sizeof(primary), "b");
+            snprintf(primary, sizeof(primary), "a");
         } else if (st == 2) {
             state = "open";
             mode = "zoom";
@@ -172,10 +163,11 @@ int main() {
         } else if (st == 3) {
             state = "closed_b";
             mode = "single";
+            /* Keep SF/Lights on A. Remember face in props for future primary switch. */
             if (force[0] == '1')
                 snprintf(primary, sizeof(primary), "%s", preferred[0] == 'b' ? "b" : "a");
             else
-                snprintf(primary, sizeof(primary), "b");
+                snprintf(primary, sizeof(primary), "a");
         } else {
             state = "closed_a";
             mode = "single";
@@ -190,32 +182,28 @@ int main() {
         property_set("vendor.fujisan.active_primary", primary);
 
         const bool power_on = display_is_on();
-        if (!power_on) {
-            /* Sleep: leave primary to HWC/SF; ensure B stays off. */
+        const bool want_b = power_on && (mode[0] == 'z' || force_b[0] == '1');
+
+        if (!power_on || !want_b) {
             secondary_off();
-        } else if (st == 2 || force_b[0] == '1' || mode[0] == 'z') {
-            /* Open/zoom: both panels powered. */
-            primary_keep_alive();
-            secondary_on(180);
-        } else if (primary[0] == 'b') {
-            /* B face: keep A composing, hide A BL, show B (HWC copies). */
-            primary_keep_alive();
-            primary_bl_off();
-            secondary_on(180);
         } else {
-            /* A face single: B fully off. */
-            primary_keep_alive();
-            secondary_off();
+            secondary_on(180);
         }
 
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
+        /* If we asked for off but BL stuck, keep hammering. */
+        if ((!power_on || !want_b) && bl1 > 0)
+            secondary_off();
+
         bool changed = (st != last_st) || (strcmp(primary, last_primary) != 0) ||
-                       (strcmp(mode, last_mode) != 0) || (power_on != (last_power == 1));
+                       (strcmp(mode, last_mode) != 0) || (power_on != (last_power == 1)) ||
+                       (bl1 != last_bl1 && (bl1 == 0 || last_bl1 == 0));
         if (changed) {
-            ALOGI("hall %d state=%s mode=%s primary=%s power=%d bl1=%d", st, state, mode, primary,
-                  power_on ? 1 : 0, bl1);
+            ALOGI("hall %d state=%s mode=%s primary=%s power=%d want_b=%d bl1=%d", st, state, mode,
+                  primary, power_on ? 1 : 0, want_b ? 1 : 0, bl1);
             last_st = st;
             last_power = power_on ? 1 : 0;
+            last_bl1 = bl1;
             snprintf(last_primary, sizeof(last_primary), "%s", primary);
             snprintf(last_mode, sizeof(last_mode), "%s", mode);
         }

@@ -1382,12 +1382,11 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
 
         int32_t ret = d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                             : HWC2_ERROR_UNSUPPORTED;
-        if (primary_b && target) {
-            (void)PostClientToFb1(d, target, fence);
-            fence = -1;
-        } else if (fence >= 0) {
+        /* Single mode: never post to fb1 (broken UBWC copy left black B backlight). */
+        if (fence >= 0)
             close(fence);
-        }
+        (void)primary_b;
+        (void)target;
         return ret;
     }
     return d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
@@ -1654,16 +1653,11 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
     if (display == kPrimaryDisplay) {
         const bool on = (mode == HWC2_POWER_MODE_ON);
         SetDisplayPowerProp(on);
+        /* Always kill B on sleep/doze. On wake, only halld may re-enable B for zoom. */
         if (!on) {
-            /* Sleep/doze: kill B; halld will not re-enable while display_power=0. */
             WriteSysfs(kBl2Path, "0");
             WriteSysfs("/sys/class/graphics/fb1/blank", "4");
-        } else {
-            /* Wake: halld re-applies posture; if zoom/primary-b, light B promptly. */
-            if (WantZoomMode() || WantPrimaryB()) {
-                WriteSysfs("/sys/class/graphics/fb1/blank", "0");
-                WriteSysfs(kBl2Path, "180");
-            }
+            WriteSysfs(kBl2Path, "0");
         }
     }
     return ret;
