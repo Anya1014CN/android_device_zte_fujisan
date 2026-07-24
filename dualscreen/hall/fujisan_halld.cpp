@@ -135,19 +135,23 @@ static bool run_service_call(const char* const argv[]) {
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
-static void set_touch_calibration(const char* descriptor, const char* x_scale,
-                                  const char* x_offset) {
+static void set_touch_calibration(const char* descriptor, int rotation,
+                                  const char* x_scale, const char* x_offset) {
     /* IInputManager#setTouchCalibrationForInputDevice, transaction 11 in
      * Android 12.  The matrix is applied to raw touch coordinates before the
      * InputReader scales them to the active display viewport. */
     const char* argv[] = {
         "/system/bin/service", "call", "input", "11",
-        "s16", descriptor, "i32", "0", "i32", "1",
+        "s16", descriptor, "i32", nullptr, "i32", "1",
         "f", x_scale, "f", "0", "f", x_offset,
         "f", "0", "f", "1", "f", "0", nullptr,
     };
+    char rotation_s[4];
+    snprintf(rotation_s, sizeof(rotation_s), "%d", rotation);
+    argv[7] = rotation_s;
     if (!run_service_call(argv))
-        ALOGW("touch calibration service call failed for %s", descriptor);
+        ALOGW("touch calibration service call failed for %s rotation %d",
+              descriptor, rotation);
 }
 
 static void configure_touch_for_mode(bool zoom) {
@@ -166,8 +170,13 @@ static void configure_touch_for_mode(bool zoom) {
         };
         if (!run_service_call(associate))
             ALOGW("failed to associate B touch with zoom display");
-        set_touch_calibration(kPrimaryTouch, "0.5", "0");
-        set_touch_calibration(kSecondaryTouch, "0.5", "540");
+        /* InputReader stores an affine matrix per display rotation.  The
+         * matrix runs before rotateAndScale(), so the same natural-coordinate
+         * left/right split is correct for all four rotations. */
+        for (int rotation = 0; rotation < 4; ++rotation) {
+            set_touch_calibration(kPrimaryTouch, rotation, "0.5", "0");
+            set_touch_calibration(kSecondaryTouch, rotation, "0.5", "540");
+        }
     } else {
         /* IInputManager#removeUniqueIdAssociation, transaction 40. */
         const char* unassociate[] = {
@@ -176,8 +185,12 @@ static void configure_touch_for_mode(bool zoom) {
         };
         if (!run_service_call(unassociate))
             ALOGW("failed to restore B touch association");
-        set_touch_calibration(kPrimaryTouch, "1", "0");
-        set_touch_calibration(kSecondaryTouch, "1", "0");
+        /* Clear every rotation too, otherwise a folded transition after an
+         * orientation change can retain the wide-display matrix. */
+        for (int rotation = 0; rotation < 4; ++rotation) {
+            set_touch_calibration(kPrimaryTouch, rotation, "1", "0");
+            set_touch_calibration(kSecondaryTouch, rotation, "1", "0");
+        }
     }
 }
 
