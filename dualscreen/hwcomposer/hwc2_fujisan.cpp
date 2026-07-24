@@ -215,6 +215,7 @@ struct Device {
     pthread_t vsync_thread{};
     std::atomic<bool> vsync_thread_run{false};
     std::atomic<bool> secondary_attached{false};
+    std::atomic<bool> primary_reprobe_pending{false};
 
     int fb_fd = -1;
     void* fb_map = MAP_FAILED;
@@ -240,6 +241,7 @@ struct Device {
     struct fb_var_screeninfo vinfo0 {};
     struct fb_fix_screeninfo finfo0 {};
     char last_mode[16] = "single";
+    bool mode_seen = false;
 
     /* Physical B power is owned by fujisan_halld.  These track its hinge
      * availability so the independent logical display gets one redraw only
@@ -250,6 +252,12 @@ struct Device {
 };
 
 static bool DualInternalEnabled() {
+    char mode[PROPERTY_VALUE_MAX] = {};
+    property_get("persist.vendor.fujisan.user_mode", mode, "");
+    if (!strcmp(mode, "dual"))
+        return true;
+    if (!strcmp(mode, "zoom"))
+        return false;
     char dual[PROPERTY_VALUE_MAX] = {};
     property_get("persist.vendor.fujisan.dual_internal", dual, "0");
     return dual[0] == '1';
@@ -508,6 +516,12 @@ static void EnsureVsyncThread(Device* d) {
 }
 
 static void ScheduleSecondaryAttach(Device* d) {
+    /* Zoom exposes A+B as one 2160x1920 logical panel.  Advertising a
+     * separate local:1 display in that mode makes InputReader route B touch
+     * to an invisible secondary-display task instead of the wide primary. */
+    if (!DualInternalEnabled())
+        return;
+
     if (d->secondary_attached.exchange(true))
         return;
 
@@ -529,6 +543,47 @@ static void ScheduleSecondaryAttach(Device* d) {
     EnsureVsyncThread(d);
     ALOGI("attach independent INTERNAL display 1");
     fn(data, kSecondaryDisplay, HWC2_CONNECTION_CONNECTED);
+}
+
+/* DisplayManager only re-enumerates the primary mode after a hotplug event.
+ * Run the callback off the present path to avoid re-entering SurfaceFlinger. */
+static void* PrimaryReprobeThreadMain(void* arg) {
+    auto* d = reinterpret_cast<Device*>(arg);
+    HWC2_PFN_HOTPLUG fn = nullptr;
+    hwc2_callback_data_t data = nullptr;
+    {
+        std::lock_guard<std::mutex> cl(d->cb_lock);
+        fn = d->hotplug_fn;
+        data = d->hotplug_data;
+    }
+    if (fn) {
+        ALOGI("reprobe primary display: disconnect");
+        fn(data, kPrimaryDisplay, HWC2_CONNECTION_DISCONNECTED);
+        usleep(250 * 1000);
+        {
+            std::lock_guard<std::mutex> cl(d->cb_lock);
+            fn = d->hotplug_fn;
+            data = d->hotplug_data;
+        }
+        if (fn) {
+            ALOGI("reprobe primary display: connect");
+            fn(data, kPrimaryDisplay, HWC2_CONNECTION_CONNECTED);
+        }
+    }
+    d->primary_reprobe_pending.store(false);
+    return nullptr;
+}
+
+static void SchedulePrimaryReprobe(Device* d) {
+    if (d->primary_reprobe_pending.exchange(true))
+        return;
+    pthread_t thread {};
+    if (pthread_create(&thread, nullptr, PrimaryReprobeThreadMain, d) != 0) {
+        d->primary_reprobe_pending.store(false);
+        ALOGE("primary reprobe thread create failed");
+        return;
+    }
+    pthread_detach(thread);
 }
 
 static hwc2_function_pointer_t RealGet(hwc2_device_t* real, int32_t desc) {
@@ -894,9 +949,17 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
         return false;
     }
 
-    /* On this command-mode MDSS kernel OVERLAY_PLAY queues and kicks the
-     * panel itself.  Both DISPLAY_COMMIT and OVERLAY_COMMIT are unimplemented
-     * for this legacy fbdev ABI, so issuing either only returns ENOSYS. */
+    /* Commit with the full mdp_display_commit ABI.  Do not confuse this with
+     * the tiny pointer-sized ioctl used by the standalone fb fill probe: the
+     * latter is rejected, while this HWC structure is the one accepted by
+     * the legacy MDSS overlay path. */
+    MdpDisplayCommit commit {};
+    commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+    commit.wait_for_finish = 0;
+    if (ioctl(fb_fd, MSMFB_DISPLAY_COMMIT, &commit) != 0) {
+        ALOGE("%s overlay commit failed: %s", panel, strerror(errno));
+        return false;
+    }
 
     static int once = 0;
     if (once++ < 5) {
@@ -1532,6 +1595,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
         buffer_handle_t target = nullptr;
         int fence = -1;
         bool refresh_secondary = false;
+        bool reprobe_primary = false;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
             d->zoom_active = zoom;
@@ -1562,12 +1626,20 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
                 d->secondary_panel_refresh_pending = false;
             }
             if (strcmp(d->last_mode, zoom ? "zoom" : "single") != 0) {
+                reprobe_primary = d->mode_seen;
+                d->mode_seen = true;
                 snprintf(d->last_mode, sizeof(d->last_mode), "%s", zoom ? "zoom" : "single");
-                ALOGI("display mode -> %s (refresh)", d->last_mode);
+                ALOGI("display mode -> %s (%s)", d->last_mode,
+                      reprobe_primary ? "reprobe" : "initial");
                 if (d->refresh_fn)
                     d->refresh_fn(d->refresh_data, kPrimaryDisplay);
+            } else if (!d->mode_seen) {
+                d->mode_seen = true;
             }
         }
+
+        if (reprobe_primary)
+            SchedulePrimaryReprobe(d);
 
         if (refresh_secondary) {
             HWC2_PFN_REFRESH fn = nullptr;

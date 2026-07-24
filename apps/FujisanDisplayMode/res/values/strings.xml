@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fujisan Display Mode</string>
+    <string name="tile_extension">扩展模式</string>
+    <string name="tile_dual">双屏模式</string>
+    <string name="tile_extension_subtitle">A+B 大屏</string>
+    <string name="tile_dual_subtitle">独立双屏</string>
+</resources>

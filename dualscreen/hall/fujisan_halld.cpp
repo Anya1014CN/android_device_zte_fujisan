@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 static int read_int_file(const char* path, int fallback) {
@@ -107,6 +108,87 @@ static bool display_is_on() {
     return true;
 }
 
+/* InputManager keeps touch calibration and display associations independently
+ * of HWC.  A zoom posture is one logical 2160px display, while a folded
+ * posture is the original 1080px A panel.  Configure both sides before
+ * SurfaceFlinger is asked to re-enumerate the display mode. */
+static bool run_service_call(const char* const argv[]) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        ALOGE("fork service call failed");
+        return false;
+    }
+    if (pid == 0) {
+        int null_fd = open("/dev/null", O_RDWR | O_CLOEXEC);
+        if (null_fd >= 0) {
+            dup2(null_fd, STDOUT_FILENO);
+            dup2(null_fd, STDERR_FILENO);
+            if (null_fd > STDERR_FILENO)
+                close(null_fd);
+        }
+        execv(argv[0], const_cast<char* const*>(argv));
+        _exit(127);
+    }
+    int status = 0;
+    if (waitpid(pid, &status, 0) != pid)
+        return false;
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+static void set_touch_calibration(const char* descriptor, const char* x_scale,
+                                  const char* x_offset) {
+    /* IInputManager#setTouchCalibrationForInputDevice, transaction 11 in
+     * Android 12.  The matrix is applied to raw touch coordinates before the
+     * InputReader scales them to the active display viewport. */
+    const char* argv[] = {
+        "/system/bin/service", "call", "input", "11",
+        "s16", descriptor, "i32", "0", "i32", "1",
+        "f", x_scale, "f", "0", "f", x_offset,
+        "f", "0", "f", "1", "f", "0", nullptr,
+    };
+    if (!run_service_call(argv))
+        ALOGW("touch calibration service call failed for %s", descriptor);
+}
+
+static void configure_touch_for_mode(bool zoom) {
+    static constexpr const char* kPrimaryTouch =
+        "954faadc99bb5a7c1d0537b923e0490c90b47e98";
+    static constexpr const char* kSecondaryTouch =
+        "b99b5f2fc557ba939628ebbc5b685e1d66f25a78";
+
+    if (zoom) {
+        /* IInputManager#addUniqueIdAssociation, transaction 39.  This
+         * overrides B's normal local:1 IDC association only while the two
+         * physical panels form local:0. */
+        const char* associate[] = {
+            "/system/bin/service", "call", "input", "39",
+            "s16", "zte-touchscreen-2nd", "s16", "local:0", nullptr,
+        };
+        if (!run_service_call(associate))
+            ALOGW("failed to associate B touch with zoom display");
+        set_touch_calibration(kPrimaryTouch, "0.5", "0");
+        set_touch_calibration(kSecondaryTouch, "0.5", "540");
+    } else {
+        /* IInputManager#removeUniqueIdAssociation, transaction 40. */
+        const char* unassociate[] = {
+            "/system/bin/service", "call", "input", "40",
+            "s16", "zte-touchscreen-2nd", nullptr,
+        };
+        if (!run_service_call(unassociate))
+            ALOGW("failed to restore B touch association");
+        set_touch_calibration(kPrimaryTouch, "1", "0");
+        set_touch_calibration(kSecondaryTouch, "1", "0");
+    }
+}
+
+static void configure_logical_display_size(bool zoom) {
+    const char* argv[] = {
+        "/system/bin/wm", "size", zoom ? "2160x1920" : "1080x1920", nullptr,
+    };
+    if (!run_service_call(argv))
+        ALOGW("failed to set logical display size for %s", zoom ? "zoom" : "single");
+}
+
 int main() {
     ALOGI("fujisan_halld start (A-primary stable power; B only for zoom)");
     enable_m1120();
@@ -119,6 +201,8 @@ int main() {
     int last_bl1 = -1;
     int last_want_b = -1;
     bool boot_panel_reconciled = false;
+    bool touch_mode_initialized = false;
+    char touch_mode[16] = {};
 
     for (;;) {
         static int tick;
@@ -135,6 +219,16 @@ int main() {
         property_get("persist.vendor.fujisan.force_mode", force_mode, "");
         char dual_internal[PROPERTY_VALUE_MAX] = "0";
         property_get("persist.vendor.fujisan.dual_internal", dual_internal, "0");
+        /* The QS tile writes this persistent, vendor-public property once per
+         * tap.  Reading it here is a property-area lookup in the daemon's
+         * existing hinge loop; it does not spawn a command or add a polling
+         * worker.  An unset value preserves the historical persistent default. */
+        char user_mode[PROPERTY_VALUE_MAX] = "";
+        property_get("persist.vendor.fujisan.user_mode", user_mode, "");
+        if (!strcmp(user_mode, "dual"))
+            dual_internal[0] = '1';
+        else if (!strcmp(user_mode, "zoom"))
+            dual_internal[0] = '0';
         char boot_completed[PROPERTY_VALUE_MAX] = "0";
         property_get("sys.boot_completed", boot_completed, "0");
         const bool boot_done = boot_completed[0] == '1';
@@ -159,9 +253,17 @@ int main() {
             state = "dual";
             mode = "dual";
         } else if (force_mode[0] == 'z') {
-            state = "open";
-            mode = "zoom";
-            snprintf(primary, sizeof(primary), "%s", preferred[0] == 'b' ? "b" : "a");
+            /* "zoom" selects the virtual-wide display policy; it must not
+             * pin it on while the device is physically folded. */
+            if (st == 1) {
+                state = "closed_a";
+                mode = "single";
+                snprintf(primary, sizeof(primary), "a");
+            } else {
+                state = "open";
+                mode = "zoom";
+                snprintf(primary, sizeof(primary), "%s", preferred[0] == 'b' ? "b" : "a");
+            }
         } else if (force_mode[0] == 'a') {
             state = "closed_a";
             mode = "single";
@@ -229,6 +331,23 @@ int main() {
          * does not stall the hall worker or tear down the MDP overlay. */
         if (boot_done && !want_b && bl1 > 0)
             secondary_off();
+
+        if (boot_done &&
+            (!touch_mode_initialized || strcmp(mode, touch_mode) != 0)) {
+            const bool was_initialized = touch_mode_initialized;
+            configure_touch_for_mode(mode[0] == 'z');
+            configure_logical_display_size(mode[0] == 'z');
+            snprintf(touch_mode, sizeof(touch_mode), "%s", mode);
+            touch_mode_initialized = true;
+
+            /* HWC observes vendor.fujisan.display_mode and asks
+             * SurfaceFlinger for a fresh frame/configuration.  Do not restart
+             * SurfaceFlinger here: that needlessly plays BootAnimation on
+             * every fold transition. */
+            if (was_initialized)
+                ALOGI("hinge mode %s -> %s: requesting HWC reconfiguration",
+                      last_mode, mode);
+        }
 
         bool changed = (st != last_st) || (strcmp(primary, last_primary) != 0) ||
                        (strcmp(mode, last_mode) != 0) || (power_on != (last_power == 1)) ||

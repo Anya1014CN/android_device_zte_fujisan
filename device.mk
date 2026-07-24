@@ -199,7 +199,9 @@ PRODUCT_PACKAGES += \
 # instead of the stock health@1.0 prebuilt.
 PRODUCT_PACKAGES += \
     android.hardware.health@2.1-service \
-    android.hardware.health@2.1-impl
+    android.hardware.health@2.1-impl \
+    FujisanDisplayMode \
+    FujisanSystemUIOverlay
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/audio_effects.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_effects.xml \
