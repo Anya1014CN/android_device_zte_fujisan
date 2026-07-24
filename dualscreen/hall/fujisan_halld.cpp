@@ -167,12 +167,10 @@ static void secondary_on(int bl) {
         bl = 255;
     char b[16];
     snprintf(b, sizeof(b), "%d", bl);
-    /* B may still be blanked by the initial fbdev setup.  Unblanking (0) is
-     * non-blocking; the dangerous operation is blanking (4), which waits for
-     * an idle kickoff and must never be issued from this daemon.  Pulse the
-     * backlight afterwards so a panel which came up before MDSS was ready
-     * latches the new state. */
-    write_sysfs("/sys/class/graphics/fb1/blank", "0");
+    /* Never touch fb1/blank here.  Even the apparent "unblank" value 0 can
+     * enter mdss_mdp_display_commit and block forever while the secondary
+     * overlay is idle, which subsequently wedges SurfaceFlinger.  HWC owns
+     * scanout; the hall daemon only controls B's backlight. */
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
     usleep(20 * 1000);
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
