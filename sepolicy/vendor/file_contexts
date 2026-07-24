@@ -1,2 +1,2 @@
-
-/vendor/bin/fujisan_halld    u:object_r:fujisan_halld_exec:s0
+/vendor/bin/fujisan_halld           u:object_r:fujisan_halld_exec:s0
+/system/vendor/bin/fujisan_halld    u:object_r:fujisan_halld_exec:s0
