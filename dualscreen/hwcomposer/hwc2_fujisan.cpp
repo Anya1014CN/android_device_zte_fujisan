@@ -67,6 +67,7 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #include <unistd.h>
 
 #include <atomic>
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -221,6 +222,7 @@ struct Device {
     struct fb_var_screeninfo vinfo {};
     struct fb_fix_screeninfo finfo {};
     uint32_t sec_overlay_id = MSMFB_NEW_REQUEST;
+    uint32_t pri_overlay_id = MSMFB_NEW_REQUEST;
     sp<IMapper> mapper;
 
     /* ZOOM (open) virtual large screen on primary display id 0. */
@@ -820,8 +822,9 @@ static void __attribute__((unused)) CopyRgbaToFb(Device* d, const uint8_t* src, 
  * allocates transient base pipes, which collides with the primary HWC and
  * eventually exhausts all SSPPs.
  */
-static bool PostHandleOverlayToFb1(Device* d, buffer_handle_t handle) {
-    if (!handle || !OpenFb1(d))
+static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
+                              buffer_handle_t handle, int src_x, const char* panel) {
+    if (!handle || fb_fd < 0 || !overlay_id)
         return false;
 
     int stride_px = FUJISAN_SEC_WIDTH;
@@ -831,12 +834,13 @@ static bool PostHandleOverlayToFb1(Device* d, buffer_handle_t handle) {
     int flags = 0;
     GetGrallocStridePx(handle, &stride_px, &w, &h, &format, &flags);
 
-    if (w > FUJISAN_SEC_WIDTH)
-        w = FUJISAN_SEC_WIDTH;
+    if (src_x < 0 || src_x >= w)
+        return false;
+    w = std::min(FUJISAN_SEC_WIDTH, w - src_x);
     if (h > FUJISAN_SEC_HEIGHT)
         h = FUJISAN_SEC_HEIGHT;
-    if (stride_px < w)
-        stride_px = w;
+    if (stride_px < src_x + w)
+        stride_px = src_x + w;
 
     const bool ubwc = (flags & PRIV_FLAGS_UBWC_ALIGNED) != 0;
 
@@ -846,15 +850,16 @@ static bool PostHandleOverlayToFb1(Device* d, buffer_handle_t handle) {
         return false;
     }
 
-    if (d->sec_overlay_id == MSMFB_NEW_REQUEST) {
+    if (*overlay_id == MSMFB_NEW_REQUEST) {
         mdp_overlay overlay {};
         overlay.src.width = static_cast<uint32_t>(stride_px);
         overlay.src.height = static_cast<uint32_t>(h);
         /* The MDSS legacy overlay API imports the complete gralloc dma-buf,
          * including UBWC metadata, so preserve the producer's real layout. */
         overlay.src.format = ubwc ? MDP_RGBA_8888_UBWC : MDP_RGBA_8888;
-        overlay.src_rect = {0, 0, static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
-        overlay.dst_rect = overlay.src_rect;
+        overlay.src_rect = {static_cast<uint32_t>(src_x), 0,
+                            static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
+        overlay.dst_rect = {0, 0, static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
         overlay.z_order = 0;
         overlay.is_fg = 1;
         overlay.alpha = MDP_ALPHA_NOP;
@@ -865,44 +870,85 @@ static bool PostHandleOverlayToFb1(Device* d, buffer_handle_t handle) {
          * exhausted the SSPP pool in the previous implementation. */
         overlay.pipe_type = PIPE_TYPE_AUTO;
         overlay.id = MSMFB_NEW_REQUEST;
-        if (ioctl(d->fb_fd, MSMFB_OVERLAY_SET, &overlay) != 0) {
-            ALOGE("fb1 overlay set failed: %s", strerror(errno));
+        if (ioctl(fb_fd, MSMFB_OVERLAY_SET, &overlay) != 0) {
+            ALOGE("%s overlay set failed: %s", panel, strerror(errno));
             return false;
         }
-        d->sec_overlay_id = overlay.id;
-        ALOGI("fb1 overlay configured id=0x%x src=%dx%d dst=%dx%d ubwc=%d", overlay.id, stride_px,
-              h, w, h, ubwc ? 1 : 0);
+        *overlay_id = overlay.id;
+        ALOGI("%s overlay configured id=0x%x src=%dx%d crop_x=%d dst=%dx%d ubwc=%d", panel,
+              overlay.id, stride_px, h, src_x, w, h, ubwc ? 1 : 0);
     }
 
     msmfb_overlay_data post {};
-    post.id = d->sec_overlay_id;
+    post.id = *overlay_id;
     post.data.memory_id = gralloc->fd;
     post.data.offset = gralloc->offset;
-    if (ioctl(d->fb_fd, MSMFB_OVERLAY_PLAY, &post) != 0) {
+    if (ioctl(fb_fd, MSMFB_OVERLAY_PLAY, &post) != 0) {
         const int err = errno;
-        ALOGE("fb1 overlay play id=0x%x failed: %s", post.id, strerror(err));
+        ALOGE("%s overlay play id=0x%x failed: %s", panel, post.id, strerror(err));
         /* fb1 can be blanked/re-enabled by the display power path after the
          * logical display is attached.  MDSS then drops its legacy pipes;
          * recreate this one on the next client-target frame. */
         if (err == ENODEV || err == EPERM)
-            d->sec_overlay_id = MSMFB_NEW_REQUEST;
+            *overlay_id = MSMFB_NEW_REQUEST;
         return false;
     }
 
-    MdpDisplayCommit commit {};
-    commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
-    commit.wait_for_finish = 0;
-    if (ioctl(d->fb_fd, MSMFB_DISPLAY_COMMIT, &commit) != 0) {
-        ALOGE("fb1 overlay commit failed: %s", strerror(errno));
-        return false;
-    }
+    /* On this command-mode MDSS kernel OVERLAY_PLAY queues and kicks the
+     * panel itself.  Both DISPLAY_COMMIT and OVERLAY_COMMIT are unimplemented
+     * for this legacy fbdev ABI, so issuing either only returns ENOSYS. */
 
     static int once = 0;
     if (once++ < 5) {
-        ALOGI("fb1 overlay post id=0x%x %dx%d stride=%d fmt=%d flags=0x%x ubwc=%d",
-              d->sec_overlay_id, w, h, stride_px, format, flags, ubwc ? 1 : 0);
+        ALOGI("%s overlay post id=0x%x %dx%d crop_x=%d stride=%d fmt=%d flags=0x%x ubwc=%d",
+              panel, *overlay_id, w, h, src_x, stride_px, format, flags, ubwc ? 1 : 0);
     }
     return true;
+}
+
+static bool PostHandleOverlayToFb1(Device* d, buffer_handle_t handle) {
+    if (!OpenFb1(d))
+        return false;
+    return PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle, 0, "fb1");
+}
+
+/* The 2160-wide client target is one dma-buf.  Import it into both real
+ * panels with cropped source rectangles rather than copying to fbdev and
+ * calling PAN_DISPLAY: the latter collides with MDSS/HWC base-pipe ownership. */
+static bool __attribute__((unused)) PostZoomOverlays(Device* d, buffer_handle_t handle, int fence) {
+    if (!handle)
+        return false;
+    if (fence >= 0) {
+        (void)sync_wait(fence, 1000);
+        close(fence);
+    }
+    if (!OpenFb0(d) || !OpenFb1(d))
+        return false;
+    const bool a = PostHandleOverlay(d, d->fb0_fd, &d->pri_overlay_id, handle, 0, "fb0");
+    const bool b = PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle,
+                                     FUJISAN_SEC_WIDTH, "fb1");
+    if (b)
+        WriteSysfs(kBl2Path, "180");
+    return a && b;
+}
+
+/* A is always composed by the vendor Qualcomm HWC.  In zoom it consumes the
+ * full client target through its native primary path; B receives only the
+ * right 1080-pixel crop through the working legacy overlay path. */
+static bool PostZoomSecondaryOverlay(Device* d, buffer_handle_t handle, int fence) {
+    if (!handle)
+        return false;
+    if (fence >= 0) {
+        (void)sync_wait(fence, 1000);
+        close(fence);
+    }
+    if (!OpenFb1(d))
+        return false;
+    const bool posted = PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle,
+                                          FUJISAN_SEC_WIDTH, "fb1");
+    if (posted)
+        WriteSysfs(kBl2Path, "180");
+    return posted;
 }
 
 
@@ -923,7 +969,7 @@ static bool PostClientToFb1(Device* d, buffer_handle_t handle, int fence) {
 }
 
 /* Split 2160x1920 client target: left -> fb0, right -> fb1 (1px hinge at x=1080 skipped into B col0). */
-static bool CopyZoomSplit(Device* d, buffer_handle_t handle, int fence) {
+static bool __attribute__((unused)) CopyZoomSplit(Device* d, buffer_handle_t handle, int fence) {
     if (!handle)
         return false;
     if (fence >= 0) {
@@ -1541,11 +1587,13 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             int w = 0, h = 0, stride = 0, format = 0, flags = 0;
             GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
             if (w >= kZoomWidth) {
-                /* Full virtual frame: CPU split to both panels; skip real HWC. */
-                (void)CopyZoomSplit(d, target, fence);
-                if (out_retire_fence)
-                    *out_retire_fence = -1;
-                return HWC2_ERROR_NONE;
+                /* fb0 belongs to the vendor composer.  Let it present the
+                 * primary target and feed B only the right-side crop. */
+                int32_t ret = d->fns.presentDisplay
+                                      ? d->fns.presentDisplay(d->real, display, out_retire_fence)
+                                      : HWC2_ERROR_UNSUPPORTED;
+                (void)PostZoomSecondaryOverlay(d, target, fence);
+                return ret;
             }
             /* Still 1080 while zoom prop is set: present on A, mirror to B until SF switches. */
             int32_t ret = d->fns.presentDisplay
@@ -1622,9 +1670,15 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
             if (target)
                 GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
             if (w >= kZoomWidth) {
-                (void)dataspace;
-                (void)damage;
-                return HWC2_ERROR_NONE;
+                /* Feed the vendor primary composer as well.  Suppressing its
+                 * client target leaves fb0 without any valid scanout pipe. */
+                int fence_for_real = -1;
+                if (acquire_fence >= 0)
+                    fence_for_real = dup(acquire_fence);
+                return d->fns.setClientTarget
+                               ? d->fns.setClientTarget(d->real, display, target, fence_for_real,
+                                                        dataspace, damage)
+                               : HWC2_ERROR_UNSUPPORTED;
             }
             /* 1080 interim: still feed real HWC (dup fence). */
             int fence_for_real = -1;
