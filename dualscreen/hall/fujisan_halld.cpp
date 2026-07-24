@@ -79,8 +79,14 @@ static void secondary_off() {
 static void secondary_on(int bl) {
     char b[16];
     snprintf(b, sizeof(b), "%d", bl);
-    /* Keep fb1 scanout alive across the hinge transition.  Its client target
-     * is refreshed by HWC after the panel is visible again. */
+    /* B may still be blanked by the initial fbdev setup.  Unblanking (0) is
+     * non-blocking; the dangerous operation is blanking (4), which waits for
+     * an idle kickoff and must never be issued from this daemon.  Pulse the
+     * backlight afterwards so a panel which came up before MDSS was ready
+     * latches the new state. */
+    write_sysfs("/sys/class/graphics/fb1/blank", "0");
+    write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
+    usleep(20 * 1000);
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
 }
 
