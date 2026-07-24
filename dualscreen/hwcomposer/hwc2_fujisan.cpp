@@ -238,6 +238,13 @@ struct Device {
     struct fb_var_screeninfo vinfo0 {};
     struct fb_fix_screeninfo finfo0 {};
     char last_mode[16] = "single";
+
+    /* Physical B power is owned by fujisan_halld.  These track its hinge
+     * availability so the independent logical display gets one redraw only
+     * after the panel has settled following an open. */
+    bool secondary_panel_available = false;
+    bool secondary_panel_refresh_pending = false;
+    int64_t secondary_panel_available_since_ns = 0;
 };
 
 static bool DualInternalEnabled() {
@@ -258,6 +265,26 @@ static bool WantPrimaryB() {
     char buf[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.active_primary", buf, "a");
     return buf[0] == 'b' || buf[0] == 'B';
+}
+
+static bool SecondaryPanelAvailable() {
+    if (!DualInternalEnabled())
+        return false;
+
+    char force_b[PROPERTY_VALUE_MAX] = {};
+    property_get("persist.vendor.fujisan.force_b_on", force_b, "0");
+    if (force_b[0] == '1')
+        return true;
+
+    char hall[PROPERTY_VALUE_MAX] = {};
+    property_get("vendor.fujisan.hall_status", hall, "1");
+    return hall[0] == '2';
+}
+
+static int64_t MonotonicNs() {
+    struct timespec ts {};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<int64_t>(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
 }
 
 static void SetDisplayPowerProp(bool on) {
@@ -1003,7 +1030,10 @@ static int32_t __attribute__((unused)) SecPresent(Device* d, int32_t* out_retire
             ALOGW("client target fence wait failed/timeout");
         close(fence);
     }
-    if (target)
+    /* halld blanks fb1 while folded.  Do not create/play an overlay against a
+     * powered-down MDSS panel; it fails with EPERM and leaves no valid pipe
+     * to receive the first frame after the next hinge-open. */
+    if (target && SecondaryPanelAvailable())
         PostHandleOverlayToFb1(d, target);
     if (out_retire)
         *out_retire = -1;
@@ -1454,6 +1484,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
         bool primary_b = WantPrimaryB();
         buffer_handle_t target = nullptr;
         int fence = -1;
+        bool refresh_secondary = false;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
             d->zoom_active = zoom;
@@ -1461,11 +1492,47 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             target = d->client_target;
             fence = d->client_acquire_fence;
             d->client_acquire_fence = -1;
+
+            if (DualInternalEnabled()) {
+                const bool available = SecondaryPanelAvailable();
+                const int64_t now = MonotonicNs();
+                if (available != d->secondary_panel_available) {
+                    d->secondary_panel_available = available;
+                    d->secondary_panel_available_since_ns = now;
+                    d->secondary_panel_refresh_pending = available;
+                    ALOGI("independent B panel -> %s", available ? "open" : "closed");
+                }
+                /* secondary_on() unblanks first and waits 50ms before it
+                 * enables backlight.  Give MDSS a little more settling time,
+                 * then ask SurfaceFlinger for exactly one fresh B frame. */
+                if (d->secondary_panel_refresh_pending && d->secondary_attached.load() &&
+                    now - d->secondary_panel_available_since_ns >= 150000000LL) {
+                    d->secondary_panel_refresh_pending = false;
+                    refresh_secondary = true;
+                }
+            } else {
+                d->secondary_panel_available = false;
+                d->secondary_panel_refresh_pending = false;
+            }
             if (strcmp(d->last_mode, zoom ? "zoom" : "single") != 0) {
                 snprintf(d->last_mode, sizeof(d->last_mode), "%s", zoom ? "zoom" : "single");
                 ALOGI("display mode -> %s (refresh)", d->last_mode);
                 if (d->refresh_fn)
                     d->refresh_fn(d->refresh_data, kPrimaryDisplay);
+            }
+        }
+
+        if (refresh_secondary) {
+            HWC2_PFN_REFRESH fn = nullptr;
+            hwc2_callback_data_t data = nullptr;
+            {
+                std::lock_guard<std::mutex> cl(d->cb_lock);
+                fn = d->refresh_fn;
+                data = d->refresh_data;
+            }
+            if (fn) {
+                ALOGI("request B redraw after hinge-open");
+                fn(data, kSecondaryDisplay);
             }
         }
 
@@ -1759,8 +1826,9 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
             std::lock_guard<std::mutex> sc(d->sec.lock);
             d->sec.power_on = on;
         }
-        WriteSysfs(kBl2Path, on ? "180" : "0");
-        WriteSysfs("/sys/class/graphics/fb1/blank", on ? "0" : "4");
+        /* Do not touch fb1 rails here.  The logical B display stays ON from
+         * Android's perspective, while fujisan_halld is the sole authority
+         * for physical power according to the hinge. */
         return HWC2_ERROR_NONE;
     }
     int32_t ret = d->fns.setPowerMode ? d->fns.setPowerMode(d->real, display, mode)
