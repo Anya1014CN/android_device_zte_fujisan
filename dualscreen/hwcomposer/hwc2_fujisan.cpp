@@ -1836,10 +1836,9 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
     if (display == kPrimaryDisplay) {
         const bool on = (mode == HWC2_POWER_MODE_ON);
         SetDisplayPowerProp(on);
-        /* Always kill B on sleep/doze. On wake, only halld may re-enable B for zoom. */
+        /* Backlight is owned by halld.  Never FBIOBLANK fb1 from composer:
+         * idle secondary scanout can block the legacy ioctl for 30 seconds. */
         if (!on) {
-            WriteSysfs(kBl2Path, "0");
-            WriteSysfs("/sys/class/graphics/fb1/blank", "4");
             WriteSysfs(kBl2Path, "0");
         }
     }

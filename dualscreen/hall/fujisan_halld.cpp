@@ -69,17 +69,18 @@ static void enable_m1120() {
 }
 
 static void secondary_off() {
-    /* Brightness first, then panel powerdown; write both paths twice for stubborn BL. */
-    write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
-    write_sysfs("/sys/class/graphics/fb1/blank", "4");
+    /* Do not FBIOBLANK fb1 here.  On this MDSS it waits for a kickoff that
+     * never comes once the secondary overlay is idle, blocking this daemon
+     * for 30 seconds and resetting B on the next attempted transition.
+     * Backlight=0 is sufficient to hide the folded panel. */
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
 }
 
 static void secondary_on(int bl) {
     char b[16];
     snprintf(b, sizeof(b), "%d", bl);
-    write_sysfs("/sys/class/graphics/fb1/blank", "0");
-    usleep(50 * 1000);
+    /* Keep fb1 scanout alive across the hinge transition.  Its client target
+     * is refreshed by HWC after the panel is visible again. */
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
 }
 
@@ -110,6 +111,7 @@ int main() {
     char last_mode[16] = {};
     int last_power = -1;
     int last_bl1 = -1;
+    int last_want_b = -1;
 
     for (;;) {
         static int tick;
@@ -198,15 +200,18 @@ int main() {
                              (mode[0] == 'd' && st == 2) ||
                              force_b[0] == '1');
 
-        if (!power_on || !want_b) {
-            secondary_off();
-        } else {
-            secondary_on(180);
-        }
-
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
-        /* If we asked for off but BL stuck, keep hammering. */
-        if ((!power_on || !want_b) && bl1 > 0)
+        const int want_b_int = want_b ? 1 : 0;
+        if (want_b_int != last_want_b) {
+            if (want_b)
+                secondary_on(180);
+            else
+                secondary_off();
+            last_want_b = want_b_int;
+        }
+        /* A failed brightness write is safe to retry; unlike FBIOBLANK it
+         * does not stall the hall worker or tear down the MDP overlay. */
+        if (!want_b && bl1 > 0)
             secondary_off();
 
         bool changed = (st != last_st) || (strcmp(primary, last_primary) != 0) ||

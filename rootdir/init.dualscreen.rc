@@ -7,7 +7,6 @@ service fujisan-fb1-fill /vendor/bin/fujisan_fb1_fill 0xFF00AA00
     disabled
 
 on early-boot
-    write /sys/class/graphics/fb1/blank 4
     write /sys/class/leds/lcd-backlight-2/brightness 0
 
 on boot
