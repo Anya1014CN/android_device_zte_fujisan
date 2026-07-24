@@ -8,3 +8,20 @@ service fujisan_halld /vendor/bin/fujisan_halld
 # sys.boot_completed keeps B dark for roughly 30 seconds after every reboot.
 on early-boot
     start fujisan_halld
+
+# fujisan_halld blocks on the m1120 input event in steady state.  These are
+# the non-hinge transitions which must force one immediate reconciliation.
+on property:sys.boot_completed=1
+    restart fujisan_halld
+
+on property:vendor.fujisan.display_power=0
+    restart fujisan_halld
+
+on property:vendor.fujisan.display_power=1
+    restart fujisan_halld
+
+on property:persist.vendor.fujisan.user_mode=dual
+    restart fujisan_halld
+
+on property:persist.vendor.fujisan.user_mode=zoom
+    restart fujisan_halld

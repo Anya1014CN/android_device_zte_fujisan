@@ -4,6 +4,7 @@ type fujisan_halld_exec, exec_type, vendor_file_type, file_type;
 init_daemon_domain(fujisan_halld)
 
 allow fujisan_halld graphics_device:chr_file rw_file_perms;
+allow fujisan_halld input_device:chr_file r_file_perms;
 allow fujisan_halld sysfs_graphics:dir search;
 allow fujisan_halld sysfs_graphics:file rw_file_perms;
 allow fujisan_halld sysfs_leds:dir search;

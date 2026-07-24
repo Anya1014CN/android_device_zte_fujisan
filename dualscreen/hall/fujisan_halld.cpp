@@ -13,9 +13,12 @@
  */
 #define LOG_TAG "FujisanHalld"
 #include <cutils/properties.h>
+#include <errno.h>
 #include <log/log.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <linux/input.h>
+#include <poll.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
@@ -67,6 +70,86 @@ static void enable_m1120() {
         write_sysfs(en, "1");
     }
     closedir(d);
+}
+
+/* m1120 emits SW_LID (and a REL_X edge) through evdev.  Wait on that input
+ * queue instead of repeatedly sampling the module parameter.  event numbers
+ * are not ABI, so discover the m1120 event node from sysfs at each wait. */
+static int open_m1120_event() {
+    DIR* inputs = opendir("/sys/class/input");
+    if (!inputs)
+        return -1;
+
+    int fd = -1;
+    struct dirent* input;
+    while ((input = readdir(inputs)) != nullptr && fd < 0) {
+        if (strncmp(input->d_name, "input", 5) != 0)
+            continue;
+
+        char name_path[256];
+        snprintf(name_path, sizeof(name_path), "/sys/class/input/%s/name", input->d_name);
+        int name_fd = open(name_path, O_RDONLY | O_CLOEXEC);
+        if (name_fd < 0)
+            continue;
+        char name[64] = {};
+        (void)read(name_fd, name, sizeof(name) - 1);
+        close(name_fd);
+        if (strncmp(name, "m1120", 5) != 0)
+            continue;
+
+        char input_path[256];
+        snprintf(input_path, sizeof(input_path), "/sys/class/input/%s", input->d_name);
+        DIR* events = opendir(input_path);
+        if (!events)
+            continue;
+        struct dirent* event;
+        while ((event = readdir(events)) != nullptr) {
+            if (strncmp(event->d_name, "event", 5) != 0)
+                continue;
+            char event_path[64];
+            snprintf(event_path, sizeof(event_path), "/dev/input/%s", event->d_name);
+            fd = open(event_path, O_RDONLY | O_CLOEXEC);
+            break;
+        }
+        closedir(events);
+    }
+    closedir(inputs);
+    return fd;
+}
+
+static void wait_for_hinge_event() {
+    for (;;) {
+        const int fd = open_m1120_event();
+        if (fd < 0) {
+            /* This only retries while the input driver is absent during an
+             * abnormal boot; normal operation has no timer wakeups. */
+            ALOGW("m1120 event node unavailable; retrying after one second");
+            sleep(1);
+            continue;
+        }
+
+        for (;;) {
+            struct pollfd pfd {};
+            pfd.fd = fd;
+            pfd.events = POLLIN;
+            const int rc = poll(&pfd, 1, -1);
+            if (rc < 0 && errno == EINTR)
+                continue;
+            if (rc <= 0 || !(pfd.revents & POLLIN))
+                break;
+
+            struct input_event event;
+            const ssize_t n = read(fd, &event, sizeof(event));
+            if (n != static_cast<ssize_t>(sizeof(event)))
+                break;
+            if ((event.type == EV_SW && event.code == SW_LID) ||
+                event.type == EV_REL) {
+                close(fd);
+                return;
+            }
+        }
+        close(fd);
+    }
 }
 
 static void secondary_off() {
@@ -216,17 +299,12 @@ int main() {
     char last_mode[16] = {};
     int last_power = -1;
     int last_bl1 = -1;
-    int last_bl0 = -1;
     int last_want_b = -1;
     bool boot_panel_reconciled = false;
     bool touch_mode_initialized = false;
     char touch_mode[16] = {};
 
     for (;;) {
-        static int tick;
-        if ((tick++ % 25) == 0)
-            enable_m1120();
-
         char preferred[PROPERTY_VALUE_MAX] = "a";
         property_get("persist.vendor.fujisan.primary_panel", preferred, "a");
         char force[PROPERTY_VALUE_MAX] = "0";
@@ -353,18 +431,6 @@ int main() {
         if (boot_done && !want_b && bl1 > 0)
             secondary_off();
 
-        /* HWC mirrors slider/auto-brightness changes immediately.  This is
-         * only a recovery path for legacy composer brightness writes and for
-         * B coming online after the main brightness update; it reuses the
-         * existing hinge loop and writes only when A actually changed. */
-        if (boot_done && want_b && bl0 >= 0 && bl0 != last_bl0) {
-            char brightness[16];
-            snprintf(brightness, sizeof(brightness), "%d", bl0);
-            write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", brightness);
-        }
-        if (bl0 >= 0)
-            last_bl0 = bl0;
-
         if (boot_done &&
             (!touch_mode_initialized || strcmp(mode, touch_mode) != 0)) {
             const bool was_initialized = touch_mode_initialized;
@@ -395,7 +461,9 @@ int main() {
             snprintf(last_mode, sizeof(last_mode), "%s", mode);
         }
 
-        usleep(200 * 1000);
+        /* Blocks at zero CPU until m1120 reports a lid/magnetic transition.
+         * init property triggers restart us for mode and power changes. */
+        wait_for_hinge_event();
     }
     return 0;
 }
