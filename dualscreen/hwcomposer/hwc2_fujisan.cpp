@@ -108,7 +108,6 @@ constexpr int kZoomWidth = 2160;  /* 1080 + 1 hinge + 1079 usable right? 1080+10
  */
 constexpr char kFb1Path[] = "/dev/graphics/fb1";
 constexpr char kBl2Path[] = "/sys/class/leds/lcd-backlight-2/brightness";
-constexpr int kBacklightMax = 255;
 
 #ifndef MSMFB_DISPLAY_COMMIT
 #define MSMFB_IOCTL_MAGIC 'm'
@@ -523,9 +522,6 @@ static void ScheduleSecondaryAttach(Device* d) {
     if (!DualInternalEnabled())
         return;
 
-    if (d->secondary_attached.exchange(true))
-        return;
-
     HWC2_PFN_HOTPLUG fn = nullptr;
     hwc2_callback_data_t data = nullptr;
     {
@@ -533,7 +529,13 @@ static void ScheduleSecondaryAttach(Device* d) {
         fn = d->hotplug_fn;
         data = d->hotplug_data;
     }
+    /* A real-primary hotplug can arrive while the HWC starts, before
+     * SurfaceFlinger registers its callback.  Do not consume the one-shot
+     * secondary attach in that window or the fresh SurfaceFlinger instance
+     * will never learn about B. */
     if (!fn)
+        return;
+    if (d->secondary_attached.exchange(true))
         return;
 
     {
@@ -991,8 +993,6 @@ static bool __attribute__((unused)) PostZoomOverlays(Device* d, buffer_handle_t 
     const bool a = PostHandleOverlay(d, d->fb0_fd, &d->pri_overlay_id, handle, 0, "fb0");
     const bool b = PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle,
                                      FUJISAN_SEC_WIDTH, "fb1");
-    if (b)
-        WriteSysfs(kBl2Path, "180");
     return a && b;
 }
 
@@ -1010,8 +1010,6 @@ static bool PostZoomSecondaryOverlay(Device* d, buffer_handle_t handle, int fenc
         return false;
     const bool posted = PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle,
                                           FUJISAN_SEC_WIDTH, "fb1");
-    if (posted)
-        WriteSysfs(kBl2Path, "180");
     return posted;
 }
 
@@ -1026,9 +1024,9 @@ static bool PostClientToFb1(Device* d, buffer_handle_t handle, int fence) {
     }
     if (!PostHandleOverlayToFb1(d, handle))
         return false;
-    /* Power mode owns fb1 blanking.  Issuing FBIOBLANK for every frame can
-     * tear down an otherwise valid legacy overlay pipe. */
-    WriteSysfs(kBl2Path, "180");
+    /* Panel B power and brightness are owned by fujisan_halld / Lights.
+     * In particular, never restore a hard-coded brightness while posting a
+     * composition frame: a touch can cause a present at any time. */
     return true;
 }
 
@@ -1109,8 +1107,6 @@ static bool __attribute__((unused)) CopyZoomSplit(Device* d, buffer_handle_t han
     KickFb(d->fb_fd, &d->vinfo);
     ioctl(d->fb0_fd, FBIOBLANK, FB_BLANK_UNBLANK);
     ioctl(d->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
-    WriteSysfs(kBl2Path, "180");
-
     static int once = 0;
     if (once++ < 8)
         ALOGI("zoom split post src=%dx%d stride=%d", w, h, stride_px);
@@ -1468,27 +1464,13 @@ static int32_t SetDisplayBrightness(hwc2_device_t* device, hwc2_display_t displa
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_UNSUPPORTED;
-    if (!d->fns.setDisplayBrightness)
-        return HWC2_ERROR_UNSUPPORTED;
-
-    const int32_t ret = d->fns.setDisplayBrightness(d->real, display, brightness);
-    if (ret != HWC2_ERROR_NONE)
-        return ret;
-
-    /* The physical panels use matching 0..255 backlight ranges.  In either
-     * open posture, DisplayPowerController only sends this request to logical
-     * primary A, so mirror the exact normalized value to B here rather than
-     * waiting for a separate display or a polling worker. */
-    if ((WantZoomMode() || SecondaryPanelAvailable()) &&
-        brightness >= 0.0f && brightness <= 1.0f) {
-        const int level = std::max(0, std::min(kBacklightMax,
-                static_cast<int>(brightness * kBacklightMax + 0.5f)));
-        char value[16];
-        snprintf(value, sizeof(value), "%d", level);
-        if (WriteSysfs(kBl2Path, value) != 0)
-            ALOGW("failed to mirror brightness %d to B", level);
-    }
-    return HWC2_ERROR_NONE;
+    /* msm8996's composer brightness values are stale after a display
+     * reconfiguration and can arrive during arbitrary touch/composition
+     * frames.  B is exclusively mirrored from A's actual Lights sysfs write
+     * by fujisan_halld's inotify watch. */
+    return d->fns.setDisplayBrightness
+               ? d->fns.setDisplayBrightness(d->real, display, brightness)
+               : HWC2_ERROR_UNSUPPORTED;
 }
 
 /* Both built-in panels are INTERNAL. Do not implement GET_DISPLAY_IDENTIFICATION_DATA:
