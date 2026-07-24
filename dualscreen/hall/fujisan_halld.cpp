@@ -118,6 +118,7 @@ int main() {
     int last_power = -1;
     int last_bl1 = -1;
     int last_want_b = -1;
+    bool boot_panel_reconciled = false;
 
     for (;;) {
         static int tick;
@@ -134,6 +135,9 @@ int main() {
         property_get("persist.vendor.fujisan.force_mode", force_mode, "");
         char dual_internal[PROPERTY_VALUE_MAX] = "0";
         property_get("persist.vendor.fujisan.dual_internal", dual_internal, "0");
+        char boot_completed[PROPERTY_VALUE_MAX] = "0";
+        property_get("sys.boot_completed", boot_completed, "0");
+        const bool boot_done = boot_completed[0] == '1';
 
         int st = read_int_file("/sys/module/ah1898/parameters/hall_status", -1);
         if (st < 0)
@@ -207,16 +211,23 @@ int main() {
 
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
         const int want_b_int = want_b ? 1 : 0;
-        if (want_b_int != last_want_b) {
+        /* MDSS may acknowledge an unblank before its initial boot setup is
+         * complete, then leave B dark until the next hinge transition.  Do
+         * not touch B's rails during that window.  Once Android is fully
+         * booted, reconcile the current hinge state exactly once; from then
+         * on, only a real B on/off transition writes panel power. */
+        if (boot_done &&
+            (!boot_panel_reconciled || want_b_int != last_want_b)) {
             if (want_b)
                 secondary_on(180);
             else
                 secondary_off();
             last_want_b = want_b_int;
+            boot_panel_reconciled = true;
         }
         /* A failed brightness write is safe to retry; unlike FBIOBLANK it
          * does not stall the hall worker or tear down the MDP overlay. */
-        if (!want_b && bl1 > 0)
+        if (boot_done && !want_b && bl1 > 0)
             secondary_off();
 
         bool changed = (st != last_st) || (strcmp(primary, last_primary) != 0) ||
