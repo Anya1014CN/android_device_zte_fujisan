@@ -191,13 +191,12 @@ int main() {
         property_set("vendor.fujisan.active_primary", primary);
 
         const bool power_on = display_is_on();
-        /* In independent-display mode B remains hotplugged to Android, but
-         * its physical panel is usable only while the hinge is open.  Keeping
-         * it powered while folded lets HWC race the hall transition and causes
-         * a one-frame flash on the next open. */
+        /* Actual fujisan posture order is C(3) folded, B(2) mid-open,
+         * A(1) fully open.  Both 1 and 2 expose the two inside panels; only
+         * the folded C posture must turn B off. */
         const bool want_b = power_on &&
                             (mode[0] == 'z' ||
-                             (mode[0] == 'd' && st == 2) ||
+                             (mode[0] == 'd' && st != 3) ||
                              force_b[0] == '1');
 
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
