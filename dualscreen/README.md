@@ -1,20 +1,28 @@
 # Fujisan dual-LCD / hinge (LOS 19.1)
 
-## Stock (9008_CNA8) findings
-- Framework service `com.zte.duallcd.DisplayModeManagerService` (not AOSP).
-- Modes: SINGLE / MIRROR / DOCKED / ZOOM (2160x1920 virtual large).
-- Hall: `/sys/module/ah1898/parameters/hall_status` with A=1, B=2(open), C=3.
-- Kernel sensor is mxm1120 (REL_X status + hall GPIO); we export stock-compat `ah1898`.
+## Goal
+- **Closed**: single primary (A face or B face)
+- **Open**: virtual **2160×1920** large screen (left A + right B, 1px hinge at x=1080)
+- No AOSP framework patches — device tree modules + kernel only
 
-## This port (no AOSP framework patches)
-1. **Closed**: single primary panel (A or B). `fujisan_halld` blanks the unused panel.
-2. **Open (B)**: `vendor.fujisan.display_mode=zoom`; HWC advertises 2160x1920 config + hinge path.
-3. **DeviceState** `vendor/etc/devicestate/device_state_configuration.xml` maps SW_LID closed/open.
-4. **Primary switch**: `persist.vendor.fujisan.primary_panel=a|b` and `persist.vendor.fujisan.primary_force=1` to pin choice (stock QS tile equivalent for v1).
+## Hall (mxm1120 / ah1898 compat)
+| status | posture | mode | panels |
+|--------|---------|------|--------|
+| 1 | closed_a | single | A on, B off |
+| 2 | open | zoom | A+B on, HWC split/mirror |
+| 3 | closed_b | single | A composing (BL 0), B on (HWC copy) |
 
-## Hinge
-- 1px seam at x=1080 in the 2160 open layout (left A 0..1079, hinge 1080, right B 1081..2159).
+Sysfs: `/sys/module/ah1898/parameters/hall_status` (mirrors mxm1120).
+Props: `vendor.fujisan.hall_status`, `device_state`, `display_mode`, `active_primary`, `display_power`.
 
-## Not in v1
-- Full stock DisplayModeManager (mirror/docked/zoom app policies).
-- Dual TYPE_INTERNAL secondary hotplug (disabled; caused pink/snow).
+## Components
+- `fujisan_halld` — posture props + panel power (respects `display_power` for sleep/wake)
+- `hwcomposer.fujisan` — wraps msm8996; single passthrough; closed_b copies to fb1; zoom splits 2160 or mirrors 1080 interim
+- DeviceState XML — SW_LID closed/open for 12L
+
+## Primary switch (stock QS equivalent v1)
+- `persist.vendor.fujisan.primary_panel=a|b`
+- `persist.vendor.fujisan.primary_force=1` to pin while closed
+
+## Sleep
+HWC `SetPowerMode` sets `vendor.fujisan.display_power` and blanks B on sleep; halld will not re-light B until wake.

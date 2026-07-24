@@ -222,15 +222,33 @@ struct Device {
     std::mutex zoom_lock;
     bool zoom_active = false;
     hwc2_config_t active_config = kSingleConfig;
-    buffer_handle_t zoom_client_target = nullptr;
+    buffer_handle_t client_target = nullptr;
+    int32_t client_acquire_fence = -1;
+    buffer_handle_t zoom_client_target = nullptr; /* alias while zoom */
     int32_t zoom_acquire_fence = -1;
     bool disable_secondary = true; /* dual INTERNAL off for hinge/zoom path */
+    int fb0_fd = -1;
+    void* fb0_map = MAP_FAILED;
+    size_t fb0_map_size = 0;
+    struct fb_var_screeninfo vinfo0 {};
+    struct fb_fix_screeninfo finfo0 {};
+    char last_mode[16] = "single";
 };
 
 static bool WantZoomMode() {
     char buf[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.display_mode", buf, "single");
     return strcmp(buf, "zoom") == 0;
+}
+
+static bool WantPrimaryB() {
+    char buf[PROPERTY_VALUE_MAX] = {};
+    property_get("vendor.fujisan.active_primary", buf, "a");
+    return buf[0] == 'b' || buf[0] == 'B';
+}
+
+static void SetDisplayPowerProp(bool on) {
+    property_set("vendor.fujisan.display_power", on ? "1" : "0");
 }
 
 
@@ -319,6 +337,38 @@ static void CloseFb1(Device* d) {
         close(d->fb_fd);
         d->fb_fd = -1;
     }
+}
+
+static bool OpenFb0(Device* d) {
+    if (d->fb0_fd >= 0)
+        return true;
+    d->fb0_fd = open("/dev/graphics/fb0", O_RDWR | O_CLOEXEC);
+    if (d->fb0_fd < 0) {
+        ALOGE("open fb0 failed: %s", strerror(errno));
+        return false;
+    }
+    if (ioctl(d->fb0_fd, FBIOGET_VSCREENINFO, &d->vinfo0) < 0 ||
+        ioctl(d->fb0_fd, FBIOGET_FSCREENINFO, &d->finfo0) < 0) {
+        ALOGE("fb0 get screeninfo failed: %s", strerror(errno));
+        close(d->fb0_fd);
+        d->fb0_fd = -1;
+        return false;
+    }
+    d->fb0_map_size = d->finfo0.smem_len;
+    if (d->fb0_map_size == 0) {
+        d->fb0_map_size = (size_t)d->vinfo0.xres_virtual * d->vinfo0.yres_virtual *
+                          (d->vinfo0.bits_per_pixel / 8);
+    }
+    d->fb0_map = mmap(nullptr, d->fb0_map_size, PROT_READ | PROT_WRITE, MAP_SHARED, d->fb0_fd, 0);
+    if (d->fb0_map == MAP_FAILED) {
+        ALOGE("fb0 mmap failed: %s", strerror(errno));
+        close(d->fb0_fd);
+        d->fb0_fd = -1;
+        return false;
+    }
+    ALOGI("fb0 mapped %ux%u line=%u smem=%zu", d->vinfo0.xres, d->vinfo0.yres,
+          d->finfo0.line_length, d->fb0_map_size);
+    return true;
 }
 
 static hwc2_vsync_period_t PrimaryVsyncPeriodNs(Device* d, hwc2_display_t display) {
@@ -730,6 +780,108 @@ static bool CopyHandleToFb1(Device* d, buffer_handle_t handle) {
         ALOGI("fb1 post %dx%d stride=%d fmt=%d flags=0x%x ubwc=%d fb_ro=%u", w, h, stride_px, format,
               flags, ubwc ? 1 : 0, d->vinfo.red.offset);
     }
+    return true;
+}
+
+
+/* Post full 1080 client target to fb1 (closed_b primary or zoom interim). */
+static bool PostClientToFb1(Device* d, buffer_handle_t handle, int fence) {
+    if (!handle)
+        return false;
+    if (fence >= 0) {
+        (void)sync_wait(fence, 1000);
+        close(fence);
+    }
+    if (!CopyHandleToFb1(d, handle))
+        return false;
+    if (d->fb_fd >= 0)
+        ioctl(d->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+    WriteSysfs(kBl2Path, "180");
+    return true;
+}
+
+/* Split 2160x1920 client target: left -> fb0, right -> fb1 (1px hinge at x=1080 skipped into B col0). */
+static bool CopyZoomSplit(Device* d, buffer_handle_t handle, int fence) {
+    if (!handle)
+        return false;
+    if (fence >= 0) {
+        (void)sync_wait(fence, 1000);
+        close(fence);
+    }
+    if (!OpenFb0(d) || !OpenFb1(d) || d->fb0_map == MAP_FAILED || d->fb_map == MAP_FAILED)
+        return false;
+
+    int stride_px = kZoomWidth;
+    int w = kZoomWidth;
+    int h = FUJISAN_SEC_HEIGHT;
+    int format = HAL_PIXEL_FORMAT_RGBA_8888;
+    int flags = 0;
+    GetGrallocStridePx(handle, &stride_px, &w, &h, &format, &flags);
+    if (h > FUJISAN_SEC_HEIGHT)
+        h = FUJISAN_SEC_HEIGHT;
+    if (stride_px < w)
+        stride_px = w;
+
+    void* vaddr = TryGrallocRgbDataAddress(handle);
+    bool locked = false;
+    if (vaddr == nullptr) {
+        locked = MapperLockCpu(d, handle, stride_px, h, &vaddr);
+        if (!locked)
+            locked = MapperLockCpu(d, handle, w, h, &vaddr);
+    }
+    if (vaddr == nullptr) {
+        ALOGE("zoom split: no CPU base %dx%d stride=%d flags=0x%x", w, h, stride_px, flags);
+        return false;
+    }
+
+    const uint8_t* src = static_cast<const uint8_t*>(vaddr);
+    const size_t src_stride = static_cast<size_t>(stride_px) * 4;
+    const size_t dst0_stride = d->finfo0.line_length ? d->finfo0.line_length
+                                                     : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
+    const size_t dst1_stride = d->finfo.line_length ? d->finfo.line_length
+                                                    : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
+    auto* dst0 = static_cast<uint8_t*>(d->fb0_map);
+    auto* dst1 = static_cast<uint8_t*>(d->fb_map);
+    const int left_w = FUJISAN_SEC_WIDTH;
+    const int right_w = FUJISAN_SEC_WIDTH;
+    const int src_right_x = (w >= kZoomWidth) ? FUJISAN_SEC_WIDTH : 0; /* if only 1080, mirror */
+
+    for (int y = 0; y < h; y++) {
+        const uint8_t* srow = src + static_cast<size_t>(y) * src_stride;
+        uint8_t* d0 = dst0 + static_cast<size_t>(y) * dst0_stride;
+        uint8_t* d1 = dst1 + static_cast<size_t>(y) * dst1_stride;
+        memcpy(d0, srow, static_cast<size_t>(left_w) * 4);
+        if (w >= kZoomWidth) {
+            memcpy(d1, srow + static_cast<size_t>(src_right_x) * 4, static_cast<size_t>(right_w) * 4);
+        } else {
+            memcpy(d1, srow, static_cast<size_t>(right_w) * 4);
+        }
+    }
+    msync(d->fb0_map, d->fb0_map_size, MS_SYNC);
+    msync(d->fb_map, d->fb_map_size, MS_SYNC);
+
+    if (locked && d->mapper != nullptr) {
+        Error err = Error::NONE;
+        d->mapper->unlock(const_cast<native_handle_t*>(handle),
+                          [&](const auto e, const auto&) { err = e; });
+        (void)err;
+    }
+
+    d->vinfo0.xoffset = 0;
+    d->vinfo0.yoffset = 0;
+    d->vinfo0.activate = FB_ACTIVATE_VBL;
+    KickFb(d->fb0_fd, &d->vinfo0);
+    d->vinfo.xoffset = 0;
+    d->vinfo.yoffset = 0;
+    d->vinfo.activate = FB_ACTIVATE_VBL;
+    KickFb(d->fb_fd, &d->vinfo);
+    ioctl(d->fb0_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+    ioctl(d->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+    WriteSysfs(kBl2Path, "180");
+
+    static int once = 0;
+    if (once++ < 8)
+        ALOGI("zoom split post src=%dx%d stride=%d", w, h, stride_px);
     return true;
 }
 
@@ -1190,37 +1342,52 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_BAD_DISPLAY;
     if (display == kPrimaryDisplay) {
-        bool zoom = false;
+        bool zoom = WantZoomMode();
+        bool primary_b = WantPrimaryB();
         buffer_handle_t target = nullptr;
         int fence = -1;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
-            zoom = d->zoom_active || WantZoomMode();
-            if (zoom) {
-                target = d->zoom_client_target;
-                fence = d->zoom_acquire_fence;
-                d->zoom_acquire_fence = -1;
+            d->zoom_active = zoom;
+            d->active_config = zoom ? kZoomConfig : kSingleConfig;
+            target = d->client_target;
+            fence = d->client_acquire_fence;
+            d->client_acquire_fence = -1;
+            if (strcmp(d->last_mode, zoom ? "zoom" : "single") != 0) {
+                snprintf(d->last_mode, sizeof(d->last_mode), "%s", zoom ? "zoom" : "single");
+                ALOGI("display mode -> %s (refresh)", d->last_mode);
+                if (d->refresh_fn)
+                    d->refresh_fn(d->refresh_data, kPrimaryDisplay);
             }
         }
-        if (zoom) {
-            if (fence >= 0) {
-                (void)sync_wait(fence, 1000);
-                close(fence);
+
+        if (zoom && target) {
+            int w = 0, h = 0, stride = 0, format = 0, flags = 0;
+            GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
+            if (w >= kZoomWidth) {
+                /* Full virtual frame: CPU split to both panels; skip real HWC. */
+                (void)CopyZoomSplit(d, target, fence);
+                if (out_retire_fence)
+                    *out_retire_fence = -1;
+                return HWC2_ERROR_NONE;
             }
-            /* First-cut zoom: post full client target to fb1 path when 1080; real 2160 split follows
-             * once SF selects config1 and allocates 2160 client targets (UBWC-linear still required).
-             */
-            if (target) {
-                if (CopyHandleToFb1(d, target)) {
-                    if (d->fb_fd >= 0)
-                        ioctl(d->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
-                    WriteSysfs(kBl2Path, "180");
-                }
-            }
-            if (out_retire_fence)
-                *out_retire_fence = -1;
-            return HWC2_ERROR_NONE;
+            /* Still 1080 while zoom prop is set: present on A, mirror to B until SF switches. */
+            int32_t ret = d->fns.presentDisplay
+                                  ? d->fns.presentDisplay(d->real, display, out_retire_fence)
+                                  : HWC2_ERROR_UNSUPPORTED;
+            (void)PostClientToFb1(d, target, fence);
+            return ret;
         }
+
+        int32_t ret = d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
+                                            : HWC2_ERROR_UNSUPPORTED;
+        if (primary_b && target) {
+            (void)PostClientToFb1(d, target, fence);
+            fence = -1;
+        } else if (fence >= 0) {
+            close(fence);
+        }
+        return ret;
     }
     return d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                 : HWC2_ERROR_UNSUPPORTED;
@@ -1254,19 +1421,45 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_BAD_DISPLAY;
     if (display == kPrimaryDisplay) {
-        bool zoom;
+        const bool zoom = WantZoomMode();
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
-            zoom = d->zoom_active || WantZoomMode();
-            if (zoom) {
-                if (d->zoom_acquire_fence >= 0)
-                    close(d->zoom_acquire_fence);
-                d->zoom_client_target = target;
-                d->zoom_acquire_fence = acquire_fence;
+            if (d->client_acquire_fence >= 0)
+                close(d->client_acquire_fence);
+            d->client_target = target;
+            d->client_acquire_fence = acquire_fence;
+            d->zoom_client_target = target;
+            d->zoom_acquire_fence = -1; /* ownership kept in client_acquire_fence */
+            d->zoom_active = zoom;
+            d->active_config = zoom ? kZoomConfig : kSingleConfig;
+        }
+        if (zoom) {
+            /* Real msm HWC stays on 1080 config; wrapper owns zoom client target. */
+            int w = 0, h = 0, stride = 0, format = 0, flags = 0;
+            if (target)
+                GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
+            if (w >= kZoomWidth) {
                 (void)dataspace;
+                (void)damage;
                 return HWC2_ERROR_NONE;
             }
+            /* 1080 interim: still feed real HWC (dup fence). */
+            int fence_for_real = -1;
+            if (acquire_fence >= 0)
+                fence_for_real = dup(acquire_fence);
+            return d->fns.setClientTarget
+                           ? d->fns.setClientTarget(d->real, display, target, fence_for_real, dataspace,
+                                                    damage)
+                           : HWC2_ERROR_UNSUPPORTED;
         }
+        /* Single: real path owns the fence; we dup for optional fb1 post. */
+        int fence_for_real = -1;
+        if (acquire_fence >= 0)
+            fence_for_real = dup(acquire_fence);
+        return d->fns.setClientTarget
+                       ? d->fns.setClientTarget(d->real, display, target, fence_for_real, dataspace,
+                                                damage)
+                       : HWC2_ERROR_UNSUPPORTED;
     }
     return d->fns.setClientTarget
                ? d->fns.setClientTarget(d->real, display, target, acquire_fence, dataspace, damage)
@@ -1457,10 +1650,20 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
     }
     int32_t ret = d->fns.setPowerMode ? d->fns.setPowerMode(d->real, display, mode)
                                       : HWC2_ERROR_UNSUPPORTED;
-    /* Primary sleep/doze: always kill panel B so power key works with dual BL. */
-    if (display == kPrimaryDisplay && mode != HWC2_POWER_MODE_ON) {
-        WriteSysfs(kBl2Path, "0");
-        WriteSysfs("/sys/class/graphics/fb1/blank", "4");
+    if (display == kPrimaryDisplay) {
+        const bool on = (mode == HWC2_POWER_MODE_ON);
+        SetDisplayPowerProp(on);
+        if (!on) {
+            /* Sleep/doze: kill B; halld will not re-enable while display_power=0. */
+            WriteSysfs(kBl2Path, "0");
+            WriteSysfs("/sys/class/graphics/fb1/blank", "4");
+        } else {
+            /* Wake: halld re-applies posture; if zoom/primary-b, light B promptly. */
+            if (WantZoomMode() || WantPrimaryB()) {
+                WriteSysfs("/sys/class/graphics/fb1/blank", "0");
+                WriteSysfs(kBl2Path, "180");
+            }
+        }
     }
     return ret;
 }

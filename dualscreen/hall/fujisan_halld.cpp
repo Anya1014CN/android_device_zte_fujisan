@@ -1,10 +1,18 @@
 /*
  * Fujisan hall / panel power helper.
  *
- * hall_status (mxm1120): 1=A face closed, 2=open/mid, 3=C face closed (B out)
- * Do NOT infer "screen off" from primary backlight — when primary is B we
- * intentionally zero A, which previously killed B every 200ms.
- * Display sleep blanks B via HWC SetPowerMode on primary.
+ * hall_status (mxm1120 / ah1898):
+ *   1 = closed, A face out
+ *   2 = open (flat) -> ZOOM large screen
+ *   3 = closed, B face out
+ *
+ * Panel policy:
+ *   closed_a: A on (SF), B off
+ *   closed_b: keep A panel powered for composition, A BL=0, B on (HWC copies UI to fb1)
+ *   open/zoom: both panels on (HWC splits 2160 or mirrors until SF picks zoom)
+ *
+ * Display sleep: HWC sets vendor.fujisan.display_power=0 and blanks B.
+ * halld must NOT re-light B while asleep; on wake re-apply posture every loop.
  */
 #define LOG_TAG "FujisanHalld"
 #include <cutils/properties.h>
@@ -20,7 +28,7 @@ static int read_int_file(const char* path, int fallback) {
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0)
         return fallback;
-    char buf[32] = {};
+    char buf[64] = {};
     ssize_t n = read(fd, buf, sizeof(buf) - 1);
     close(fd);
     if (n <= 0)
@@ -39,9 +47,7 @@ static void write_sysfs(const char* path, const char* val) {
     close(fd);
 }
 
-/* Enable mxm1120 input device (stock leaves it off until userspace enables). */
 static void enable_m1120() {
-    write_sysfs("/sys/devices/virtual/input/input3/enable", "1");
     DIR* d = opendir("/sys/class/input");
     if (!d)
         return;
@@ -62,7 +68,6 @@ static void enable_m1120() {
         char en[256];
         snprintf(en, sizeof(en), "/sys/class/input/%s/enable", de->d_name);
         write_sysfs(en, "1");
-        ALOGI("enabled %s", en);
     }
     closedir(d);
 }
@@ -75,31 +80,50 @@ static void secondary_off() {
 static void secondary_on(int bl) {
     char b[16];
     snprintf(b, sizeof(b), "%d", bl);
-    /* Unblank first — brightness is ignored while panel is suspended. */
     write_sysfs("/sys/class/graphics/fb1/blank", "0");
     usleep(50 * 1000);
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
 }
 
-static void primary_panel_off() {
-    write_sysfs("/sys/class/leds/lcd-backlight/brightness", "0");
-    write_sysfs("/sys/class/graphics/fb0/blank", "4");
-}
-
-static void primary_panel_unblank() {
+/* Keep composition alive: only unblank, never powerdown fb0 from halld. */
+static void primary_keep_alive() {
     write_sysfs("/sys/class/graphics/fb0/blank", "0");
 }
 
+static void primary_bl_off() {
+    write_sysfs("/sys/class/leds/lcd-backlight/brightness", "0");
+}
+
+static bool display_is_on() {
+    char p[PROPERTY_VALUE_MAX] = "1";
+    property_get("vendor.fujisan.display_power", p, "1");
+    if (p[0] == '0')
+        return false;
+    /* Fallback: if primary panel is fully powered down and power prop missing. */
+    int fd = open("/sys/class/graphics/fb0/msm_fb_panel_status", O_RDONLY | O_CLOEXEC);
+    if (fd >= 0) {
+        char buf[64] = {};
+        (void)read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (strstr(buf, "suspend") && p[0] != '1')
+            return false;
+    }
+    return true;
+}
+
 int main() {
-    ALOGI("fujisan_halld start");
+    ALOGI("fujisan_halld start (single/zoom posture)");
     enable_m1120();
     usleep(100 * 1000);
 
     int last_st = -1;
     char last_primary[8] = {};
-    int last_bl1 = -1;
+    char last_mode[16] = {};
+    int last_power = -1;
 
     for (;;) {
+        enable_m1120();
+
         char preferred[PROPERTY_VALUE_MAX] = "a";
         property_get("persist.vendor.fujisan.primary_panel", preferred, "a");
         char force[PROPERTY_VALUE_MAX] = "0";
@@ -149,33 +173,36 @@ int main() {
         property_set("vendor.fujisan.display_mode", mode);
         property_set("vendor.fujisan.active_primary", primary);
 
-        if (st == 2 || force_b[0] == '1') {
-            /* Open or debug force: both panels powered. */
-            primary_panel_unblank();
+        const bool power_on = display_is_on();
+        if (!power_on) {
+            /* Sleep: leave primary to HWC/SF; ensure B stays off. */
+            secondary_off();
+        } else if (st == 2 || force_b[0] == '1') {
+            /* Open/zoom: both panels powered. */
+            primary_keep_alive();
             secondary_on(180);
         } else if (primary[0] == 'b') {
-            /* B face out: light B, park A. */
-            primary_panel_off();
+            /* B face: keep A composing, hide A BL, show B (HWC copies). */
+            primary_keep_alive();
+            primary_bl_off();
             secondary_on(180);
         } else {
-            /* A face out: light A (SF owns BL), park B. */
-            primary_panel_unblank();
+            /* A face single: B fully off. */
+            primary_keep_alive();
             secondary_off();
         }
 
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
-        bool changed = (st != last_st) || (strcmp(primary, last_primary) != 0) || (bl1 != last_bl1);
+        bool changed = (st != last_st) || (strcmp(primary, last_primary) != 0) ||
+                       (strcmp(mode, last_mode) != 0) || (power_on != (last_power == 1));
         if (changed) {
-            ALOGI("hall %d state=%s mode=%s primary=%s bl1=%d", st, state, mode, primary, bl1);
+            ALOGI("hall %d state=%s mode=%s primary=%s power=%d bl1=%d", st, state, mode, primary,
+                  power_on ? 1 : 0, bl1);
             last_st = st;
-            last_bl1 = bl1;
+            last_power = power_on ? 1 : 0;
             snprintf(last_primary, sizeof(last_primary), "%s", primary);
+            snprintf(last_mode, sizeof(last_mode), "%s", mode);
         }
-
-        /* Re-enable sensor periodically in case something disables it. */
-        static int tick;
-        if ((tick++ % 25) == 0)
-            enable_m1120();
 
         usleep(200 * 1000);
     }
