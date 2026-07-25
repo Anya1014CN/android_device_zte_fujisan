@@ -21,11 +21,16 @@ on property:vendor.fujisan.display_power=1
     restart fujisan_halld
 
 on property:persist.vendor.fujisan.user_mode=dual
-    # Topology changes are handled in-process by hwcomposer.fujisan.  Restarting
-    # either compositor used to replay bootanimation and discarded every live
-    # surface, so only ask the event-driven hall helper to reconcile input and
-    # panel power for the newly selected topology.
+    # On this legacy MDSS stack a primary mode change does not cause
+    # SurfaceFlinger to recreate its wide client target.  Keeping it alive
+    # leaves fb1 with a stale crop/stride (garbled B) and retains the old
+    # mobile Configuration.  Recreate the compositor transactionally so both
+    # display topology and app resources are regenerated from the new mode.
+    restart vendor.hwcomposer-2-4
+    restart surfaceflinger
     restart fujisan_halld
 
 on property:persist.vendor.fujisan.user_mode=zoom
+    restart vendor.hwcomposer-2-4
+    restart surfaceflinger
     restart fujisan_halld
