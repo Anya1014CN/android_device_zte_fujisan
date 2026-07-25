@@ -7,15 +7,6 @@ Current bring-up assumptions:
 - stock vendor manifest and compatibility matrix are used as the initial VINTF baseline
 # Fujisan (ZTE Axon M)
 
-## LineageOS 19.1 upstream replacement
-
-This device has four source replacements in addition to its regular device,
-kernel, and vendor trees: `frameworks/base`, `frameworks/native`, Settings, and
-Trebuchet. Before syncing a fresh tree, install the local manifest stored at
-`upstream-manifest/fujisan.xml` as
-`.repo/local_manifests/fujisan.xml`, then sync all four replacement paths.
-
-The matching standard `lineage.dependencies` entry is retained for roomservice
-dependency discovery.  Roomservice deliberately does not replace projects
-already present in the main Lineage manifest, so the local-manifest override is
-necessary to select the `Anya1014CN` fork rather than LineageOS upstream.
+The LineageOS 19.1 adaptation is self-contained in this device tree together
+with the regular kernel and vendor trees. It does not require framework,
+native, Settings, or Trebuchet source replacements.

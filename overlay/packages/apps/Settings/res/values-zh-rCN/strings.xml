@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fujisan_display_mode_title">双屏模式</string>
+    <string name="fujisan_display_mode_summary">选择扩展或独立布局</string>
+</resources>

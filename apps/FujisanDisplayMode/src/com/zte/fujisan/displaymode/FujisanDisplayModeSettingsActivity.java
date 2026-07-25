@@ -9,6 +9,7 @@ import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 /** The implementation behind Settings > Display > Dual-screen mode. */
 public final class FujisanDisplayModeSettingsActivity extends Activity {
@@ -37,6 +38,15 @@ public final class FujisanDisplayModeSettingsActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        // Settings uses a static resource overlay to link here.  Keep the
+        // topology policy in this device app: folded hardware must never
+        // expose a mode selector, even when launched from an old Settings
+        // process whose preference screen has not been recreated yet.
+        if (!isOpen()) {
+            Toast.makeText(this, R.string.settings_unfold_required, Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
         setTitle(R.string.settings_display_mode_title);
 
         final LinearLayout root = new LinearLayout(this);
