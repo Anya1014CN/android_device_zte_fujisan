@@ -32,9 +32,14 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     sys.usb.controller=6a00000.dwc3 \
 
 # product/system_ext defaults ship persist.sys.usb.config=none; override them.
+# Settings ships its 12L two-pane implementation but leaves it behind a
+# feature flag on phone products. Extended mode is a 2160x1920 logical display
+# (720dp wide at the device density), so opt into that existing code without a
+# Settings fork.
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.usb.config=adb \
     sys.usb.configfs=1 \
+    persist.sys.fflag.override.settings_support_large_screen=true \
 
 PRODUCT_SYSTEM_EXT_PROPERTIES += \
     persist.sys.usb.config=adb \
