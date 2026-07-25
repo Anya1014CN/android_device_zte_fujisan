@@ -49,7 +49,9 @@ PRODUCT_VENDOR_PROPERTIES += \
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
     fujisan_halld \
-    NavigationBarModeGesturalOverlay
+    NavigationBarModeGesturalOverlay \
+    androidx.window.sidecar \
+    androidx.window.extensions
 
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
@@ -225,6 +227,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.dualscreen.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.dualscreen.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
     $(LOCAL_PATH)/configs/permissions/privapp-permissions-fujisan.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/privapp-permissions-fujisan.xml \
+    $(LOCAL_PATH)/configs/permissions/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.freeform_window_management.xml \
     $(LOCAL_PATH)/configs/display/display_settings.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display_settings.xml \
     $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \

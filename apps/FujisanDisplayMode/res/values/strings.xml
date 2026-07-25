@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Fujisan Display Mode</string>
-    <string name="tile_extension">扩展模式</string>
-    <string name="tile_dual">双屏模式</string>
-    <string name="tile_extension_subtitle">A+B 大屏</string>
-    <string name="tile_dual_subtitle">独立双屏</string>
+    <string name="app_name">Dual-screen mode</string>
+    <string name="tile_title">Dual-screen mode</string>
+    <string name="tile_switch_extension">Extended mode</string>
+    <string name="tile_switch_dual">Independent mode</string>
+    <string name="tile_unfold_required">Unfold device</string>
+    <string name="settings_display_mode_title">Dual-screen mode</string>
+    <string name="settings_display_mode_summary">Choose the extended or independent layout</string>
+    <string name="settings_extension">Extended mode</string>
+    <string name="settings_dual">Independent mode</string>
+    <string name="settings_unfold_required">Unfold device to change dual-screen mode</string>
 </resources>

@@ -11,13 +11,19 @@
         <service
             android:name=".FujisanDisplayModeTile"
             android:icon="@drawable/ic_display_mode"
-            android:label="@string/tile_extension"
+            android:label="@string/tile_title"
             android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+
+        <activity
+            android:name=".FujisanDisplayModeSettingsActivity"
+            android:exported="true"
+            android:label="@string/settings_display_mode_title">
+        </activity>
 
         <receiver
             android:name=".TilePlacementReceiver"

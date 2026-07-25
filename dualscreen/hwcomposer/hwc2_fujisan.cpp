@@ -215,6 +215,9 @@ struct Device {
     pthread_t vsync_thread{};
     std::atomic<bool> vsync_thread_run{false};
     std::atomic<bool> secondary_attached{false};
+    std::atomic<bool> secondary_topology_pending{false};
+    std::atomic<bool> secondary_overlay_reset_pending{false};
+    std::atomic<bool> primary_refresh_after_topology{false};
     std::atomic<bool> primary_reprobe_pending{false};
 
     int fb_fd = -1;
@@ -242,6 +245,8 @@ struct Device {
     struct fb_fix_screeninfo finfo0 {};
     char last_mode[16] = "single";
     bool mode_seen = false;
+    bool topology_seen = false;
+    bool dual_internal_active = false;
 
     /* Physical B power is owned by fujisan_halld.  These track its hinge
      * availability so the independent logical display gets one redraw only
@@ -515,13 +520,10 @@ static void EnsureVsyncThread(Device* d) {
     }
 }
 
-static void ScheduleSecondaryAttach(Device* d) {
-    /* Zoom exposes A+B as one 2160x1920 logical panel.  Advertising a
-     * separate local:1 display in that mode makes InputReader route B touch
-     * to an invisible secondary-display task instead of the wide primary. */
-    if (!DualInternalEnabled())
-        return;
-
+static void ReconcileSecondaryTopology(Device* d) {
+    /* Never call a SurfaceFlinger callback from PresentDisplay. The callback
+     * can synchronously query HWC, so topology changes are serialized by a
+     * detached worker. */
     HWC2_PFN_HOTPLUG fn = nullptr;
     hwc2_callback_data_t data = nullptr;
     {
@@ -529,27 +531,94 @@ static void ScheduleSecondaryAttach(Device* d) {
         fn = d->hotplug_fn;
         data = d->hotplug_data;
     }
-    /* A real-primary hotplug can arrive while the HWC starts, before
-     * SurfaceFlinger registers its callback.  Do not consume the one-shot
-     * secondary attach in that window or the fresh SurfaceFlinger instance
-     * will never learn about B. */
     if (!fn)
         return;
-    if (d->secondary_attached.exchange(true))
+
+    const bool want_dual = DualInternalEnabled();
+    const bool attached = d->secondary_attached.load();
+    if (want_dual == attached)
         return;
+
+    /* An independent B target and a zoom right-half target have different
+     * source crops. Retire the old MDSS overlay before the next present path
+     * allocates the replacement. */
+    d->secondary_overlay_reset_pending.store(true);
+
+    if (want_dual) {
+        {
+            std::lock_guard<std::mutex> sc(d->sec.lock);
+            d->sec.hotplugged = true;
+            d->sec.power_on = true;
+            d->sec.validated = false;
+        }
+        d->secondary_attached.store(true);
+        EnsureVsyncThread(d);
+        ALOGI("attach independent INTERNAL display 1");
+        fn(data, kSecondaryDisplay, HWC2_CONNECTION_CONNECTED);
+        return;
+    }
 
     {
         std::lock_guard<std::mutex> sc(d->sec.lock);
-        d->sec.hotplugged = true;
-        d->sec.power_on = true;
+        d->sec.hotplugged = false;
+        d->sec.power_on = false;
+        d->sec.validated = false;
+        d->sec.layers.clear();
+        d->sec.client_target = nullptr;
+        if (d->sec.client_acquire_fence >= 0) {
+            close(d->sec.client_acquire_fence);
+            d->sec.client_acquire_fence = -1;
+        }
     }
-    EnsureVsyncThread(d);
-    ALOGI("attach independent INTERNAL display 1");
-    fn(data, kSecondaryDisplay, HWC2_CONNECTION_CONNECTED);
+    d->secondary_attached.store(false);
+    ALOGI("detach independent INTERNAL display 1 for zoom topology");
+    fn(data, kSecondaryDisplay, HWC2_CONNECTION_DISCONNECTED);
 }
 
-/* DisplayManager only re-enumerates the primary mode after a hotplug event.
- * Run the callback off the present path to avoid re-entering SurfaceFlinger. */
+static void ScheduleSecondaryTopology(Device* d);
+static void SchedulePrimaryReprobe(Device* d);
+
+static void* SecondaryTopologyThreadMain(void* arg) {
+    auto* d = reinterpret_cast<Device*>(arg);
+    ReconcileSecondaryTopology(d);
+    if (d->primary_refresh_after_topology.exchange(false))
+        SchedulePrimaryReprobe(d);
+    d->secondary_topology_pending.store(false);
+    /* A user can tap twice while this callback is in flight. Schedule exactly
+     * one follow-up only if the final property differs from the state we just
+     * published; there is no periodic work in the steady state. */
+    if (DualInternalEnabled() != d->secondary_attached.load())
+        ScheduleSecondaryTopology(d);
+    return nullptr;
+}
+
+static void ScheduleSecondaryTopology(Device* d) {
+    if (d->secondary_topology_pending.exchange(true))
+        return;
+    pthread_t thread {};
+    if (pthread_create(&thread, nullptr, SecondaryTopologyThreadMain, d) != 0) {
+        d->secondary_topology_pending.store(false);
+        ALOGE("secondary topology worker create failed");
+        return;
+    }
+    pthread_detach(thread);
+}
+
+static void ResetSecondaryOverlayIfNeeded(Device* d) {
+    if (!d->secondary_overlay_reset_pending.exchange(false))
+        return;
+    if (d->fb_fd >= 0 && d->sec_overlay_id != MSMFB_NEW_REQUEST) {
+        uint32_t id = d->sec_overlay_id;
+        (void)ioctl(d->fb_fd, MSMFB_OVERLAY_UNSET, &id);
+    }
+    d->sec_overlay_id = MSMFB_NEW_REQUEST;
+}
+
+/* SurfaceFlinger reloads a physical display's supported modes after a connected
+ * callback for an already-known HWC display.  Do that off the present path to
+ * avoid re-entering SurfaceFlinger.  Deliberately do not send a preceding
+ * disconnect: that tears down the logical display, briefly invalidates every
+ * input viewport and makes SystemUI look like it has rebooted. */
 static void* PrimaryReprobeThreadMain(void* arg) {
     auto* d = reinterpret_cast<Device*>(arg);
     HWC2_PFN_HOTPLUG fn = nullptr;
@@ -560,18 +629,8 @@ static void* PrimaryReprobeThreadMain(void* arg) {
         data = d->hotplug_data;
     }
     if (fn) {
-        ALOGI("reprobe primary display: disconnect");
-        fn(data, kPrimaryDisplay, HWC2_CONNECTION_DISCONNECTED);
-        usleep(250 * 1000);
-        {
-            std::lock_guard<std::mutex> cl(d->cb_lock);
-            fn = d->hotplug_fn;
-            data = d->hotplug_data;
-        }
-        if (fn) {
-            ALOGI("reprobe primary display: connect");
-            fn(data, kPrimaryDisplay, HWC2_CONNECTION_CONNECTED);
-        }
+        ALOGI("reprobe primary display: in-place mode refresh");
+        fn(data, kPrimaryDisplay, HWC2_CONNECTION_CONNECTED);
     }
     d->primary_reprobe_pending.store(false);
     return nullptr;
@@ -1140,6 +1199,7 @@ static int32_t __attribute__((unused)) SecPresent(Device* d, int32_t* out_retire
     /* halld blanks fb1 while folded.  Do not create/play an overlay against a
      * powered-down MDSS panel; it fails with EPERM and leaves no valid pipe
      * to receive the first frame after the next hinge-open. */
+    ResetSecondaryOverlayIfNeeded(d);
     if (target && SecondaryPanelAvailable())
         PostHandleOverlayToFb1(d, target);
     if (out_retire)
@@ -1166,7 +1226,7 @@ static void HotplugTrampoline(hwc2_callback_data_t cb_data, hwc2_display_t displ
     if (fn && display != kSecondaryDisplay)
         fn(user, display, connected);
     if (display == kPrimaryDisplay && connected == HWC2_CONNECTION_CONNECTED)
-        ScheduleSecondaryAttach(dev);
+        ScheduleSecondaryTopology(dev);
 }
 
 static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
@@ -1208,9 +1268,9 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
                 ? d->fns.registerCallback(d->real, descriptor, d,
                                          reinterpret_cast<hwc2_function_pointer_t>(HotplugTrampoline))
                 : HWC2_ERROR_UNSUPPORTED;
-        // Also schedule attach in case primary hotplug already fired.
+        // Also reconcile in case primary hotplug already fired.
         if (err == HWC2_ERROR_NONE)
-            ScheduleSecondaryAttach(d);
+            ScheduleSecondaryTopology(d);
         return err;
     }
 
@@ -1592,11 +1652,13 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
         return SecPresent(d, out_retire_fence);
     if (display == kPrimaryDisplay) {
         bool zoom = WantZoomMode();
+        const bool dual_internal = DualInternalEnabled();
         bool primary_b = WantPrimaryB();
         buffer_handle_t target = nullptr;
         int fence = -1;
         bool refresh_secondary = false;
         bool reprobe_primary = false;
+        bool reconfigure_secondary_topology = false;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
             d->zoom_active = zoom;
@@ -1605,7 +1667,12 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             fence = d->client_acquire_fence;
             d->client_acquire_fence = -1;
 
-            if (DualInternalEnabled()) {
+            if (!d->topology_seen || d->dual_internal_active != dual_internal) {
+                d->topology_seen = true;
+                d->dual_internal_active = dual_internal;
+                reconfigure_secondary_topology = true;
+            }
+            if (dual_internal) {
                 const bool available = SecondaryPanelAvailable();
                 const int64_t now = MonotonicNs();
                 if (available != d->secondary_panel_available) {
@@ -1639,8 +1706,16 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             }
         }
 
-        if (reprobe_primary)
+        if (reconfigure_secondary_topology) {
+            /* Dual <-> zoom must first retire/create B's physical display.
+             * Re-enumerating the primary afterwards prevents SurfaceFlinger
+             * from ever seeing the old wide target and local:1 together. */
+            if (reprobe_primary)
+                d->primary_refresh_after_topology.store(true);
+            ScheduleSecondaryTopology(d);
+        } else if (reprobe_primary) {
             SchedulePrimaryReprobe(d);
+        }
 
         if (refresh_secondary) {
             HWC2_PFN_REFRESH fn = nullptr;
@@ -1665,6 +1740,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
                 int32_t ret = d->fns.presentDisplay
                                       ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                       : HWC2_ERROR_UNSUPPORTED;
+                ResetSecondaryOverlayIfNeeded(d);
                 (void)PostZoomSecondaryOverlay(d, target, fence);
                 return ret;
             }
@@ -1672,6 +1748,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             int32_t ret = d->fns.presentDisplay
                                   ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                   : HWC2_ERROR_UNSUPPORTED;
+            ResetSecondaryOverlayIfNeeded(d);
             (void)PostClientToFb1(d, target, fence);
             return ret;
         }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">双屏模式</string>
+    <string name="tile_title">双屏模式</string>
+    <string name="tile_switch_extension">扩展模式</string>
+    <string name="tile_switch_dual">独立模式</string>
+    <string name="tile_unfold_required">请展开设备</string>
+    <string name="settings_display_mode_title">双屏模式</string>
+    <string name="settings_display_mode_summary">选择扩展或独立双屏布局</string>
+    <string name="settings_extension">扩展模式</string>
+    <string name="settings_dual">独立模式</string>
+    <string name="settings_unfold_required">请展开设备后再切换双屏模式</string>
+</resources>

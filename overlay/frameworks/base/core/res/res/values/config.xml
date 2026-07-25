@@ -40,4 +40,26 @@
         <item>1</item>
     </integer-array>
     <integer-array name="config_halfFoldedDeviceStates" />
+
+    <!--
+      The two 1080x1920 panels form one 2160x1920 logical display when open.
+      This is an actual physical gap, not a display cutout.  The WindowManager
+      Jetpack extension rotates this natural-orientation rectangle with the
+      display, so portrait has a vertical central hinge and landscape has a
+      horizontal central hinge.
+
+      State 0 is folded and deliberately maps to UNKNOWN, which suppresses the
+      feature while only panel A is active.  State 1 is the opened/flat posture.
+    -->
+    <string name="config_display_features" translatable="false">hinge-[1079,0,1081,1920]</string>
+    <string-array name="config_device_state_postures" translatable="false">
+        <item>0:-1</item>
+        <item>1:3</item>
+    </string-array>
+
+    <!-- The platform already supports split screen; make the large unfolded
+         display an always-eligible multi-window and freeform target. -->
+    <bool name="config_freeformWindowManagement">true</bool>
+    <integer name="config_supportsNonResizableMultiWindow">1</integer>
+    <integer name="config_respectsActivityMinWidthHeightMultiWindow">-1</integer>
 </resources>

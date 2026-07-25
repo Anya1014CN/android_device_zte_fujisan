@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Enables the public freeform capability.  ActivityTaskManager and Trebuchet
+     both gate the small-window task action on this feature. -->
+<permissions>
+    <feature name="android.software.freeform_window_management" />
+</permissions>

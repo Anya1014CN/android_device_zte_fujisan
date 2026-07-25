@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Settings-side controller is common code; only Fujisan opts in. -->
+    <bool name="config_show_fujisan_display_mode">true</bool>
+</resources>
