@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Keep the display-mode tile in slot 6 on a fresh/reset QS layout. -->
-    <string name="quick_settings_tiles_default" translatable="false">
-        internet,bt,flashlight,dnd,alarm,custom(com.zte.fujisan.displaymode/com.zte.fujisan.displaymode.FujisanDisplayModeTile),airplane,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle
-    </string>
-</resources>

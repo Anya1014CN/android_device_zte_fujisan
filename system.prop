@@ -84,9 +84,10 @@ vendor.fujisan.device_state=closed_a
 vendor.fujisan.display_mode=single
 persist.vendor.fujisan.primary_panel=a
 persist.vendor.fujisan.primary_force=0
-# Default to two independent INTERNAL displays.  A device that already has a
-# persisted value keeps it; set this property to 1 once after updating.
-persist.vendor.fujisan.dual_internal=1
+# Fujisan exposes a single virtual A+B display while unfolded.  Kept at zero
+# for compatibility with older data partitions; hwcomposer ignores legacy
+# independent-display requests.
+persist.vendor.fujisan.dual_internal=0
 vendor.fujisan.display_power=1
 vendor.fujisan.active_primary=a
 ro.feature.target_dual_display=1

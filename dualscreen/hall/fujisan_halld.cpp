@@ -342,18 +342,6 @@ int main() {
         property_get("persist.vendor.fujisan.force_b_on", force_b, "0");
         char force_mode[PROPERTY_VALUE_MAX] = "";
         property_get("persist.vendor.fujisan.force_mode", force_mode, "");
-        char dual_internal[PROPERTY_VALUE_MAX] = "0";
-        property_get("persist.vendor.fujisan.dual_internal", dual_internal, "0");
-        /* The QS tile writes this persistent, vendor-public property once per
-         * tap.  Reading it here is a property-area lookup in the daemon's
-         * existing hinge loop; it does not spawn a command or add a polling
-         * worker.  An unset value preserves the historical persistent default. */
-        char user_mode[PROPERTY_VALUE_MAX] = "";
-        property_get("persist.vendor.fujisan.user_mode", user_mode, "");
-        if (!strcmp(user_mode, "dual"))
-            dual_internal[0] = '1';
-        else if (!strcmp(user_mode, "zoom"))
-            dual_internal[0] = '0';
         char boot_completed[PROPERTY_VALUE_MAX] = "0";
         property_get("sys.boot_completed", boot_completed, "0");
         const bool boot_done = boot_completed[0] == '1';
@@ -372,12 +360,7 @@ int main() {
         const char* mode = "single";
         char primary[8] = "a";
 
-        if (dual_internal[0] == '1') {
-            /* Two independent INTERNAL displays.  HWC owns B's client target;
-             * keep its rails up instead of entering the single-display zoom path. */
-            state = "dual";
-            mode = "dual";
-        } else if (force_mode[0] == 'z') {
+        if (force_mode[0] == 'z') {
             /* "zoom" selects the virtual-wide display policy; it must not
              * pin it on while the device is physically folded. */
             if (st == 1) {

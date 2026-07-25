@@ -1,7 +1,0 @@
-vendor_public_prop(fujisan_mode_prop)
-
-# The platform-signed Quick Settings tile is the sole UI writer.  The property
-# is public only so the vendor HWC and hall daemon can consume the selection.
-set_prop(priv_app, fujisan_mode_prop)
-
-get_prop(fujisan_halld, fujisan_mode_prop)

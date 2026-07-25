@@ -257,15 +257,10 @@ struct Device {
 };
 
 static bool DualInternalEnabled() {
-    char mode[PROPERTY_VALUE_MAX] = {};
-    property_get("persist.vendor.fujisan.user_mode", mode, "");
-    if (!strcmp(mode, "dual"))
-        return true;
-    if (!strcmp(mode, "zoom"))
-        return false;
-    char dual[PROPERTY_VALUE_MAX] = {};
-    property_get("persist.vendor.fujisan.dual_internal", dual, "0");
-    return dual[0] == '1';
+    /* The product supports only the virtual A+B topology.  Ignore old
+     * persisted dual-mode properties so an OTA from an earlier build cannot
+     * resurrect the retired independent INTERNAL display. */
+    return false;
 }
 
 static bool WantZoomMode() {
