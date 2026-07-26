@@ -352,7 +352,20 @@ int main() {
         const char* mode = "single";
         char primary[8] = "a";
 
-        if (force_mode[0] == 'z') {
+        /* The boot-animation compositor only has a reliable primary-panel
+         * contract.  Never publish the virtual 2160px configuration before
+         * Android declares boot complete: an unfolded cold boot consequently
+         * stays on A for the whole animation.  init restarts this daemon on
+         * sys.boot_completed=1, at which point the very first reconciliation
+         * applies the actual hinge posture once, without any polling.
+         *
+         * Keep reading/exporting hall_status during this gate so the first
+         * post-boot pass cannot race a mechanical transition. */
+        if (!boot_done) {
+            state = "boot_single";
+            mode = "single";
+            snprintf(primary, sizeof(primary), "a");
+        } else if (force_mode[0] == 'z') {
             /* "zoom" selects the virtual-wide display policy; it must not
              * pin it on while the device is physically folded. */
             if (st == 1) {
@@ -409,21 +422,14 @@ int main() {
         const bool posture_wants_b = mode[0] == 'z' ||
                                      (mode[0] == 'd' && st != 1) ||
                                      force_b[0] == '1';
-        /* SetPowerMode reports OFF while BootAnimation owns the primary
-         * surface, even though both physical panels can scan out.  Honor the
-         * hinge during that interval so an unfolded boot lights B; once
-         * Android is ready, return to the normal power-state policy. */
-        const bool want_b = posture_wants_b && (boot_done ? power_on : true);
+        /* The startup gate deliberately keeps B dark.  After boot, follow
+         * the real screen power state as usual. */
+        const bool want_b = boot_done && posture_wants_b && power_on;
 
         const int bl0 = read_int_file("/sys/class/leds/lcd-backlight/brightness", -1);
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
         const int want_b_int = want_b ? 1 : 0;
-        /* A fold-open boot already has HWC's virtual-wide topology before
-         * boot completion.  Light B in that posture so BootAnimation reaches
-         * both panels; a folded boot still leaves B untouched until Android
-         * is ready.  We only control backlight here, never fb1 blank/rails. */
-        if ((boot_done || want_b) &&
-            (!boot_panel_reconciled || want_b_int != last_want_b)) {
+        if (boot_done && (!boot_panel_reconciled || want_b_int != last_want_b)) {
             if (want_b)
                 /* Both panels expose the same 0..255 range.  Bring B up at
                  * the current system brightness.  Before Lights has written

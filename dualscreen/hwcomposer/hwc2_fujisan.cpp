@@ -274,6 +274,14 @@ static bool DualInternalEnabled() {
 static bool WantZoomMode() {
     if (DualInternalEnabled())
         return false;
+    /* BootAnimation is drawn before Android owns a stable 2160-wide client
+     * target.  Force the physical primary configuration until halld is
+     * restarted by init at sys.boot_completed=1; this also protects against
+     * a stale transient display_mode property during service startup. */
+    char boot_completed[PROPERTY_VALUE_MAX] = {};
+    property_get("sys.boot_completed", boot_completed, "0");
+    if (boot_completed[0] != '1')
+        return false;
     char buf[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.display_mode", buf, "single");
     return strcmp(buf, "zoom") == 0;
