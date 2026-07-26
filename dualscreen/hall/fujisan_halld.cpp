@@ -414,17 +414,18 @@ int main() {
         const int bl0 = read_int_file("/sys/class/leds/lcd-backlight/brightness", -1);
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
         const int want_b_int = want_b ? 1 : 0;
-        /* MDSS may acknowledge an unblank before its initial boot setup is
-         * complete, then leave B dark until the next hinge transition.  Do
-         * not touch B's rails during that window.  Once Android is fully
-         * booted, reconcile the current hinge state exactly once; from then
-         * on, only a real B on/off transition writes panel power. */
-        if (boot_done &&
+        /* A fold-open boot already has HWC's virtual-wide topology before
+         * boot completion.  Light B in that posture so BootAnimation reaches
+         * both panels; a folded boot still leaves B untouched until Android
+         * is ready.  We only control backlight here, never fb1 blank/rails. */
+        if ((boot_done || want_b) &&
             (!boot_panel_reconciled || want_b_int != last_want_b)) {
             if (want_b)
                 /* Both panels expose the same 0..255 range.  Bring B up at
-                 * the current system brightness, never at a fixed level. */
-                secondary_on(bl0 >= 0 ? bl0 : 180);
+                 * the current system brightness.  Before Lights has written
+                 * A, use the panel's normal boot brightness as a temporary
+                 * value; the existing post-boot mirror takes over later. */
+                secondary_on(bl0 > 0 ? bl0 : 87);
             else
                 secondary_off();
             last_want_b = want_b_int;
