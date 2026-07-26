@@ -954,13 +954,23 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
     if (stride_px < src_x + w)
         stride_px = src_x + w;
 
-    const bool ubwc = (flags & PRIV_FLAGS_UBWC_ALIGNED) != 0;
-
     const auto* gralloc = reinterpret_cast<const FujisanPrivateHandle*>(handle);
     if (gralloc->magic != kFujisanGrallocMagic || gralloc->fd < 0) {
         ALOGE("invalid fb1 client target handle magic=0x%x fd=%d", gralloc->magic, gralloc->fd);
         return false;
     }
+
+    const bool ubwc = (flags & PRIV_FLAGS_UBWC_ALIGNED) != 0;
+    /* The msm8996 gralloc used by the vendor composer can retain the
+     * RGBA_8888 format field when SurfaceFlinger resizes a folded 1080-wide
+     * client target to 2160-wide.  Its allocation is nevertheless a 16-bpp
+     * RGB565 buffer (about half the RGBA size).  Passing the stale format to
+     * MDSS makes the driver demand twice the dma-buf size and reject B's
+     * overlay.  Trust the allocation extent in that transition. */
+    const uint64_t rgba_bytes = static_cast<uint64_t>(stride_px) * h * 4;
+    const bool compact_rgb565 =
+        gralloc->size > 0 && static_cast<uint64_t>(gralloc->size) < rgba_bytes;
+    const bool rgb565 = format == HAL_PIXEL_FORMAT_RGB_565 || compact_rgb565;
 
     if (*overlay_id == MSMFB_NEW_REQUEST) {
         mdp_overlay overlay {};
@@ -971,7 +981,7 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
          * SurfaceFlinger may choose RGB_565 for the 2160-wide client target;
          * treating that 2-byte buffer as RGBA makes MDSS request twice the
          * available dma-buf size and leaves panel B without a valid frame. */
-        if (format == HAL_PIXEL_FORMAT_RGB_565)
+        if (rgb565)
             overlay.src.format = MDP_RGB_565;
         else
             overlay.src.format = ubwc ? MDP_RGBA_8888_UBWC : MDP_RGBA_8888;
@@ -993,8 +1003,9 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
             return false;
         }
         *overlay_id = overlay.id;
-        ALOGI("%s overlay configured id=0x%x src=%dx%d crop_x=%d dst=%dx%d ubwc=%d", panel,
-              overlay.id, stride_px, h, src_x, w, h, ubwc ? 1 : 0);
+        ALOGI("%s overlay configured id=0x%x src=%dx%d crop_x=%d dst=%dx%d fmt=%d size=%u rgb565=%d ubwc=%d", panel,
+              overlay.id, stride_px, h, src_x, w, h, format, gralloc->size,
+              rgb565 ? 1 : 0, ubwc ? 1 : 0);
     }
 
     msmfb_overlay_data post {};
