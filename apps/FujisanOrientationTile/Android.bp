@@ -1,0 +1,10 @@
+android_app {
+    name: "FujisanOrientationTile",
+    srcs: ["src/**/*.java"],
+    resource_dirs: ["res"],
+    manifest: "AndroidManifest.xml",
+    certificate: "platform",
+    privileged: true,
+    product_specific: true,
+    platform_apis: true,
+}

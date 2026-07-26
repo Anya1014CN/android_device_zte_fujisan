@@ -16,3 +16,9 @@ on post-fs-data
 
 on property:init.svc.vendor.wifi_hal_legacy=running
     setprop wlan.driver.status ok
+
+# The QCA CLD driver is built into the 4.4 kernel, unlike ZTE's original
+# loadable module. Start it only after /vendor firmware is available: doing so
+# from post-fs can block init while the driver waits for firmware.
+on property:sys.boot_completed=1
+    write /sys/module/wlan/parameters/fwpath sta

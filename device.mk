@@ -55,6 +55,7 @@ PRODUCT_VENDOR_PROPERTIES += \
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
     fujisan_halld \
+    FujisanOrientationTile \
     NavigationBarModeGesturalOverlay \
     androidx.window.sidecar \
     androidx.window.extensions

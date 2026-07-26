@@ -1,6 +1,6 @@
 /*
  * Fujisan HWC2 wrapper (Composer 2.4)
- *  Closed (single): passthrough hwcomposer.msm8996 on panel A or B (primary_panel).
+ *  Closed (single): passthrough CAF hwcomposer.msm8996 on panel A or B (primary_panel).
  *  Open (zoom): one logical 2160x1920 INTERNAL, client target split to fb0|fb1 with 1px hinge.
  *  Secondary hotplug disabled — stock dual-LCD ZOOM path, not dual INTERNAL.
  */
@@ -195,6 +195,57 @@ struct SecondaryState {
     int32_t client_acquire_fence = -1;
 };
 
+/*
+ * Zoom is one logical display, but Fujisan has two independent 1080-wide
+ * MDSS targets.  Keep the original HWC2 layer state here so the wrapper can
+ * submit the visible part of a normal layer to each target directly instead
+ * of asking SurfaceFlinger to first render a 2160-wide client target.
+ *
+ * This deliberately supports only the common, zero-transform RGB path.  A
+ * layer that cannot be represented safely is left to the established client
+ * target route; correctness is more important than avoiding one GPU frame.
+ */
+struct ZoomOverlay {
+    uint32_t id = MSMFB_NEW_REQUEST;
+    int src_w = 0;
+    int src_h = 0;
+    int format = 0;
+    int flags = 0;
+    int src_x = 0;
+    int src_y = 0;
+    int src_crop_w = 0;
+    int src_crop_h = 0;
+    int dst_x = 0;
+    int dst_y = 0;
+    int dst_w = 0;
+    int dst_h = 0;
+    uint32_t z = 0;
+    uint32_t alpha = MDP_ALPHA_NOP;
+    uint32_t blend = BLEND_OP_OPAQUE;
+};
+
+struct ZoomLayer {
+    int32_t requested = HWC2_COMPOSITION_CLIENT;
+    int32_t validated = HWC2_COMPOSITION_CLIENT;
+    bool changed = false;
+    buffer_handle_t buffer = nullptr;
+    int acquire_fence = -1;
+    hwc_rect_t frame{};
+    hwc_frect_t crop{};
+    int32_t transform = 0;
+    int32_t blend = HWC2_BLEND_MODE_NONE;
+    float alpha = 1.0f;
+    int32_t dataspace = HAL_DATASPACE_UNKNOWN;
+    uint32_t z = 0;
+    hwc_color_t color{};
+    bool has_color = false;
+    const native_handle_t* sideband = nullptr;
+    bool has_sideband = false;
+    bool device_candidate = false;
+    ZoomOverlay a{};
+    ZoomOverlay b{};
+};
+
 struct Device {
     hwc2_device_t base{};
     hwc2_device_t* real = nullptr;
@@ -256,6 +307,11 @@ struct Device {
     bool topology_seen = false;
     bool dual_internal_active = false;
 
+    std::map<hwc2_layer_t, ZoomLayer> zoom_layers;
+    bool zoom_layers_validated = false;
+    bool zoom_layer_path_active = false;
+    bool zoom_force_client = false;
+
     /* Physical B power is owned by fujisan_halld.  These track its hinge
      * availability so the independent logical display gets one redraw only
      * after the panel has settled following an open. */
@@ -263,6 +319,8 @@ struct Device {
     bool secondary_panel_refresh_pending = false;
     int64_t secondary_panel_available_since_ns = 0;
 };
+
+static void ResetZoomOverlay(int fd, ZoomOverlay* overlay);
 
 static bool DualInternalEnabled() {
     /* The product supports only the virtual A+B topology.  Ignore old
@@ -869,6 +927,336 @@ static bool GetGrallocStridePx(buffer_handle_t handle, int* out_stride_px, int* 
     return false;
 }
 
+static void ResetZoomOverlay(int fd, ZoomOverlay* overlay) {
+    if (!overlay)
+        return;
+    if (fd >= 0 && overlay->id != MSMFB_NEW_REQUEST) {
+        uint32_t id = overlay->id;
+        if (ioctl(fd, MSMFB_OVERLAY_UNSET, &id) != 0)
+            ALOGW("zoom overlay reset id=0x%x failed: %s", id, strerror(errno));
+    }
+    *overlay = ZoomOverlay{};
+}
+
+static bool ZoomLayerCanScanout(const ZoomLayer& layer) {
+    if (!layer.buffer || layer.has_color || layer.has_sideband ||
+        layer.transform != 0 || layer.z >= 7)
+        return false;
+    if (layer.frame.right <= layer.frame.left || layer.frame.bottom <= layer.frame.top ||
+        layer.crop.right <= layer.crop.left || layer.crop.bottom <= layer.crop.top)
+        return false;
+    const auto* h = reinterpret_cast<const FujisanPrivateHandle*>(layer.buffer);
+    if (h->magic != kFujisanGrallocMagic || h->fd < 0)
+        return false;
+    /* Protected buffers require a secure MDP session.  The legacy fbdev
+     * overlay ABI used here has no reliable way to negotiate that session,
+     * so keep these on the proven client/real-composer fallback path. */
+    if ((h->producer_usage | h->consumer_usage) & GRALLOC_USAGE_PROTECTED)
+        return false;
+    return true;
+}
+
+/* First mixed-composition tier: only promote a large, opaque layer wholly on
+ * panel A.  CAF owns that physical panel natively; B remains on the proven
+ * 2160-wide client-target crop until its independent MDP path is negotiated. */
+static bool ZoomLayerCanUsePrimaryDevice(const ZoomLayer& layer) {
+    return ZoomLayerCanScanout(layer) && layer.z < 2 && layer.alpha >= 0.999f &&
+           layer.frame.left >= 0 && layer.frame.right <= FUJISAN_SEC_WIDTH &&
+           layer.frame.bottom - layer.frame.top >= 256;
+}
+
+/* Translate one global logical layer into its clipped portion on panel A or
+ * B.  The source crop is adjusted proportionally so a scaled layer remains
+ * continuous at the hinge. */
+static bool BuildZoomSegment(const ZoomLayer& layer, int panel_left,
+                             ZoomOverlay* out) {
+    if (!out || !ZoomLayerCanScanout(layer))
+        return false;
+
+    const int left = std::max({layer.frame.left, panel_left, 0});
+    const int right = std::min({layer.frame.right, panel_left + FUJISAN_SEC_WIDTH, kZoomWidth});
+    const int top = std::max(layer.frame.top, 0);
+    const int bottom = std::min(layer.frame.bottom, FUJISAN_SEC_HEIGHT);
+    if (right <= left || bottom <= top)
+        return false;
+
+    const int frame_w = layer.frame.right - layer.frame.left;
+    const int frame_h = layer.frame.bottom - layer.frame.top;
+    const float crop_w = layer.crop.right - layer.crop.left;
+    const float crop_h = layer.crop.bottom - layer.crop.top;
+
+    int stride = 0, src_w = 0, src_h = 0, format = 0, flags = 0;
+    if (!GetGrallocStridePx(layer.buffer, &stride, &src_w, &src_h, &format, &flags) ||
+        stride <= 0 || src_h <= 0)
+        return false;
+
+    const int sx0 = std::max(0, std::min(stride - 1, static_cast<int>(
+            layer.crop.left + (left - layer.frame.left) * crop_w / frame_w)));
+    const int sx1 = std::max(sx0 + 1, std::min(stride, static_cast<int>(
+            layer.crop.left + (right - layer.frame.left) * crop_w / frame_w + 0.999f)));
+    const int sy0 = std::max(0, std::min(src_h - 1, static_cast<int>(
+            layer.crop.top + (top - layer.frame.top) * crop_h / frame_h)));
+    const int sy1 = std::max(sy0 + 1, std::min(src_h, static_cast<int>(
+            layer.crop.top + (bottom - layer.frame.top) * crop_h / frame_h + 0.999f)));
+
+    const auto* h = reinterpret_cast<const FujisanPrivateHandle*>(layer.buffer);
+    const uint64_t rgba_bytes = static_cast<uint64_t>(stride) * src_h * 4;
+    const bool compact_rgb565 = h->size > 0 && static_cast<uint64_t>(h->size) < rgba_bytes;
+    const bool rgb565 = format == HAL_PIXEL_FORMAT_RGB_565 || compact_rgb565;
+    out->src_w = stride;
+    out->src_h = src_h;
+    out->format = rgb565 ? MDP_RGB_565
+                         : ((flags & PRIV_FLAGS_UBWC_ALIGNED) ? MDP_RGBA_8888_UBWC
+                                                               : MDP_RGBA_8888);
+    out->flags = flags;
+    out->src_x = sx0;
+    out->src_y = sy0;
+    out->src_crop_w = sx1 - sx0;
+    out->src_crop_h = sy1 - sy0;
+    out->dst_x = left - panel_left;
+    out->dst_y = top;
+    out->dst_w = right - left;
+    out->dst_h = bottom - top;
+    out->z = layer.z;
+    out->alpha = static_cast<uint32_t>(std::max(0.0f, std::min(1.0f, layer.alpha)) * 255.0f + 0.5f);
+    out->blend = layer.blend == HWC2_BLEND_MODE_PREMULTIPLIED ? BLEND_OP_PREMULTIPLIED :
+                 layer.blend == HWC2_BLEND_MODE_COVERAGE ? BLEND_OP_COVERAGE : BLEND_OP_OPAQUE;
+    return true;
+}
+
+static bool SameZoomOverlayContract(const ZoomOverlay& a, const ZoomOverlay& b) {
+    return a.src_w == b.src_w && a.src_h == b.src_h && a.format == b.format &&
+           a.src_x == b.src_x && a.src_y == b.src_y &&
+           a.src_crop_w == b.src_crop_w && a.src_crop_h == b.src_crop_h &&
+           a.dst_x == b.dst_x && a.dst_y == b.dst_y && a.dst_w == b.dst_w &&
+           a.dst_h == b.dst_h && a.z == b.z && a.alpha == b.alpha && a.blend == b.blend;
+}
+
+static bool ConfigureZoomOverlay(int fd, ZoomOverlay* current,
+                                 const ZoomOverlay& desired, const char* panel) {
+    if (!current || fd < 0)
+        return false;
+    if (current->id != MSMFB_NEW_REQUEST && !SameZoomOverlayContract(*current, desired))
+        ResetZoomOverlay(fd, current);
+    if (current->id == MSMFB_NEW_REQUEST) {
+        mdp_overlay overlay {};
+        overlay.src.width = desired.src_w;
+        overlay.src.height = desired.src_h;
+        overlay.src.format = desired.format;
+        overlay.src_rect = {static_cast<uint32_t>(desired.src_x), static_cast<uint32_t>(desired.src_y),
+                            static_cast<uint32_t>(desired.src_crop_w), static_cast<uint32_t>(desired.src_crop_h)};
+        overlay.dst_rect = {static_cast<uint32_t>(desired.dst_x), static_cast<uint32_t>(desired.dst_y),
+                            static_cast<uint32_t>(desired.dst_w), static_cast<uint32_t>(desired.dst_h)};
+        overlay.z_order = desired.z;
+        overlay.is_fg = 1;
+        overlay.alpha = desired.alpha;
+        overlay.blend_op = desired.blend;
+        overlay.transp_mask = MDP_TRANSP_NOP;
+        overlay.pipe_type = PIPE_TYPE_AUTO;
+        overlay.id = MSMFB_NEW_REQUEST;
+        if (ioctl(fd, MSMFB_OVERLAY_SET, &overlay) != 0) {
+            ALOGW("%s direct-layer overlay set failed: %s", panel, strerror(errno));
+            return false;
+        }
+        *current = desired;
+        current->id = overlay.id;
+    }
+    return true;
+}
+
+static bool PlayZoomOverlay(int fd, const ZoomOverlay& overlay, buffer_handle_t buffer,
+                            const char* panel) {
+    const auto* h = reinterpret_cast<const FujisanPrivateHandle*>(buffer);
+    if (fd < 0 || overlay.id == MSMFB_NEW_REQUEST || !h || h->fd < 0)
+        return false;
+    msmfb_overlay_data post {};
+    post.id = overlay.id;
+    post.data.memory_id = h->fd;
+    post.data.offset = h->offset;
+    if (ioctl(fd, MSMFB_OVERLAY_PLAY, &post) != 0) {
+        ALOGW("%s direct-layer overlay play id=0x%x failed: %s", panel, overlay.id, strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+static bool CommitZoomOverlays(int fd, const char* panel) {
+    MdpDisplayCommit commit {};
+    commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+    commit.wait_for_finish = 0;
+    if (ioctl(fd, MSMFB_DISPLAY_COMMIT, &commit) != 0) {
+        ALOGW("%s direct-layer overlay commit failed: %s", panel, strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+static void ResetAllZoomLayerOverlays(Device* d) {
+    if (!d)
+        return;
+    for (auto& kv : d->zoom_layers) {
+        ResetZoomOverlay(d->fb0_fd, &kv.second.a);
+        ResetZoomOverlay(d->fb_fd, &kv.second.b);
+    }
+}
+
+/*
+ * The wrapper deliberately withholds layer state from the Xiaomi composer
+ * while direct two-panel scanout is active.  If a subsequent frame cannot be
+ * represented by our legacy MDP overlay ABI, replay that state before asking
+ * the real composer to take the normal client-target route again.  Without
+ * this handoff it can keep a stale 1080-wide layer contract from before the
+ * virtual 2160-wide mode and leave one panel frozen.
+ *
+ * Called with zoom_lock held.  The acquire fence remains owned by ZoomLayer;
+ * the real composer receives a dup so either path can subsequently consume
+ * its own descriptor safely.
+ */
+static bool __attribute__((unused)) ReplayZoomLayersToRealLocked(Device* d) {
+    if (!d)
+        return false;
+    for (auto& kv : d->zoom_layers) {
+        const hwc2_layer_t id = kv.first;
+        ZoomLayer& layer = kv.second;
+        int32_t err = HWC2_ERROR_NONE;
+        if (d->fns.setLayerCompositionType)
+            err = d->fns.setLayerCompositionType(d->real, kPrimaryDisplay, id,
+                                                  layer.device_candidate ? HWC2_COMPOSITION_DEVICE
+                                                                         : HWC2_COMPOSITION_CLIENT);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerBlendMode)
+            err = d->fns.setLayerBlendMode(d->real, kPrimaryDisplay, id, layer.blend);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerDataspace)
+            err = d->fns.setLayerDataspace(d->real, kPrimaryDisplay, id, layer.dataspace);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerDisplayFrame)
+            err = d->fns.setLayerDisplayFrame(d->real, kPrimaryDisplay, id, layer.frame);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerPlaneAlpha)
+            err = d->fns.setLayerPlaneAlpha(d->real, kPrimaryDisplay, id, layer.alpha);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerSidebandStream)
+            err = d->fns.setLayerSidebandStream(d->real, kPrimaryDisplay, id, layer.sideband);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerSourceCrop)
+            err = d->fns.setLayerSourceCrop(d->real, kPrimaryDisplay, id, layer.crop);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerTransform)
+            err = d->fns.setLayerTransform(d->real, kPrimaryDisplay, id, layer.transform);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerZOrder)
+            err = d->fns.setLayerZOrder(d->real, kPrimaryDisplay, id, layer.z);
+        if (err == HWC2_ERROR_NONE && layer.has_color && d->fns.setLayerColor)
+            err = d->fns.setLayerColor(d->real, kPrimaryDisplay, id, layer.color);
+        if (err == HWC2_ERROR_NONE && d->fns.setLayerBuffer) {
+            const int fence_for_real = layer.acquire_fence >= 0 ? dup(layer.acquire_fence) : -1;
+            err = d->fns.setLayerBuffer(d->real, kPrimaryDisplay, id, layer.buffer,
+                                        fence_for_real);
+            if (err != HWC2_ERROR_NONE && fence_for_real >= 0)
+                close(fence_for_real);
+        }
+        if (err != HWC2_ERROR_NONE) {
+            ALOGW("failed to replay zoom layer %llu to real composer: %d",
+                  static_cast<unsigned long long>(id), err);
+            return false;
+        }
+        if (layer.acquire_fence >= 0) {
+            close(layer.acquire_fence);
+            layer.acquire_fence = -1;
+        }
+    }
+    return true;
+}
+
+static bool ZoomCanHardwareComposeLocked(Device* d) {
+    if (!d || d->zoom_force_client || d->zoom_layers.empty())
+        return false;
+    unsigned int candidates = 0;
+    static unsigned int diagnostic_frames = 0;
+    const bool log_frame = diagnostic_frames < 2;
+    for (auto& kv : d->zoom_layers) {
+        ZoomLayer& layer = kv.second;
+        layer.device_candidate = ZoomLayerCanUsePrimaryDevice(layer);
+        candidates += layer.device_candidate ? 1 : 0;
+        if (log_frame) {
+            int stride = 0, width = 0, height = 0, format = 0, flags = 0;
+            if (layer.buffer)
+                (void)GetGrallocStridePx(layer.buffer, &stride, &width, &height, &format, &flags);
+            ALOGI("hybrid layer=%llu frame=%d,%d-%d,%d crop=%.1f,%.1f-%.1f,%.1f z=%u "
+                  "alpha=%.2f tx=%d buf=%p %dx%d stride=%d fmt=%d flags=0x%x -> %s",
+                  static_cast<unsigned long long>(kv.first), layer.frame.left, layer.frame.top,
+                  layer.frame.right, layer.frame.bottom, layer.crop.left, layer.crop.top,
+                  layer.crop.right, layer.crop.bottom, layer.z, layer.alpha, layer.transform,
+                  layer.buffer, width, height, stride, format, flags,
+                  layer.device_candidate ? "DEVICE" : "CLIENT");
+        }
+    }
+    if (log_frame)
+        ++diagnostic_frames;
+    /* Leave CAF at most two lower z-stage app layers; the rest of the scene
+     * stays client-composed, including all SystemUI decoration. */
+    return candidates > 0 && candidates <= 2;
+}
+
+static void __attribute__((unused)) RequestPrimaryRefresh(Device* d) {
+    HWC2_PFN_REFRESH fn = nullptr;
+    hwc2_callback_data_t data = nullptr;
+    {
+        std::lock_guard<std::mutex> cl(d->cb_lock);
+        fn = d->refresh_fn;
+        data = d->refresh_data;
+    }
+    if (fn)
+        fn(data, kPrimaryDisplay);
+}
+
+/* Called only after Validate selected DEVICE for every primary zoom layer. */
+static bool __attribute__((unused)) PresentZoomLayers(Device* d) {
+    if (!d || !OpenFb0(d) || !OpenFb1(d))
+        return false;
+
+    std::lock_guard<std::mutex> zl(d->zoom_lock);
+    if (!d->zoom_layer_path_active)
+        return false;
+
+    bool have_a = false;
+    bool have_b = false;
+    bool ok = true;
+    for (auto& kv : d->zoom_layers) {
+        ZoomLayer& layer = kv.second;
+        if (layer.acquire_fence >= 0) {
+            if (sync_wait(layer.acquire_fence, 1000) != 0)
+                ALOGW("zoom layer %llu acquire fence timed out", static_cast<unsigned long long>(kv.first));
+            close(layer.acquire_fence);
+            layer.acquire_fence = -1;
+        }
+        ZoomOverlay a {};
+        if (BuildZoomSegment(layer, 0, &a)) {
+            if (!ConfigureZoomOverlay(d->fb0_fd, &layer.a, a, "fb0") ||
+                !PlayZoomOverlay(d->fb0_fd, layer.a, layer.buffer, "fb0"))
+                ok = false;
+            have_a = true;
+        } else {
+            ResetZoomOverlay(d->fb0_fd, &layer.a);
+        }
+        ZoomOverlay b {};
+        if (BuildZoomSegment(layer, FUJISAN_SEC_WIDTH, &b)) {
+            if (!ConfigureZoomOverlay(d->fb_fd, &layer.b, b, "fb1") ||
+                !PlayZoomOverlay(d->fb_fd, layer.b, layer.buffer, "fb1"))
+                ok = false;
+            have_b = true;
+        } else {
+            ResetZoomOverlay(d->fb_fd, &layer.b);
+        }
+    }
+    if (ok && have_a)
+        ok = CommitZoomOverlays(d->fb0_fd, "fb0");
+    if (ok && have_b)
+        ok = CommitZoomOverlays(d->fb_fd, "fb1");
+    if (!ok) {
+        /* A pipe allocation error is a capability decision, not a fatal
+         * display error.  Tear down partial work and make the next Validate
+         * select the known-good 2160 client target path. */
+        ResetAllZoomLayerOverlays(d);
+        d->zoom_layer_path_active = false;
+        d->zoom_force_client = true;
+    }
+    return ok;
+}
+
 static void* TryGrallocRgbDataAddress(buffer_handle_t handle) {
     const hw_module_t* module = nullptr;
     if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module) != 0 || !module)
@@ -1369,6 +1757,15 @@ static int32_t AcceptDisplayChanges(hwc2_device_t* device, hwc2_display_t displa
             kv.second.changed = false;
         return HWC2_ERROR_NONE;
     }
+    if (display == kPrimaryDisplay && WantZoomMode()) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        if (d->zoom_layer_path_active) {
+            for (auto& kv : d->zoom_layers)
+                kv.second.changed = false;
+            return d->fns.acceptDisplayChanges ? d->fns.acceptDisplayChanges(d->real, display)
+                                               : HWC2_ERROR_UNSUPPORTED;
+        }
+    }
     return d->fns.acceptDisplayChanges ? d->fns.acceptDisplayChanges(d->real, display)
                                       : HWC2_ERROR_UNSUPPORTED;
 }
@@ -1377,15 +1774,34 @@ static int32_t CreateLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_l
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecCreateLayer(d, out);
-    return d->fns.createLayer ? d->fns.createLayer(d->real, display, out) : HWC2_ERROR_UNSUPPORTED;
+    const int32_t ret = d->fns.createLayer ? d->fns.createLayer(d->real, display, out)
+                                            : HWC2_ERROR_UNSUPPORTED;
+    if (ret == HWC2_ERROR_NONE && display == kPrimaryDisplay && out) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        d->zoom_layers[*out] = ZoomLayer{};
+        d->zoom_layers_validated = false;
+    }
+    return ret;
 }
 
 static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer) {
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecDestroyLayer(d, layer);
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            if (it->second.acquire_fence >= 0)
+                close(it->second.acquire_fence);
+            ResetZoomOverlay(d->fb0_fd, &it->second.a);
+            ResetZoomOverlay(d->fb_fd, &it->second.b);
+            d->zoom_layers.erase(it);
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.destroyLayer ? d->fns.destroyLayer(d->real, display, layer)
-                              : HWC2_ERROR_UNSUPPORTED;
+                               : HWC2_ERROR_UNSUPPORTED;
 }
 
 static int32_t GetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hwc2_config_t* out) {
@@ -1413,6 +1829,33 @@ static int32_t GetChangedCompositionTypes(hwc2_device_t* device, hwc2_display_t 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecGetChanged(d, out_count, out_layers, out_types);
+    if (display == kPrimaryDisplay && WantZoomMode()) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        if (d->zoom_layer_path_active) {
+            uint32_t need = 0;
+            for (const auto& kv : d->zoom_layers)
+                if (kv.second.changed)
+                    ++need;
+            if (!out_layers || !out_types) {
+                if (out_count)
+                    *out_count = need;
+                return HWC2_ERROR_NONE;
+            }
+            if (*out_count < need) {
+                *out_count = need;
+                return HWC2_ERROR_NONE;
+            }
+            uint32_t index = 0;
+            for (const auto& kv : d->zoom_layers) {
+                if (!kv.second.changed)
+                    continue;
+                out_layers[index] = kv.first;
+                out_types[index++] = kv.second.validated;
+            }
+            *out_count = index;
+            return HWC2_ERROR_NONE;
+        }
+    }
     return d->fns.getChangedCompositionTypes
                ? d->fns.getChangedCompositionTypes(d->real, display, out_count, out_layers, out_types)
                : HWC2_ERROR_UNSUPPORTED;
@@ -1435,7 +1878,7 @@ static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t disp
         height == FUJISAN_SEC_HEIGHT &&
         (format == HAL_PIXEL_FORMAT_RGBA_8888 || format == HAL_PIXEL_FORMAT_RGBX_8888 ||
          format == HAL_PIXEL_FORMAT_BGRA_8888)) {
-        /* The real Xiaomi-derived composer advertises only its physical
+        /* The real CAF composer advertises only its physical
          * 1080-wide limit.  Returning that answer for our virtual 2160-wide
          * config makes SurfaceFlinger allocate a 1080 target and scale the
          * whole desktop into it, leaving no distinct right half for panel B.
@@ -1664,7 +2107,7 @@ static int32_t SetActiveConfigWithConstraints(
 
         /* Android 12 uses this HWC 2.4 entry point rather than the legacy
          * SetActiveConfig callback.  Do not pass virtual config 1 to the
-         * Xiaomi-derived real composer: it only owns physical 1080 config 0
+         * CAF real composer: it only owns physical 1080 config 0
          * and quietly returns a narrow client target after a hotplug
          * reprobe.  Keep config 1 visible to SurfaceFlinger while applying
          * config 0 beneath it. */
@@ -2017,6 +2460,16 @@ static int32_t SetLayerBlendMode(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.blend = mode;
+            d->zoom_layers_validated = false;
+        }
+        if (WantZoomMode())
+            return it == d->zoom_layers.end() ? HWC2_ERROR_BAD_LAYER : HWC2_ERROR_NONE;
+    }
     return d->fns.setLayerBlendMode ? d->fns.setLayerBlendMode(d->real, display, layer, mode)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2029,6 +2482,17 @@ static int32_t SetLayerBuffer(hwc2_device_t* device, hwc2_display_t display, hwc
             close(acquire_fence);
         return HWC2_ERROR_NONE;
     }
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it == d->zoom_layers.end())
+            return HWC2_ERROR_BAD_LAYER;
+        it->second.buffer = buffer;
+        d->zoom_layers_validated = false;
+        if (it->second.acquire_fence >= 0)
+            close(it->second.acquire_fence);
+        it->second.acquire_fence = acquire_fence >= 0 ? dup(acquire_fence) : -1;
+    }
     return d->fns.setLayerBuffer
                ? d->fns.setLayerBuffer(d->real, display, layer, buffer, acquire_fence)
                : HWC2_ERROR_UNSUPPORTED;
@@ -2039,6 +2503,15 @@ static int32_t SetLayerColor(hwc2_device_t* device, hwc2_display_t display, hwc2
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.color = color;
+            it->second.has_color = true;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerColor ? d->fns.setLayerColor(d->real, display, layer, color)
                                : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2055,6 +2528,14 @@ static int32_t SetLayerCompositionType(hwc2_device_t* device, hwc2_display_t dis
         d->sec.validated = false;
         return HWC2_ERROR_NONE;
     }
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.requested = type;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerCompositionType
                ? d->fns.setLayerCompositionType(d->real, display, layer, type)
                : HWC2_ERROR_UNSUPPORTED;
@@ -2065,6 +2546,14 @@ static int32_t SetLayerDataspace(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.dataspace = dataspace;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerDataspace ? d->fns.setLayerDataspace(d->real, display, layer, dataspace)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2074,6 +2563,14 @@ static int32_t SetLayerDisplayFrame(hwc2_device_t* device, hwc2_display_t displa
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.frame = frame;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerDisplayFrame
                ? d->fns.setLayerDisplayFrame(d->real, display, layer, frame)
                : HWC2_ERROR_UNSUPPORTED;
@@ -2084,6 +2581,14 @@ static int32_t SetLayerPlaneAlpha(hwc2_device_t* device, hwc2_display_t display,
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.alpha = alpha;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerPlaneAlpha ? d->fns.setLayerPlaneAlpha(d->real, display, layer, alpha)
                                     : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2093,6 +2598,15 @@ static int32_t SetLayerSidebandStream(hwc2_device_t* device, hwc2_display_t disp
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.sideband = stream;
+            it->second.has_sideband = stream != nullptr;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerSidebandStream
                ? d->fns.setLayerSidebandStream(d->real, display, layer, stream)
                : HWC2_ERROR_UNSUPPORTED;
@@ -2103,6 +2617,14 @@ static int32_t SetLayerSourceCrop(hwc2_device_t* device, hwc2_display_t display,
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.crop = crop;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerSourceCrop ? d->fns.setLayerSourceCrop(d->real, display, layer, crop)
                                     : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2122,6 +2644,14 @@ static int32_t SetLayerTransform(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.transform = transform;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerTransform ? d->fns.setLayerTransform(d->real, display, layer, transform)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2141,6 +2671,14 @@ static int32_t SetLayerZOrder(hwc2_device_t* device, hwc2_display_t display, hwc
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        auto it = d->zoom_layers.find(layer);
+        if (it != d->zoom_layers.end()) {
+            it->second.z = z;
+            d->zoom_layers_validated = false;
+        }
+    }
     return d->fns.setLayerZOrder ? d->fns.setLayerZOrder(d->real, display, layer, z)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2208,6 +2746,73 @@ static int32_t ValidateDisplay(hwc2_device_t* device, hwc2_display_t display, ui
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecValidate(d, out_types, out_requests);
+    if (display == kPrimaryDisplay) {
+        const bool zoom = WantZoomMode();
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        if (zoom && ZoomCanHardwareComposeLocked(d)) {
+            /* Keep CAF's normal primary Present path alive.  It receives
+             * only the selected lower application layers as DEVICE; all
+             * SystemUI/small UBWC layers remain CLIENT and retain the wide
+             * target used by the established B crop path. */
+            for (auto& kv : d->zoom_layers) {
+                if (kv.second.device_candidate && d->fns.setLayerCompositionType) {
+                    const int32_t err = d->fns.setLayerCompositionType(
+                            d->real, kPrimaryDisplay, kv.first, HWC2_COMPOSITION_DEVICE);
+                    if (err != HWC2_ERROR_NONE)
+                        goto client_fallback;
+                }
+            }
+            d->zoom_layer_path_active = true;
+            uint32_t changes = 0;
+            for (auto& kv : d->zoom_layers) {
+                ZoomLayer& layer = kv.second;
+                layer.changed = layer.device_candidate &&
+                                layer.requested != HWC2_COMPOSITION_DEVICE;
+                layer.validated = layer.device_candidate ? HWC2_COMPOSITION_DEVICE
+                                                         : HWC2_COMPOSITION_CLIENT;
+                if (layer.changed)
+                    ++changes;
+            }
+            d->zoom_layers_validated = true;
+            uint32_t real_types = 0, real_requests = 0;
+            const int32_t real_ret = d->fns.validateDisplay
+                    ? d->fns.validateDisplay(d->real, display, &real_types, &real_requests)
+                    : HWC2_ERROR_UNSUPPORTED;
+            if (real_ret != HWC2_ERROR_NONE)
+                goto client_fallback;
+            if (out_types)
+                *out_types = changes;
+            if (out_requests)
+                *out_requests = real_requests;
+            return changes ? HWC2_ERROR_HAS_CHANGES : HWC2_ERROR_NONE;
+        }
+client_fallback:
+        if (d->zoom_layer_path_active)
+            ResetAllZoomLayerOverlays(d);
+        d->zoom_layer_path_active = false;
+        if (zoom) {
+            /* We suppressed the normal setter calls while the direct route
+             * was active.  Give the wrapped composer a complete,
+             * self-consistent client-layer transaction before it validates
+             * the fallback. */
+            for (auto& kv : d->zoom_layers) {
+                kv.second.device_candidate = false;
+                if (d->fns.setLayerCompositionType)
+                    (void)d->fns.setLayerCompositionType(d->real, kPrimaryDisplay, kv.first,
+                                                         kv.second.requested);
+            }
+        } else {
+            /* The next single-panel transaction is passed through normally;
+             * only retire fence descriptors retained by the old direct path.
+             */
+            for (auto& kv : d->zoom_layers) {
+                if (kv.second.acquire_fence >= 0) {
+                    close(kv.second.acquire_fence);
+                    kv.second.acquire_fence = -1;
+                }
+            }
+        }
+    }
     return d->fns.validateDisplay ? d->fns.validateDisplay(d->real, display, out_types, out_requests)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
