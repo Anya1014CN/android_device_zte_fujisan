@@ -2170,7 +2170,14 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
         /* Backlight is owned by halld.  Never FBIOBLANK fb1 from composer:
          * idle secondary scanout can block the legacy ioctl for 30 seconds. */
         if (!on) {
-            WriteSysfs(kBl2Path, "0");
+            /* BootAnimation briefly parks the primary in OFF while it takes
+             * ownership of the surface.  In an unfolded boot B already has
+             * a valid zoom overlay and must remain lit; only honor a real
+             * post-boot screen-off transition here. */
+            char boot_completed[PROPERTY_VALUE_MAX] = {};
+            property_get("sys.boot_completed", boot_completed, "0");
+            if (boot_completed[0] == '1')
+                WriteSysfs(kBl2Path, "0");
         }
     }
     return ret;
