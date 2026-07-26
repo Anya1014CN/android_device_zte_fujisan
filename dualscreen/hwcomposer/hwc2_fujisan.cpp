@@ -967,8 +967,14 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
         overlay.src.width = static_cast<uint32_t>(stride_px);
         overlay.src.height = static_cast<uint32_t>(h);
         /* The MDSS legacy overlay API imports the complete gralloc dma-buf,
-         * including UBWC metadata, so preserve the producer's real layout. */
-        overlay.src.format = ubwc ? MDP_RGBA_8888_UBWC : MDP_RGBA_8888;
+         * including UBWC metadata, so preserve the producer's real layout.
+         * SurfaceFlinger may choose RGB_565 for the 2160-wide client target;
+         * treating that 2-byte buffer as RGBA makes MDSS request twice the
+         * available dma-buf size and leaves panel B without a valid frame. */
+        if (format == HAL_PIXEL_FORMAT_RGB_565)
+            overlay.src.format = MDP_RGB_565;
+        else
+            overlay.src.format = ubwc ? MDP_RGBA_8888_UBWC : MDP_RGBA_8888;
         overlay.src_rect = {static_cast<uint32_t>(src_x), 0,
                             static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
         overlay.dst_rect = {0, 0, static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
