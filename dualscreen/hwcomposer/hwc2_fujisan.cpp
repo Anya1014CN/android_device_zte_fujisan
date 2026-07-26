@@ -609,13 +609,11 @@ static void ResetSecondaryOverlayIfNeeded(Device* d) {
     d->sec_overlay_id = MSMFB_NEW_REQUEST;
 }
 
-/* A connected-only callback changes DisplayInfo but leaves SurfaceFlinger's
- * old 1080-wide client-target pool alive.  On the first folded -> zoom
- * transition, that pool is then relabelled as 2160-wide even though its dma-buf
- * is still only large enough for a 1080x1920 frame.  MDSS rightly rejects the
- * right-half overlay.  Retire and recreate the same physical display so SF
- * allocates a new wide client target.  This runs on the detached worker, not
- * the present path, and does not restart SurfaceFlinger or system_server. */
+/* SurfaceFlinger reloads a physical display's supported modes after a connected
+ * callback for an already-known HWC display.  Do that off the present path to
+ * avoid re-entering SurfaceFlinger.  Deliberately do not send a preceding
+ * disconnect: that tears down the logical display, briefly invalidates every
+ * input viewport and makes SystemUI look like it has rebooted. */
 static void* PrimaryReprobeThreadMain(void* arg) {
     auto* d = reinterpret_cast<Device*>(arg);
     HWC2_PFN_HOTPLUG fn = nullptr;
@@ -626,23 +624,7 @@ static void* PrimaryReprobeThreadMain(void* arg) {
         data = d->hotplug_data;
     }
     if (fn) {
-        {
-            std::lock_guard<std::mutex> zl(d->zoom_lock);
-            if (d->client_acquire_fence >= 0) {
-                close(d->client_acquire_fence);
-                d->client_acquire_fence = -1;
-            }
-            d->client_target = nullptr;
-            d->zoom_client_target = nullptr;
-            d->zoom_acquire_fence = -1;
-            d->secondary_overlay_reset_pending.store(true);
-        }
-        ALOGI("reprobe primary display: retire stale client target");
-        fn(data, kPrimaryDisplay, HWC2_CONNECTION_DISCONNECTED);
-        /* Give SurfaceFlinger time to drop the old BufferQueue before it
-         * reads the newly selected 1080/2160 config on reconnect. */
-        usleep(100 * 1000);
-        ALOGI("reprobe primary display: publish new mode");
+        ALOGI("reprobe primary display: in-place mode refresh");
         fn(data, kPrimaryDisplay, HWC2_CONNECTION_CONNECTED);
     }
     d->primary_reprobe_pending.store(false);
