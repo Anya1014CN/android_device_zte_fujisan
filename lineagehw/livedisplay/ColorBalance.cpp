@@ -66,8 +66,18 @@ Return<bool> ColorBalance::setColorBalance(int32_t value) {
     value = std::max(kBalanceMin, std::min(kBalanceMax, value));
     const int32_t hue = balanceToHue(value);
 
-    if (!WriteStringToFile(std::to_string(hue), kPanelHue, true)) {
+    const std::string encoded = std::to_string(hue);
+    if (!WriteStringToFile(encoded, kPanelHue, true)) {
         LOG(ERROR) << "Failed to write " << hue << " to " << kPanelHue;
+        return false;
+    }
+
+    /* The second panel is absent while folded.  Its kernel endpoint retains
+     * the requested value and applies it on the next panel-on, so synchronize
+     * it when available without making a folded device report a false error. */
+    if (access(kSecondaryPanelHue, W_OK) == 0 &&
+            !WriteStringToFile(encoded, kSecondaryPanelHue, true)) {
+        LOG(ERROR) << "Failed to write " << hue << " to " << kSecondaryPanelHue;
         return false;
     }
 

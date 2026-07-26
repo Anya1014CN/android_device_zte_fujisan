@@ -19,6 +19,7 @@ using ::android::hardware::Return;
 class ColorBalance : public IColorBalance {
 public:
     static constexpr const char* kPanelHue = "/proc/panel_hue_0_set";
+    static constexpr const char* kSecondaryPanelHue = "/proc/panel_hue_1_set";
     static constexpr int32_t kDefaultHue = 255;
 
     static bool isSupported();
