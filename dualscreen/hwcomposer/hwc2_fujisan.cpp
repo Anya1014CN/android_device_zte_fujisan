@@ -1529,14 +1529,18 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
         return HWC2_ERROR_NONE;
     }
     if (display == kPrimaryDisplay) {
-        /* config0: 1080x1920 single; config1: 2160x1920 open/zoom virtual */
+        /* Expose only the topology that is physically usable right now.
+         * If both configs are returned, SurfaceFlinger keeps vendor config 0
+         * after the in-place hotplug reprobe, while WM renders a 2160-wide
+         * canvas into that 1080 target.  That is the source of the A/B
+         * mirrored desktop. */
+        const hwc2_config_t active = WantZoomMode() ? kZoomConfig : kSingleConfig;
         if (!out_configs) {
-            *out_count = 2;
+            *out_count = 1;
             return HWC2_ERROR_NONE;
         }
-        if (*out_count >= 1) out_configs[0] = kSingleConfig;
-        if (*out_count >= 2) out_configs[1] = kZoomConfig;
-        *out_count = (*out_count >= 2) ? 2 : *out_count;
+        if (*out_count >= 1) out_configs[0] = active;
+        *out_count = 1;
         return HWC2_ERROR_NONE;
     }
     return d->fns.getDisplayConfigs
