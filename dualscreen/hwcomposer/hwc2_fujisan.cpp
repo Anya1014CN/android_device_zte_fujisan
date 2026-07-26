@@ -1634,9 +1634,50 @@ static int32_t SetActiveConfigWithConstraints(
     if (!out_timeline)
         return HWC2_ERROR_BAD_PARAMETER;
 
-    if (display != kSecondaryDisplay && d->fns.setActiveConfigWithConstraints) {
-        return d->fns.setActiveConfigWithConstraints(d->real, display, config, constraints,
-                                                     out_timeline);
+    if (display == kPrimaryDisplay) {
+        if (config != kSingleConfig && config != kZoomConfig)
+            return HWC2_ERROR_BAD_CONFIG;
+
+        /* Android 12 uses this HWC 2.4 entry point rather than the legacy
+         * SetActiveConfig callback.  Do not pass virtual config 1 to the
+         * Xiaomi-derived real composer: it only owns physical 1080 config 0
+         * and quietly returns a narrow client target after a hotplug
+         * reprobe.  Keep config 1 visible to SurfaceFlinger while applying
+         * config 0 beneath it. */
+        bool zoom = false;
+        {
+            std::lock_guard<std::mutex> zl(d->zoom_lock);
+            zoom = (config == kZoomConfig) || WantZoomMode();
+            d->zoom_active = zoom;
+            d->active_config = zoom ? kZoomConfig : kSingleConfig;
+        }
+
+        int32_t err = HWC2_ERROR_UNSUPPORTED;
+        if (d->fns.setActiveConfigWithConstraints) {
+            err = d->fns.setActiveConfigWithConstraints(d->real, display, kSingleConfig,
+                                                        constraints, out_timeline);
+        } else if (d->fns.setActiveConfig) {
+            err = d->fns.setActiveConfig(d->real, display, kSingleConfig);
+        }
+        if (err != HWC2_ERROR_NONE)
+            return err;
+
+        /* Old composers do not fill the HWC 2.4 timeline when reached
+         * through their HWC 2.3 fallback. */
+        if (!d->fns.setActiveConfigWithConstraints) {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            int64_t now = int64_t(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
+            int64_t desired = constraints ? constraints->desiredTimeNanos : now;
+            if (desired < now)
+                desired = now;
+            out_timeline->newVsyncAppliedTimeNanos = desired;
+            out_timeline->refreshRequired = false;
+            out_timeline->refreshTimeNanos = 0;
+        }
+        ALOGI("SetActiveConfigWithConstraints primary request=%llu -> %s (real=0)",
+              static_cast<unsigned long long>(config), zoom ? "ZOOM 2160" : "SINGLE 1080");
+        return HWC2_ERROR_NONE;
     }
 
     int32_t err;
