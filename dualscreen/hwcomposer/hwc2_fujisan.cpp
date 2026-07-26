@@ -861,40 +861,6 @@ static bool GetGrallocStridePx(buffer_handle_t handle, int* out_stride_px, int* 
     return false;
 }
 
-/* The vendor msm8996 gralloc has a second representation for the wide zoom
- * client target: its 2160-pixel RGB565 row is reported in 32-bit words.
- * Consequently its handle says 1088x1920 and RGBA, while its dma-buf is the
- * ~8.4 MiB 2176x1920 RGB565 allocation.  SurfaceFlinger is still composing a
- * 2160-wide display at that point, so treating this as a real 1080 target
- * mirrors the whole desktop onto B. */
-static bool IsPackedZoomRgb565Target(buffer_handle_t handle, int stride, int w, int h) {
-    if (!WantZoomMode() || !handle || h != FUJISAN_SEC_HEIGHT || w <= 0 ||
-        w > FUJISAN_SEC_WIDTH || stride < w || stride > FUJISAN_SEC_WIDTH + 16)
-        return false;
-
-    const auto* gralloc = reinterpret_cast<const FujisanPrivateHandle*>(handle);
-    if (gralloc->magic != kFujisanGrallocMagic || gralloc->size == 0)
-        return false;
-
-    /* A packed 2176px RGB565 surface needs stride(words) * 4 bytes per row.
-     * Accept the vendor's small metadata tail, but not unrelated buffers. */
-    const uint64_t payload = static_cast<uint64_t>(stride) * h * 4;
-    return gralloc->size >= payload && gralloc->size <= payload + 262144;
-}
-
-static bool NormalizePackedZoomRgb565Target(buffer_handle_t handle, int* stride, int* w,
-                                            int* h, int* format, int* flags) {
-    if (!stride || !w || !h || !format || !flags ||
-        !IsPackedZoomRgb565Target(handle, *stride, *w, *h))
-        return false;
-
-    *stride *= 2;  /* 32-bit words -> RGB565 pixels */
-    *w *= 2;
-    *format = HAL_PIXEL_FORMAT_RGB_565;
-    *flags &= ~PRIV_FLAGS_UBWC_ALIGNED;
-    return true;
-}
-
 static void* TryGrallocRgbDataAddress(buffer_handle_t handle) {
     const hw_module_t* module = nullptr;
     if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module) != 0 || !module)
@@ -998,9 +964,6 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
     int flags = 0;
     GetGrallocStridePx(handle, &stride_px, &w, &h, &format, &flags);
 
-    const bool packed_zoom_rgb565 =
-        NormalizePackedZoomRgb565Target(handle, &stride_px, &w, &h, &format, &flags);
-
     if (src_x < 0 || src_x >= w)
         return false;
     w = std::min(FUJISAN_SEC_WIDTH, w - src_x);
@@ -1096,8 +1059,6 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
         ALOGI("%s overlay configured id=0x%x src=%dx%d crop_x=%d dst=%dx%d fmt=%d size=%u rgb565=%d ubwc=%d", panel,
               overlay.id, stride_px, h, src_x, w, h, format, gralloc->size,
               rgb565 ? 1 : 0, ubwc ? 1 : 0);
-        if (packed_zoom_rgb565)
-            ALOGI("%s restored packed zoom target to %dx%d RGB565", panel, stride_px, w);
     }
 
     msmfb_overlay_data post {};
@@ -1461,6 +1422,18 @@ static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t disp
             format == HAL_PIXEL_FORMAT_BGRA_8888)
             return HWC2_ERROR_NONE;
         return HWC2_ERROR_UNSUPPORTED;
+    }
+    if (display == kPrimaryDisplay && WantZoomMode() && width == kZoomWidth &&
+        height == FUJISAN_SEC_HEIGHT &&
+        (format == HAL_PIXEL_FORMAT_RGBA_8888 || format == HAL_PIXEL_FORMAT_RGBX_8888 ||
+         format == HAL_PIXEL_FORMAT_BGRA_8888)) {
+        /* The real Xiaomi-derived composer advertises only its physical
+         * 1080-wide limit.  Returning that answer for our virtual 2160-wide
+         * config makes SurfaceFlinger allocate a 1080 target and scale the
+         * whole desktop into it, leaving no distinct right half for panel B.
+         * We have a working MDP crop path for a 2160 RGBA client target, so
+         * advertise that capability at the wrapper boundary. */
+        return HWC2_ERROR_NONE;
     }
     return d->fns.getClientTargetSupport
                ? d->fns.getClientTargetSupport(d->real, display, width, height, format, dataspace)
@@ -1883,7 +1856,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
         if (zoom && target) {
             int w = 0, h = 0, stride = 0, format = 0, flags = 0;
             GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
-            if (w >= kZoomWidth || IsPackedZoomRgb565Target(target, stride, w, h)) {
+            if (w >= kZoomWidth) {
                 /* fb0 belongs to the vendor composer.  Let it present the
                  * primary target and feed B only the right-side crop. */
                 int32_t ret = d->fns.presentDisplay
