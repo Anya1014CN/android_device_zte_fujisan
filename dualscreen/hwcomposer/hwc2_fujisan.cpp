@@ -227,6 +227,14 @@ struct Device {
     struct fb_fix_screeninfo finfo {};
     uint32_t sec_overlay_id = MSMFB_NEW_REQUEST;
     uint32_t pri_overlay_id = MSMFB_NEW_REQUEST;
+    /* The legacy MDP overlay stores its source geometry and pixel format at
+     * OVERLAY_SET time.  SurfaceFlinger may first submit a 1080-wide target
+     * while changing to zoom, then replace it with the 2160-wide target. */
+    uint32_t sec_overlay_src_width = 0;
+    uint32_t sec_overlay_src_height = 0;
+    uint32_t sec_overlay_src_format = 0;
+    int sec_overlay_crop_x = -1;
+    uint32_t sec_overlay_crop_width = 0;
     sp<IMapper> mapper;
 
     /* ZOOM (open) virtual large screen on primary display id 0. */
@@ -385,6 +393,11 @@ static void CloseFb1(Device* d) {
         (void)ioctl(d->fb_fd, MSMFB_OVERLAY_UNSET, &id);
         d->sec_overlay_id = MSMFB_NEW_REQUEST;
     }
+    d->sec_overlay_src_width = 0;
+    d->sec_overlay_src_height = 0;
+    d->sec_overlay_src_format = 0;
+    d->sec_overlay_crop_x = -1;
+    d->sec_overlay_crop_width = 0;
     if (d->fb_map != MAP_FAILED) {
         munmap(d->fb_map, d->fb_map_size);
         d->fb_map = MAP_FAILED;
@@ -607,6 +620,11 @@ static void ResetSecondaryOverlayIfNeeded(Device* d) {
         (void)ioctl(d->fb_fd, MSMFB_OVERLAY_UNSET, &id);
     }
     d->sec_overlay_id = MSMFB_NEW_REQUEST;
+    d->sec_overlay_src_width = 0;
+    d->sec_overlay_src_height = 0;
+    d->sec_overlay_src_format = 0;
+    d->sec_overlay_crop_x = -1;
+    d->sec_overlay_crop_width = 0;
 }
 
 /* SurfaceFlinger reloads a physical display's supported modes after a connected
@@ -971,6 +989,37 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
     const bool compact_rgb565 =
         gralloc->size > 0 && static_cast<uint64_t>(gralloc->size) < rgba_bytes;
     const bool rgb565 = format == HAL_PIXEL_FORMAT_RGB_565 || compact_rgb565;
+    const uint32_t mdp_format = rgb565 ? MDP_RGB_565
+                                       : (ubwc ? MDP_RGBA_8888_UBWC : MDP_RGBA_8888);
+
+    /* MDP's OVERLAY_PLAY only imports a dma-buf; it does not update the
+     * geometry or format selected by the earlier OVERLAY_SET.  On a cold
+     * boot while folded, SF first gives B a narrow client target and then a
+     * compact RGB565 wide target on the first open.  Reuse of the narrow
+     * RGBA overlay makes MDSS validate the latter as a 16.8 MiB buffer even
+     * though the allocation is 8.4 MiB.  Retire just B's pipe when its
+     * immutable overlay contract changes; this is internal to HWC and does
+     * not disconnect/recreate the primary display. */
+    const bool is_secondary = overlay_id == &d->sec_overlay_id;
+    const bool secondary_contract_changed =
+        is_secondary && *overlay_id != MSMFB_NEW_REQUEST &&
+        (d->sec_overlay_src_width != static_cast<uint32_t>(stride_px) ||
+         d->sec_overlay_src_height != static_cast<uint32_t>(h) ||
+         d->sec_overlay_src_format != mdp_format ||
+         d->sec_overlay_crop_x != src_x ||
+         d->sec_overlay_crop_width != static_cast<uint32_t>(w));
+    if (secondary_contract_changed) {
+        uint32_t id = *overlay_id;
+        if (ioctl(fb_fd, MSMFB_OVERLAY_UNSET, &id) != 0)
+            ALOGW("%s overlay reset id=0x%x failed: %s", panel, id, strerror(errno));
+        *overlay_id = MSMFB_NEW_REQUEST;
+        d->sec_overlay_src_width = 0;
+        d->sec_overlay_src_height = 0;
+        d->sec_overlay_src_format = 0;
+        d->sec_overlay_crop_x = -1;
+        d->sec_overlay_crop_width = 0;
+        ALOGI("%s overlay contract changed; recreating", panel);
+    }
 
     if (*overlay_id == MSMFB_NEW_REQUEST) {
         mdp_overlay overlay {};
@@ -981,10 +1030,7 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
          * SurfaceFlinger may choose RGB_565 for the 2160-wide client target;
          * treating that 2-byte buffer as RGBA makes MDSS request twice the
          * available dma-buf size and leaves panel B without a valid frame. */
-        if (rgb565)
-            overlay.src.format = MDP_RGB_565;
-        else
-            overlay.src.format = ubwc ? MDP_RGBA_8888_UBWC : MDP_RGBA_8888;
+        overlay.src.format = mdp_format;
         overlay.src_rect = {static_cast<uint32_t>(src_x), 0,
                             static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
         overlay.dst_rect = {0, 0, static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
@@ -1003,6 +1049,13 @@ static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
             return false;
         }
         *overlay_id = overlay.id;
+        if (is_secondary) {
+            d->sec_overlay_src_width = static_cast<uint32_t>(stride_px);
+            d->sec_overlay_src_height = static_cast<uint32_t>(h);
+            d->sec_overlay_src_format = mdp_format;
+            d->sec_overlay_crop_x = src_x;
+            d->sec_overlay_crop_width = static_cast<uint32_t>(w);
+        }
         ALOGI("%s overlay configured id=0x%x src=%dx%d crop_x=%d dst=%dx%d fmt=%d size=%u rgb565=%d ubwc=%d", panel,
               overlay.id, stride_px, h, src_x, w, h, format, gralloc->size,
               rgb565 ? 1 : 0, ubwc ? 1 : 0);
@@ -1709,6 +1762,10 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
                 reprobe_primary = d->mode_seen;
                 d->mode_seen = true;
                 snprintf(d->last_mode, sizeof(d->last_mode), "%s", zoom ? "zoom" : "single");
+                /* B may have been blanked while the old logical mode was
+                 * active.  Its legacy pipe must be recreated from the first
+                 * target in the new mode, but the primary stays connected. */
+                d->secondary_overlay_reset_pending.store(true);
                 ALOGI("display mode -> %s (%s)", d->last_mode,
                       reprobe_primary ? "reprobe" : "initial");
                 if (d->refresh_fn)
