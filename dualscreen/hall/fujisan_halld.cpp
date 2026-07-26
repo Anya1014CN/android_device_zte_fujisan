@@ -309,14 +309,6 @@ static void configure_touch_for_mode(bool zoom) {
     }
 }
 
-static void configure_logical_display_size(bool zoom) {
-    const char* argv[] = {
-        "/system/bin/wm", "size", zoom ? "2160x1920" : "1080x1920", nullptr,
-    };
-    if (!run_service_call(argv))
-        ALOGW("failed to set logical display size for %s", zoom ? "zoom" : "single");
-}
-
 int main() {
     ALOGI("fujisan_halld start (A-primary stable power; B only for zoom)");
     enable_m1120();
@@ -458,7 +450,11 @@ int main() {
             (!touch_mode_initialized || strcmp(mode, touch_mode) != 0)) {
             const bool was_initialized = touch_mode_initialized;
             configure_touch_for_mode(mode[0] == 'z');
-            configure_logical_display_size(mode[0] == 'z');
+            /* Do not use `wm size` for posture changes.  It persists a
+             * forced display size in Settings and makes the next folded boot
+             * render BootAnimation as a 2160-wide desktop until this daemon
+             * reaches sys.boot_completed.  HWC's active topology is the
+             * authoritative logical size. */
             snprintf(touch_mode, sizeof(touch_mode), "%s", mode);
             touch_mode_initialized = true;
 
