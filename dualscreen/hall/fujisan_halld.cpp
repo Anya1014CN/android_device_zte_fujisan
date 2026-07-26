@@ -406,10 +406,14 @@ int main() {
         /* Actual fujisan posture order is A(1) folded, B(2) mid-open,
          * C(3) fully open.  Both 2 and 3 expose the two inside panels; only
          * the folded A posture must turn B off. */
-        const bool want_b = power_on &&
-                            (mode[0] == 'z' ||
-                             (mode[0] == 'd' && st != 1) ||
-                             force_b[0] == '1');
+        const bool posture_wants_b = mode[0] == 'z' ||
+                                     (mode[0] == 'd' && st != 1) ||
+                                     force_b[0] == '1';
+        /* SetPowerMode reports OFF while BootAnimation owns the primary
+         * surface, even though both physical panels can scan out.  Honor the
+         * hinge during that interval so an unfolded boot lights B; once
+         * Android is ready, return to the normal power-state policy. */
+        const bool want_b = posture_wants_b && (boot_done ? power_on : true);
 
         const int bl0 = read_int_file("/sys/class/leds/lcd-backlight/brightness", -1);
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
