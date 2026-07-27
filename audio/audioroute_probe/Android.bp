@@ -1,0 +1,14 @@
+cc_library_shared {
+    name: "libaudioroute_fujisan_probe",
+    srcs: ["audio_route.c"],
+    include_dirs: [
+        "external/tinyalsa/include",
+    ],
+    shared_libs: [
+        "libcutils",
+        "libexpat",
+        "liblog",
+        "libtinyalsa",
+        "libutils",
+    ],
+}

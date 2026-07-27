@@ -6,6 +6,7 @@
         <module name="primary" halVersion="3.0">
             <attachedDevices>
                 <item>Speaker</item>
+                <item>Earpiece</item>
                 <item>Built-In Mic</item>
             </attachedDevices>
             <defaultOutputDevice>Speaker</defaultOutputDevice>
@@ -25,6 +26,10 @@
                     <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
                              samplingRates="48000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
                 </devicePort>
+                <devicePort tagName="Earpiece" type="AUDIO_DEVICE_OUT_EARPIECE" role="sink">
+                    <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
+                             samplingRates="48000" channelMasks="AUDIO_CHANNEL_OUT_MONO"/>
+                </devicePort>
                 <devicePort tagName="Built-In Mic" type="AUDIO_DEVICE_IN_BUILTIN_MIC" role="source">
                     <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
                              samplingRates="8000,11025,16000,44100,48000"
@@ -33,6 +38,7 @@
             </devicePorts>
             <routes>
                 <route type="mix" sink="Speaker" sources="primary output"/>
+                <route type="mix" sink="Earpiece" sources="primary output"/>
                 <route type="mix" sink="primary input" sources="Built-In Mic"/>
             </routes>
         </module>

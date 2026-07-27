@@ -63,6 +63,7 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
+#include <sys/system_properties.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -270,6 +271,8 @@ struct Device {
     std::atomic<bool> secondary_overlay_reset_pending{false};
     std::atomic<bool> primary_refresh_after_topology{false};
     std::atomic<bool> primary_reprobe_pending{false};
+    pthread_t display_mode_thread{};
+    std::atomic<bool> display_mode_thread_run{false};
 
     int fb_fd = -1;
     void* fb_map = MAP_FAILED;
@@ -695,9 +698,8 @@ static void ResetSecondaryOverlayIfNeeded(Device* d) {
 
 /* SurfaceFlinger reloads a physical display's supported modes after a connected
  * callback for an already-known HWC display.  Do that off the present path to
- * avoid re-entering SurfaceFlinger.  Deliberately do not send a preceding
- * disconnect: that tears down the logical display, briefly invalidates every
- * input viewport and makes SystemUI look like it has rebooted. */
+ * avoid re-entering SurfaceFlinger.  Do not send a preceding disconnect: it
+ * tears down the logical display and violates seamless hinge switching. */
 static void* PrimaryReprobeThreadMain(void* arg) {
     auto* d = reinterpret_cast<Device*>(arg);
     HWC2_PFN_HOTPLUG fn = nullptr;
@@ -710,6 +712,26 @@ static void* PrimaryReprobeThreadMain(void* arg) {
     if (fn) {
         ALOGI("reprobe primary display: in-place mode refresh");
         fn(data, kPrimaryDisplay, HWC2_CONNECTION_CONNECTED);
+        /* The callback returns after SurfaceFlinger has re-enumerated the
+         * current one-config topology.  Let the hall daemon refresh its
+         * display-bound SystemUI cache only after that point. */
+        property_set("vendor.fujisan.hwc_topology_ready",
+                     WantZoomMode() ? "zoom" : "single");
+        /* local:0 survives the 1080<->2160 change, while Android 12 SystemUI
+         * caches StatusBarContentInsets by that ID.  This point is after the
+         * in-place SurfaceFlinger re-enumeration, so it is the only safe place
+         * to request its one-shot rebuild.  Keeping it in HWC avoids losing
+         * the request when init restarts the hall daemon for display power. */
+        const char* topology = WantZoomMode() ? "zoom" : "single";
+        char systemui_geometry[PROPERTY_VALUE_MAX] = "single";
+        property_get("vendor.fujisan.systemui_geometry", systemui_geometry,
+                     "single");
+        if (strcmp(systemui_geometry, topology) != 0) {
+            property_set("vendor.fujisan.systemui_geometry", topology);
+            property_set("vendor.fujisan.systemui_refresh", "0");
+            property_set("vendor.fujisan.systemui_refresh", "1");
+            ALOGI("requested SystemUI refresh after %s topology", topology);
+        }
     }
     d->primary_reprobe_pending.store(false);
     return nullptr;
@@ -1191,7 +1213,7 @@ static bool ZoomCanHardwareComposeLocked(Device* d) {
     return candidates > 0 && candidates <= 2;
 }
 
-static void __attribute__((unused)) RequestPrimaryRefresh(Device* d) {
+static void RequestPrimaryRefresh(Device* d) {
     HWC2_PFN_REFRESH fn = nullptr;
     hwc2_callback_data_t data = nullptr;
     {
@@ -1201,6 +1223,62 @@ static void __attribute__((unused)) RequestPrimaryRefresh(Device* d) {
     }
     if (fn)
         fn(data, kPrimaryDisplay);
+}
+
+struct DisplayModePropertySnapshot {
+    uint32_t serial = 0;
+    char value[PROPERTY_VALUE_MAX] = {};
+};
+
+static void ReadDisplayModeProperty(void* cookie, const char*, const char* value,
+                                    uint32_t serial) {
+    auto* snapshot = static_cast<DisplayModePropertySnapshot*>(cookie);
+    snapshot->serial = serial;
+    snprintf(snapshot->value, sizeof(snapshot->value), "%s", value ? value : "");
+}
+
+/* SurfaceFlinger can be idle immediately after boot.  A hinge event then used
+ * to wait for the user's first touch to produce the PresentDisplay that notices
+ * display_mode.  Block on the property serial instead: the hall daemon's mode
+ * write wakes this thread, which asks SF for one frame.  There is no periodic
+ * topology polling in normal operation. */
+static void* DisplayModeWatchThreadMain(void* arg) {
+    auto* d = reinterpret_cast<Device*>(arg);
+    const prop_info* mode_prop = __system_property_find("vendor.fujisan.display_mode");
+    if (!mode_prop) {
+        ALOGW("display_mode property missing; passive mode wake unavailable");
+        d->display_mode_thread_run.store(false);
+        return nullptr;
+    }
+
+    DisplayModePropertySnapshot snapshot;
+    __system_property_read_callback(mode_prop, ReadDisplayModeProperty, &snapshot);
+    while (d->display_mode_thread_run.load()) {
+        uint32_t changed_serial = snapshot.serial;
+        /* This timeout is solely a shutdown escape hatch; mode changes wake
+         * the futex immediately and steady state consumes no CPU. */
+        const struct timespec timeout = {30, 0};
+        if (!__system_property_wait(mode_prop, snapshot.serial, &changed_serial, &timeout))
+            continue;
+        __system_property_read_callback(mode_prop, ReadDisplayModeProperty, &snapshot);
+        if (!d->display_mode_thread_run.load())
+            break;
+        ALOGI("display_mode property -> %s; requesting primary frame", snapshot.value);
+        RequestPrimaryRefresh(d);
+    }
+    d->display_mode_thread_run.store(false);
+    return nullptr;
+}
+
+static void EnsureDisplayModeWatchThread(Device* d) {
+    bool expected = false;
+    if (!d->display_mode_thread_run.compare_exchange_strong(expected, true))
+        return;
+    if (pthread_create(&d->display_mode_thread, nullptr,
+                       DisplayModeWatchThreadMain, d) != 0) {
+        d->display_mode_thread_run.store(false);
+        ALOGE("display_mode watcher create failed");
+    }
 }
 
 /* Called only after Validate selected DEVICE for every primary zoom layer. */
@@ -1723,6 +1801,9 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
         }
     }
 
+    if (descriptor == HWC2_CALLBACK_REFRESH)
+        EnsureDisplayModeWatchThread(d);
+
     if (descriptor == HWC2_CALLBACK_HOTPLUG) {
         int32_t err =
             d->fns.registerCallback
@@ -1814,8 +1895,11 @@ static int32_t GetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
     }
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
-        if (WantZoomMode())
-            d->active_config = kZoomConfig;
+        /* The active topology is driven by the hinge daemon.  SurfaceFlinger
+         * can retain its former zoom config as a pending mode request across
+         * an in-place hotplug, so never let that stale request keep a folded
+         * device at 2160px. */
+        d->active_config = WantZoomMode() ? kZoomConfig : kSingleConfig;
         *out = d->active_config;
         return HWC2_ERROR_NONE;
     }
@@ -1980,11 +2064,9 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
         return HWC2_ERROR_NONE;
     }
     if (display == kPrimaryDisplay) {
-        /* Expose only the topology that is physically usable right now.
-         * If both configs are returned, SurfaceFlinger keeps vendor config 0
-         * after the in-place hotplug reprobe, while WM renders a 2160-wide
-         * canvas into that 1080 target.  That is the source of the A/B
-         * mirrored desktop. */
+        /* SurfaceFlinger retains its former requested config across an
+         * in-place hinge hotplug.  Expose only the usable topology here, so a
+         * folded device cannot remain pinned to the old 2160px request. */
         const hwc2_config_t active = WantZoomMode() ? kZoomConfig : kSingleConfig;
         if (!out_configs) {
             *out_count = 1;
@@ -2114,7 +2196,10 @@ static int32_t SetActiveConfigWithConstraints(
         bool zoom = false;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
-            zoom = (config == kZoomConfig) || WantZoomMode();
+            /* config may be the previous topology requested by SurfaceFlinger
+             * before the hinge mode refresh.  The hall daemon is authoritative
+             * for this virtual display's geometry. */
+            zoom = WantZoomMode();
             d->zoom_active = zoom;
             d->active_config = zoom ? kZoomConfig : kSingleConfig;
         }
@@ -2183,13 +2268,16 @@ static int32_t GetDisplayType(hwc2_device_t* device, hwc2_display_t display, int
 }
 
 static int32_t GetDozeSupport(hwc2_device_t* device, hwc2_display_t display, int32_t* out) {
-    auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
+    (void)device;
+    (void)display;
+    /* The inherited msm8996 SDM advertises DOZE but this command-mode DSI
+     * panel cannot reliably enter it.  SurfaceFlinger consequently sends
+     * HWC2_POWER_MODE_DOZE at the screen-off timeout; SDM then times out,
+     * declares fb0 dead and repeatedly resets the panel, starving SystemUI.
+     * Do not expose a capability the physical panel does not implement. */
+    if (out)
         *out = 0;
-        return HWC2_ERROR_NONE;
-    }
-    return d->fns.getDozeSupport ? d->fns.getDozeSupport(d->real, display, out)
-                                : HWC2_ERROR_UNSUPPORTED;
+    return HWC2_ERROR_NONE;
 }
 
 static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_num,
@@ -2267,7 +2355,11 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
                 d->secondary_panel_refresh_pending = false;
             }
             if (strcmp(d->last_mode, zoom ? "zoom" : "single") != 0) {
-                reprobe_primary = d->mode_seen;
+                /* The first post-boot transition is just as much a real
+                 * geometry change as later hinge moves.  It must publish a
+                 * fresh config rather than leaving SystemUI on boot's 1080px
+                 * contract. */
+                reprobe_primary = true;
                 d->mode_seen = true;
                 snprintf(d->last_mode, sizeof(d->last_mode), "%s", zoom ? "zoom" : "single");
                 /* B may have been blanked while the old logical mode was
@@ -2351,8 +2443,8 @@ static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
         if (config != kSingleConfig && config != kZoomConfig)
             return HWC2_ERROR_BAD_CONFIG;
         std::lock_guard<std::mutex> zl(d->zoom_lock);
-        d->active_config = config;
-        d->zoom_active = (config == kZoomConfig) || WantZoomMode();
+        d->zoom_active = WantZoomMode();
+        d->active_config = d->zoom_active ? kZoomConfig : kSingleConfig;
         ALOGI("SetActiveConfig primary -> %s", d->zoom_active ? "ZOOM 2160" : "SINGLE 1080");
         if (config == kSingleConfig && d->fns.setActiveConfig)
             return d->fns.setActiveConfig(d->real, display, 0);
@@ -2981,6 +3073,9 @@ static int OpenRealComposer(hwc2_device_t** out_real, void** out_so) {
 
 static int HwcClose(hw_device_t* dev) {
     auto* d = reinterpret_cast<Device*>(dev);
+    d->display_mode_thread_run.store(false);
+    if (d->display_mode_thread)
+        pthread_join(d->display_mode_thread, nullptr);
     d->vsync_thread_run.store(false);
     if (d->vsync_thread)
         pthread_join(d->vsync_thread, nullptr);
@@ -2997,8 +3092,11 @@ static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw
     if (!name || strcmp(name, HWC_HARDWARE_COMPOSER) != 0)
         return -EINVAL;
 
-    if (DualInternalEnabled())
-        property_set("debug.gralloc.gfx_ubwc_disable", "1");
+    /* The legacy msm8996 fb1 overlay path cannot reliably import an UBWC
+     * client target alongside SDM's primary pipe.  It eventually leaves its
+     * XIN client active, makes pipe6 impossible to halt, and SDM resets fb0
+     * in a loop.  Use linear buffers for this dual-panel wrapper. */
+    property_set("debug.gralloc.gfx_ubwc_disable", "1");
 
     auto* d = new Device();
     int err = OpenRealComposer(&d->real, &d->real_so);

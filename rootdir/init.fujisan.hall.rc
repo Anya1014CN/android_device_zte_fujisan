@@ -4,6 +4,24 @@ service fujisan_halld /vendor/bin/fujisan_halld
     group system graphics input
     disabled
 
+# Publish the topology property before SurfaceFlinger registers HWC callbacks.
+# The HWC watcher then always has a property serial to sleep on during the
+# early-boot window, rather than waiting for the first user input.
+on early-init
+    setprop vendor.fujisan.display_mode single
+    setprop vendor.fujisan.systemui_geometry single
+
+# SystemUI caches its status-bar geometry by physical-display ID.  The virtual
+# A+B topology keeps that ID, so after an unfold the cache must be rebuilt.
+# Run this separate one-shot as root: fujisan_halld intentionally runs as
+# `system` and cannot signal the SystemUI app UID itself.
+service fujisan_systemui_refresh /system/bin/sh -c "/system/bin/killall -TERM com.android.systemui; /system/bin/setprop vendor.fujisan.systemui_refresh 0"
+    class late_start
+    user root
+    group root
+    disabled
+    oneshot
+
 # Start early solely to publish the stable A-only boot topology.  The daemon
 # itself defers all expanded-panel work until init restarts it at boot complete.
 on early-boot
@@ -19,3 +37,6 @@ on property:vendor.fujisan.display_power=0
 
 on property:vendor.fujisan.display_power=1
     restart fujisan_halld
+
+on property:vendor.fujisan.systemui_refresh=1
+    start fujisan_systemui_refresh

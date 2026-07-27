@@ -1,0 +1,7 @@
+cc_library_shared {
+    name: "libdolbyshim",
+    vendor: true,
+    compile_multilib: "both",
+    srcs: ["dolbyshim.c"],
+    cflags: ["-Werror"],
+}

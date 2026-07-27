@@ -24,6 +24,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <sys/inotify.h>
+#include <time.h>
 #include <unistd.h>
 
 static int read_int_file(const char* path, int fallback) {
@@ -410,6 +411,14 @@ int main() {
             else
                 snprintf(primary, sizeof(primary), "a");
         }
+
+        /* Before boot completes Android is intentionally kept single-panel.
+         * Record that baseline so an unfolded cold boot also gets exactly one
+         * post-boot SystemUI refresh.  HWC owns the later refresh handshake:
+         * init may restart this hall service during a mode switch, so a waiter
+         * here could be killed before HWC completes. */
+        if (!boot_done)
+            property_set("vendor.fujisan.systemui_geometry", "single");
 
         property_set("vendor.fujisan.device_state", state);
         property_set("vendor.fujisan.display_mode", mode);

@@ -32,10 +32,15 @@ TARGET_2ND_CPU_VARIANT := kryo
 TARGET_COPY_OUT_VENDOR := system/vendor
 TARGET_SYSTEM_PROP += $(DEVICE_PATH)/system.prop
 
-# Audio (bring-up stub: AOSP default primary, no qcom HAL/policy manager)
+# Audio: use the source-built CAF msm8996 ALSA HAL.  The Fujisan card is an
+# AK4962 SLIMbus codec, so the generic AOSP in-memory primary HAL cannot
+# drive its mixer routes or capture paths.
 USE_XML_AUDIO_POLICY_CONF := 1
-USE_CUSTOM_AUDIO_POLICY := 0
-BOARD_USES_ALSA_AUDIO := false
+USE_CUSTOM_AUDIO_POLICY := 1
+BOARD_USES_ALSA_AUDIO := true
+# The Fujisan AK4962/TFA path is configured by the device mixer routes.  Do
+# not request CAF's optional audio_amplifier.* plugin: this device has none.
+AUDIO_FEATURE_ENABLED_EXT_AMPLIFIER := false
 BOARD_SUPPORTS_SOUND_TRIGGER := false
 
 # Kernel
