@@ -74,6 +74,12 @@ ro.hardware.gatekeeper=msm8996
 persist.vendor.display.primary_first=1
 ro.sf.lcd_density=480
 
+# Fujisan has 4 GB RAM.  Without these ART defaults Android falls back to a
+# 16 MB process heap, which makes system_server and SystemUI OOM during boot.
+dalvik.vm.heapstartsize=16m
+dalvik.vm.heapgrowthlimit=256m
+dalvik.vm.heapsize=512m
+
 # Use device HWC wrapper for independent panel B (not mirror)
 ro.hardware.hwcomposer=fujisan
 
