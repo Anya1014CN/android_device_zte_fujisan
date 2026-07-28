@@ -88,6 +88,12 @@ PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-impl \
     libbt-vendor
 
+# The stock legacy module drives /sys/class/timed_output/vibrator. Wrap it in
+# the HIDL service expected by Android 12's VibratorManagerService.
+PRODUCT_PACKAGES += \
+    android.hardware.vibrator@1.0-service \
+    android.hardware.vibrator@1.0-impl
+
 # The FPC service itself remains proprietary on this device.  Keep only the
 # standard framework interface libraries and wrapper service source-built, then
 # replace the installed wrapper binary with the proprietary FPC implementation
