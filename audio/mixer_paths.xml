@@ -2078,8 +2078,7 @@
     </path>
 
     <path name="handset-hac">
-        <ctl name="Receiver Switch" value="On" />
-        <path name="speaker" />
+        <path name="handset" />
     </path>
 
     <path name="handset">
@@ -2405,8 +2404,7 @@
     </path>
 
     <path name="voice-handset-tmus">
-        <ctl name="Receiver Switch" value="On" />
-        <path name="speaker" />
+        <path name="voice-handset" />
     </path>
 
     <path name="voice-speaker">
