@@ -1,4 +1,6 @@
-# Combined expand input (2160x1920). Unused with separate_inputs=1.
-# Never route as a touchscreen onto the primary display.
+# Combined expanded input (2160x1920).  It owns all physical touch slots so
+# gestures spanning both panels retain their pointer identities.
 device.internal = 1
-keyboard.orientationAware = 0
+touch.deviceType = touchScreen
+touch.orientationAware = 1
+touch.displayId = local:0

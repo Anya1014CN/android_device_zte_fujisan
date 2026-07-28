@@ -50,7 +50,7 @@ on boot
     write /dev/pmsg0 "fujisan: boot\n"
     write /cache/fujisan-init-stage "boot\n"
     write /dcmlog/lineage/stage_boot "boot\n"
-    write /sys/module/zte_touch_expand/parameters/separate_inputs 1
+    write /sys/module/zte_touch_expand/parameters/separate_inputs 0
     start fujisan-bootlog
 
 service fujisan-bootlog /system/bin/fujisan_bootlog.sh
