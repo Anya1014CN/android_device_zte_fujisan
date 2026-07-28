@@ -1931,7 +1931,7 @@
     <path name="smart-clk">
         <ctl name="Smart PA Init Switch" value="On" />
         <ctl name="PORT2 Sync Domain" value="aif2" />
-        <ctl name="Max Profile" value="bypass_spk" />
+        <ctl name="Max Profile" value="bypass_dual" />
     </path>
 
     <path name="speaker">
@@ -1944,7 +1944,7 @@
         <ctl name="SDTO2 Source Selector" value="SBI1" />
         <ctl name="PORT4 Sync Domain" value="slimbus" />
         <ctl name="SDTO4 Source Selector" value="SDTI2" />
-        <ctl name="Max Profile" value="bypass_spk" />
+        <ctl name="Max Profile" value="bypass_dual" />
     </path>
 
     <path name="speaker-off-dolby">
@@ -1957,7 +1957,7 @@
         <ctl name="SDTO2 Source Selector" value="SBI1" />
         <ctl name="PORT4 Sync Domain" value="slimbus" />
         <ctl name="SDTO4 Source Selector" value="SDTI2" />
-        <ctl name="Max Profile" value="bypass_spk" />
+        <ctl name="Max Profile" value="bypass_dual" />
     </path>
 
     <path name="speaker-akm">
@@ -2423,7 +2423,7 @@
         <ctl name="SDTO2 Source Selector" value="DSPO2" />
         <ctl name="DSPI2 Source Selector" value="SDTI2" />
         <ctl name="Voice Gain Set Switch" value="2" />
-        <ctl name="Max Profile" value="bypass_spk" />
+        <ctl name="Max Profile" value="bypass_dual" />
     </path>
 
     <path name="voice-speaker-mic">
@@ -2588,7 +2588,7 @@
         <ctl name="Smart PA Init Switch" value="On" />
         <ctl name="PORT2 Sync Domain" value="slimbus" />
         <ctl name="SDTO2 Source Selector" value="SBI1" />
-        <ctl name="Max Profile" value="bypass_spk" />
+        <ctl name="Max Profile" value="bypass_dual" />
     </path>
 
     <path name="speaker-and-line">
