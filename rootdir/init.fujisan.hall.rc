@@ -1,7 +1,7 @@
 service fujisan_halld /vendor/bin/fujisan_halld
     class late_start
-    user system
-    group system graphics input
+    user root
+    group root system graphics input
     disabled
 
 # Publish the topology property before SurfaceFlinger registers HWC callbacks.
@@ -13,8 +13,8 @@ on early-init
 
 # SystemUI caches its status-bar geometry by physical-display ID.  The virtual
 # A+B topology keeps that ID, so after an unfold the cache must be rebuilt.
-# Run this separate one-shot as root: fujisan_halld intentionally runs as
-# `system` and cannot signal the SystemUI app UID itself.
+# Run this separate one-shot as root so the SystemUI process receives a
+# normal signal rather than a direct in-process binder call.
 service fujisan_systemui_refresh /system/bin/sh -c "/system/bin/killall -TERM com.android.systemui; /system/bin/setprop vendor.fujisan.systemui_refresh 0"
     class late_start
     user root
