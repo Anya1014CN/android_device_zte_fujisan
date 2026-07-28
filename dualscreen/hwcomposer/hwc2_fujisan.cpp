@@ -2424,7 +2424,13 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
 
         int32_t ret = d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                             : HWC2_ERROR_UNSUPPORTED;
-        /* Single mode: never post to fb1 (broken UBWC copy left black B backlight). */
+        /* Single mode: retire B completely.  Merely setting its DCS
+         * brightness to zero leaves fb1 open, so MDSS keeps the panel
+         * scanning the last zoom frame with a faint residual glow.  Closing
+         * the last fb1 client after its overlay is removed takes the safe
+         * kernel release path, which powers the panel down. */
+        if (!dual_internal)
+            CloseFb1(d);
         if (fence >= 0)
             close(fence);
         (void)primary_b;
