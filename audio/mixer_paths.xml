@@ -1931,7 +1931,7 @@
     <path name="smart-clk">
         <ctl name="Smart PA Init Switch" value="On" />
         <ctl name="PORT2 Sync Domain" value="aif2" />
-        <ctl name="Max Profile" value="music_dual" />
+        <ctl name="Max Profile" value="bypass_spk" />
     </path>
 
     <path name="speaker">
@@ -1944,7 +1944,7 @@
         <ctl name="SDTO2 Source Selector" value="SBI1" />
         <ctl name="PORT4 Sync Domain" value="slimbus" />
         <ctl name="SDTO4 Source Selector" value="SDTI2" />
-        <ctl name="Max Profile" value="music_dolby" />
+        <ctl name="Max Profile" value="bypass_spk" />
     </path>
 
     <path name="speaker-off-dolby">
@@ -1957,7 +1957,7 @@
         <ctl name="SDTO2 Source Selector" value="SBI1" />
         <ctl name="PORT4 Sync Domain" value="slimbus" />
         <ctl name="SDTO4 Source Selector" value="SDTI2" />
-        <ctl name="Max Profile" value="music_dual" />
+        <ctl name="Max Profile" value="bypass_spk" />
     </path>
 
     <path name="speaker-akm">
@@ -2083,8 +2083,7 @@
     </path>
 
     <path name="handset">
-        <!--<ctl name="Receiver Switch" value="On" />
-        <path name="speaker" />-->
+        <ctl name="Receiver Switch" value="On" />
         <ctl name="Codec MCLK Switch" value="On" />
         <ctl name="Smart PA Init Switch" value="On" />
         <ctl name="SLIM RX1 MUX" value="SB1_PB" />
@@ -2345,7 +2344,7 @@
     </path>
 
     <path name="voice-handset">
-        <!--<ctl name="Receiver Switch" value="On" />-->
+        <ctl name="Receiver Switch" value="On" />
         <ctl name="Codec MCLK Switch" value="On" />
         <ctl name="Smart PA Init Switch" value="On" />
         <ctl name="SLIM RX1 MUX" value="SB1_PB" />
@@ -2357,11 +2356,11 @@
         <ctl name="PORT2 Sync Domain" value="slimbus" />
         <ctl name="SDTO2 Source Selector" value="DSPO2" />
         <ctl name="Voice Gain Set Switch" value="2" />
-        <ctl name="Max Profile" value="speech_ear" />
+        <ctl name="Max Profile" value="bypass_ear" />
     </path>
 
     <path name="voice-in-machine-handset">
-        <!--<ctl name="Receiver Switch" value="On" />-->
+        <ctl name="Receiver Switch" value="On" />
         <ctl name="Codec MCLK Switch" value="On" />
         <ctl name="Smart PA Init Switch" value="On" />
         <ctl name="SLIM RX1 MUX" value="SB1_PB" />
@@ -2373,7 +2372,7 @@
         <ctl name="PORT2 Sync Domain" value="slimbus" />
         <ctl name="SDTO2 Source Selector" value="DSPO4" />
         <ctl name="Voice Gain Set Switch" value="2" />
-        <ctl name="Max Profile" value="speech_ear" />
+        <ctl name="Max Profile" value="bypass_ear" />
     </path>
 
     <path name="voice-handset-mic">
@@ -2424,7 +2423,7 @@
         <ctl name="SDTO2 Source Selector" value="DSPO2" />
         <ctl name="DSPI2 Source Selector" value="SDTI2" />
         <ctl name="Voice Gain Set Switch" value="2" />
-        <ctl name="Max Profile" value="speech_dual" />
+        <ctl name="Max Profile" value="bypass_spk" />
     </path>
 
     <path name="voice-speaker-mic">
@@ -2589,7 +2588,7 @@
         <ctl name="Smart PA Init Switch" value="On" />
         <ctl name="PORT2 Sync Domain" value="slimbus" />
         <ctl name="SDTO2 Source Selector" value="SBI1" />
-        <ctl name="Max Profile" value="music_dual" />
+        <ctl name="Max Profile" value="bypass_spk" />
     </path>
 
     <path name="speaker-and-line">
