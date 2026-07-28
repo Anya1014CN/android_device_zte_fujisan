@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Legacy HIDL FPC1020 side fingerprint sensor. -->
+    <string-array name="config_biometric_sensors" translatable="false">
+        <item>0:2:15</item>
+    </string-array>
+    <!-- Android 12 models legacy side sensors with the power-button type. -->
+    <bool name="config_is_powerbutton_fps">true</bool>
+</resources>

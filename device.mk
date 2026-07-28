@@ -103,6 +103,7 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     android.hardware.biometrics.fingerprint@2.1-service \
     android.hidl.base@1.0 \
+    FujisanFingerprintOverlay \
     fujisan_fingerprint_blob_overlay
 
 # Oreo vendor blobs depend on vendor-visible HIDL runtime libraries. The
