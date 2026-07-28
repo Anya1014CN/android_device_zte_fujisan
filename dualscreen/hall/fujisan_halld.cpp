@@ -274,6 +274,12 @@ static void configure_touch_for_mode(bool zoom) {
     static constexpr const char* kSecondaryTouch =
         "b99b5f2fc557ba939628ebbc5b685e1d66f25a78";
 
+    /* The combined 2160px input device is required for a gesture spanning
+     * both panels.  It must be bypassed while folded: Android otherwise
+     * scales its 2160px range into the 1080px single-panel viewport. */
+    write_sysfs("/sys/module/zte_touch_expand/parameters/separate_inputs",
+                zoom ? "N" : "Y");
+
     /* Android 12's name/unique-id association only filters dispatch; its
      * TouchInputMapper still chooses the first INTERNAL viewport.  A port
      * association reaches the mapper, so B's physical input port selects
