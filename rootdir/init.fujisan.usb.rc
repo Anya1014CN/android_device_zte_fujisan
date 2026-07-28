@@ -12,26 +12,17 @@ on early-init
     setprop sys.usb.configfs 1
 
 on init
-    mkdir /dev/usb-ffs 0775 shell system
-    mkdir /dev/usb-ffs/adb 0770 shell system
+    chmod 0771 /dev/usb-ffs
+    mount configfs none /config
+    mkdir /config/usb_gadget/g1
     setprop sys.usb.configfs 1
-    setprop persist.sys.usb.config adb
 
 on post-fs
     setprop sys.usb.configfs 1
-    setprop persist.sys.usb.config adb
     write /sys/devices/soc/6a00000.ssusb/mode peripheral
 
 on boot
     setprop sys.usb.configfs 1
-    setprop persist.sys.usb.config adb
     setprop sys.usb.controller 6a00000.dwc3
     write /sys/devices/soc/6a00000.ssusb/mode peripheral
-    setprop sys.usb.config adb
-    start fujisan-usb
-
-on property:sys.usb.ffs.ready=1
-    start fujisan-usb
-
-on property:init.svc.bootanim=running
     start fujisan-usb

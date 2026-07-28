@@ -54,6 +54,7 @@ PRODUCT_VENDOR_PROPERTIES += \
 
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
+    android.hardware.usb@1.0-service \
     fujisan_halld \
     FujisanOrientationTile \
     NavigationBarModeGesturalOverlay \
