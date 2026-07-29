@@ -1,12 +1,5 @@
-# Fujisan USB: 4.4 configfs adb (msm8996).
-# Stock vendor creates gadget/ffs; this forces peripheral + clean UDC bind.
-
-service fujisan-usb /system/bin/sh /system/bin/fujisan_usb.sh
-    class core
-    user root
-    group root system shell
-    oneshot
-    disabled
+# The standard android.hardware.usb service owns all gadget functions.  This
+# device fragment only provides the msm8996 configfs/controller prerequisites.
 
 on early-init
     setprop sys.usb.configfs 1
@@ -25,4 +18,3 @@ on boot
     setprop sys.usb.configfs 1
     setprop sys.usb.controller 6a00000.dwc3
     write /sys/devices/soc/6a00000.ssusb/mode peripheral
-    start fujisan-usb

@@ -27,6 +27,9 @@ service fujisan_systemui_refresh /system/bin/sh -c "/system/bin/killall -TERM co
 on early-boot
     start fujisan_halld
 
+on boot
+    write /sys/module/zte_touch_expand/parameters/separate_inputs Y
+
 # fujisan_halld blocks on the m1120 input event in steady state.  These are
 # the non-hinge transitions which must force one immediate reconciliation.
 on property:sys.boot_completed=1
