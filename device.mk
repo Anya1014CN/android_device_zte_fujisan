@@ -95,6 +95,13 @@ PRODUCT_PACKAGES += \
     android.hardware.vibrator@1.0-service \
     android.hardware.vibrator@1.0-impl
 
+# The Oreo Qualcomm data stack consumes its private xmllib parser ABI while
+# loading netmgr_config.xml.  Use the matching OEM parser blob; the AOSP
+# libxml2 API is not ABI-compatible with this legacy Qualcomm surface.
+PRODUCT_PACKAGES += \
+    libril-compat \
+    libprotobuf-cpp-full-legacy
+
 # The FPC service itself remains proprietary on this device.  Keep only the
 # standard framework interface libraries and wrapper service source-built, then
 # replace the installed wrapper binary with the proprietary FPC implementation

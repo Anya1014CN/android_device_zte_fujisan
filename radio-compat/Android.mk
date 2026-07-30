@@ -1,15 +1,6 @@
 LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := libxml
-LOCAL_VENDOR_MODULE := true
-LOCAL_MULTILIB := both
-LOCAL_SRC_FILES := xmllib_compat.c
-LOCAL_SHARED_LIBRARIES := liblog
-LOCAL_CFLAGS := -Werror
-include $(BUILD_SHARED_LIBRARY)
-
-include $(CLEAR_VARS)
 LOCAL_MODULE := libril-compat
 LOCAL_VENDOR_MODULE := true
 LOCAL_MULTILIB := both
