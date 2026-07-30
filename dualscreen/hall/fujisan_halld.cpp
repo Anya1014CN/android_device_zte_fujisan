@@ -1,11 +1,11 @@
 /*
  * Fujisan hall / panel power helper.
  *
- * hall_status: 1=closed A, 2=open(zoom), 3=closed B face
+ * hall_status: 1=folded A, 2=opening, 3=fully open (zoom)
  *
  * Panel power policy (bring-up, stable power key first):
  *   - Always leave panel A to SurfaceFlinger / Lights (never force A BL off).
- *   - B is OFF in single mode (closed_a and closed_b).
+ *   - B is OFF only in the folded-A posture.
  *   - B is ON only for open/zoom (or debug force flags).
  *   - Sleep (screen_state OFF/DOZE): force B off; do not touch A.
  *
@@ -408,18 +408,10 @@ int main() {
             state = "force_b";
             mode = "single";
             snprintf(primary, sizeof(primary), "a");
-        } else if (st == 2) {
+        } else if (st == 2 || st == 3) {
             state = "open";
             mode = "zoom";
             snprintf(primary, sizeof(primary), "%s", preferred[0] == 'b' ? "b" : "a");
-        } else if (st == 3) {
-            state = "closed_b";
-            mode = "single";
-            /* Keep SF/Lights on A. Remember face in props for future primary switch. */
-            if (force[0] == '1')
-                snprintf(primary, sizeof(primary), "%s", preferred[0] == 'b' ? "b" : "a");
-            else
-                snprintf(primary, sizeof(primary), "a");
         } else {
             state = "closed_a";
             mode = "single";

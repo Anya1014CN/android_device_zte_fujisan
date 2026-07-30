@@ -50,7 +50,7 @@ on property:vendor.fujisan.hall_status=2
     write /sys/module/zte_touch_expand/parameters/separate_inputs N
 
 on property:vendor.fujisan.hall_status=3
-    write /sys/module/zte_touch_expand/parameters/separate_inputs Y
+    write /sys/module/zte_touch_expand/parameters/separate_inputs N
 
 on property:vendor.fujisan.systemui_refresh=1
     start fujisan_systemui_refresh
