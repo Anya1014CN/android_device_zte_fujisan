@@ -1,0 +1,16 @@
+LIBBINDER {
+    global:
+        _ZN7android6ParcelC1Ev;
+        _ZN7android6ParcelD1Ev;
+        _ZNK7android6Parcel4dataEv;
+        _ZNK7android6Parcel8dataSizeEv;
+        _ZNK7android6Parcel15setDataPositionEm;
+        _ZN7android6Parcel5writeEPKvm;
+        _ZN7android6Parcel10writeInt32Ei;
+        _ZN7android6Parcel13writeString16EPKDsm;
+};
+
+LIBRIL_COMPAT {
+    global:
+        strdup8to16;
+};

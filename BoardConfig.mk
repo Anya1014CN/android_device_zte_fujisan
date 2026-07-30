@@ -125,6 +125,8 @@ OVERRIDE_RS_DRIVER := libRSDriver_adreno.so
 TARGET_NO_RPC := true
 USE_DEVICE_SPECIFIC_GPS := true
 TARGET_RIL_VARIANT := caf
+# The device supplies its own dual-SIM RIL services in vendor init.
+ENABLE_VENDOR_RIL_SERVICE := true
 
 # Wi-Fi
 # The stock kernel already exposes a live wlan module/interface and does not
