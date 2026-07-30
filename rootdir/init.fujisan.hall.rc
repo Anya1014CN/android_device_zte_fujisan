@@ -30,6 +30,15 @@ on early-boot
 on boot
     write /sys/module/zte_touch_expand/parameters/separate_inputs Y
 
+    # QPNP creates blink after the LED class device, too late for ueventd.
+    # The stock HIDL Light HAL runs as system.
+    chown system system /sys/class/leds/red/blink
+    chmod 0664 /sys/class/leds/red/blink
+    chown system system /sys/class/leds/green/blink
+    chmod 0664 /sys/class/leds/green/blink
+    chown system system /sys/class/leds/blue/blink
+    chmod 0664 /sys/class/leds/blue/blink
+
 # fujisan_halld blocks on the m1120 input event in steady state.  These are
 # the non-hinge transitions which must force one immediate reconciliation.
 on property:sys.boot_completed=1
