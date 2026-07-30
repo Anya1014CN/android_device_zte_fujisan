@@ -1253,6 +1253,8 @@ static void* DisplayModeWatchThreadMain(void* arg) {
 
     DisplayModePropertySnapshot snapshot;
     __system_property_read_callback(mode_prop, ReadDisplayModeProperty, &snapshot);
+    char last_mode[sizeof(snapshot.value)];
+    snprintf(last_mode, sizeof(last_mode), "%s", snapshot.value);
     while (d->display_mode_thread_run.load()) {
         uint32_t changed_serial = snapshot.serial;
         /* This timeout is solely a shutdown escape hatch; mode changes wake
@@ -1263,6 +1265,9 @@ static void* DisplayModeWatchThreadMain(void* arg) {
         __system_property_read_callback(mode_prop, ReadDisplayModeProperty, &snapshot);
         if (!d->display_mode_thread_run.load())
             break;
+        if (strcmp(last_mode, snapshot.value) == 0)
+            continue;
+        snprintf(last_mode, sizeof(last_mode), "%s", snapshot.value);
         ALOGI("display_mode property -> %s; requesting primary frame", snapshot.value);
         RequestPrimaryRefresh(d);
     }

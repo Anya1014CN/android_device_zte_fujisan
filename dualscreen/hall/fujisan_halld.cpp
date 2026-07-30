@@ -50,6 +50,17 @@ static void write_sysfs(const char* path, const char* val) {
     close(fd);
 }
 
+/* property_set() advances the property's serial even when the value has not
+ * changed.  The HWC waits on display_mode's serial to notice real posture
+ * transitions, so publishing the same posture again for a brightness update
+ * must not make SurfaceFlinger re-run the topology path. */
+static void set_property_if_changed(const char* key, const char* value) {
+    char current[PROPERTY_VALUE_MAX] = {};
+    property_get(key, current, "");
+    if (strcmp(current, value) != 0)
+        property_set(key, value);
+}
+
 static void enable_m1120() {
     DIR* d = opendir("/sys/class/input");
     if (!d)
@@ -353,7 +364,7 @@ int main() {
 
         char status_s[8];
         snprintf(status_s, sizeof(status_s), "%d", st);
-        property_set("vendor.fujisan.hall_status", status_s);
+        set_property_if_changed("vendor.fujisan.hall_status", status_s);
 
         const char* state = "closed_a";
         const char* mode = "single";
@@ -424,11 +435,11 @@ int main() {
          * init may restart this hall service during a mode switch, so a waiter
          * here could be killed before HWC completes. */
         if (!boot_done)
-            property_set("vendor.fujisan.systemui_geometry", "single");
+            set_property_if_changed("vendor.fujisan.systemui_geometry", "single");
 
-        property_set("vendor.fujisan.device_state", state);
-        property_set("vendor.fujisan.display_mode", mode);
-        property_set("vendor.fujisan.active_primary", primary);
+        set_property_if_changed("vendor.fujisan.device_state", state);
+        set_property_if_changed("vendor.fujisan.display_mode", mode);
+        set_property_if_changed("vendor.fujisan.active_primary", primary);
 
         const bool power_on = display_is_on();
         /* Actual fujisan posture order is A(1) folded, B(2) mid-open,
