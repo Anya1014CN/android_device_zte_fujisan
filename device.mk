@@ -95,6 +95,14 @@ PRODUCT_PACKAGES += \
     android.hardware.vibrator@1.0-service \
     android.hardware.vibrator@1.0-impl
 
+# The OEM image provides the modem-facing location stack. Add only the
+# framework-facing GNSS HIDL bridge; libloc_core and libgps.utils stay OEM.
+PRODUCT_PACKAGES += \
+    libgnss \
+    libgnsspps \
+    android.hardware.gnss@1.0-impl-qti \
+    android.hardware.gnss@1.0-service-qti
+
 # The Oreo Qualcomm data stack consumes its private xmllib parser ABI while
 # loading netmgr_config.xml.  Use the matching OEM parser blob; the AOSP
 # libxml2 API is not ABI-compatible with this legacy Qualcomm surface.
@@ -282,6 +290,8 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/usr/keylayout/qpnp_pon.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/qpnp_pon.kl \
     $(LOCAL_PATH)/system/usr/keylayout/synaptics_dsx.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/synaptics_dsx.kl \
     $(LOCAL_PATH)/system/etc/permissions/android.hardware.fingerprint.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/android.hardware.fingerprint.xml
+
+    $(LOCAL_PATH)/qcril-setup/init.fujisan.qcril.sh:$(TARGET_COPY_OUT_VENDOR)/bin/init.fujisan.qcril.sh \
 
 PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/ramdisk,$(TARGET_COPY_OUT_RAMDISK))

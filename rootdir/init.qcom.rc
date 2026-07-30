@@ -1,2 +1,6 @@
 # Product init extras live in fujisan.*.rc.
 # USB: configfs via fujisan.usb.rc + vendor init.qcom.usb.rc
+
+on post-fs-data
+    # Patch QCRIL database for IMS/VoLTE before rild starts
+    exec u:r:qti_init_shell:s0 -- /vendor/bin/sh /vendor/bin/init.fujisan.qcril.sh
