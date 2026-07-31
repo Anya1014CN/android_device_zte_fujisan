@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+         Fujisan has red and green notification LED dies only.  Yellow is the
+         supported additive mix, so use it instead of the platform's white
+         default, whose blue component has no physical output on this device.
+    -->
+    <color name="config_defaultNotificationColor">#ffffff00</color>
+
+    <!-- Equal timings select the PMI8994 LPG breathing profile. -->
+    <integer name="config_defaultNotificationLedOn">500</integer>
+    <integer name="config_defaultNotificationLedOff">500</integer>
+</resources>

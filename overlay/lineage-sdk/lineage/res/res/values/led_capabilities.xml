@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+         1: RGB notification, 2: RGB battery, 8: pulsing, 64: battery LED.
+         The RGB flags describe the red/green channels and their yellow mix;
+         Fujisan intentionally has no blue die.
+    -->
+    <integer name="config_deviceLightCapabilities">75</integer>
+</resources>
