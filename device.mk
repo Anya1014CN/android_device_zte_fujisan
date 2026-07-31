@@ -57,6 +57,7 @@ PRODUCT_PACKAGES += \
     android.hardware.usb@1.0-service \
     fujisan_halld \
     FujisanOrientationTile \
+    FujisanNetworkStackOverlay \
     NavigationBarModeGesturalOverlay \
     androidx.window.sidecar \
     androidx.window.extensions

@@ -66,4 +66,7 @@
     <bool name="config_freeformWindowManagement">true</bool>
     <integer name="config_supportsNonResizableMultiWindow">1</integer>
     <integer name="config_respectsActivityMinWidthHeightMultiWindow">-1</integer>
+
+    <!-- Use the public NTP pool for framework time synchronization. -->
+    <string name="config_ntpServer" translatable="false">pool.ntp.org</string>
 </resources>
