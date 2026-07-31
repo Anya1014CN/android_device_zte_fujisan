@@ -18,3 +18,12 @@ on boot
     setprop sys.usb.configfs 1
     setprop sys.usb.controller 6a00000.dwc3
     write /sys/devices/soc/6a00000.ssusb/mode peripheral
+
+# configfs unbinds the gadget for "none", but does not update the legacy
+# Qualcomm dual-role controller.  Keep its LPM state in sync so it cannot
+# veto system suspend after USB is disabled or unplugged.
+on property:sys.usb.config=none && property:sys.usb.configfs=1
+    write /sys/devices/soc/6a00000.ssusb/mode none
+
+on property:sys.usb.config=adb && property:sys.usb.configfs=1
+    write /sys/devices/soc/6a00000.ssusb/mode peripheral
