@@ -2852,6 +2852,22 @@ static int32_t ValidateDisplay(hwc2_device_t* device, hwc2_display_t display, ui
     if (display == kPrimaryDisplay) {
         const bool zoom = WantZoomMode();
         std::lock_guard<std::mutex> zl(d->zoom_lock);
+        if (zoom && !d->zoom_force_client) {
+            /*
+             * Panel B is fed by a crop of SurfaceFlinger's client target.
+             * A layer promoted to DEVICE is removed from that target, while
+             * the experimental direct-layer path is not used to scan the
+             * same layer out on B.  The result is a right-panel-only missing
+             * or stale layer for applications that exercise the promotion.
+             *
+             * Keep the virtual 2160-wide display fully client-composed until
+             * both panels share one complete device-composition transaction.
+             * This deliberately affects zoom only; single-panel CAF HWC
+             * composition remains unchanged.
+             */
+            d->zoom_force_client = true;
+            ALOGI("zoom: force full client composition; B requires the complete client target");
+        }
         if (zoom && ZoomCanHardwareComposeLocked(d)) {
             /* Keep CAF's normal primary Present path alive.  It receives
              * only the selected lower application layers as DEVICE; all
