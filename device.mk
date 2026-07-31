@@ -50,7 +50,8 @@ PRODUCT_SYSTEM_EXT_PROPERTIES += \
 # uses the legacy wcnss_filter userspace path, so BoardConfigVendor enables the
 # old wc_transport property contract for the source-built libbt-vendor.
 PRODUCT_VENDOR_PROPERTIES += \
-    vendor.qcom.bluetooth.soc=rome
+    vendor.qcom.bluetooth.soc=rome \
+    ro.vendor.sensors.pug=true
 
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
