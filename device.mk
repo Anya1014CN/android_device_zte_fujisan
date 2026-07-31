@@ -200,12 +200,23 @@ PRODUCT_PACKAGES += \
     android.hardware.sensors@1.0-impl \
     android.hardware.sensors@1.0-service
 
-# The stock 32-bit OMX service lives in /vendor and resolves its VNDK
-# companion libraries from the vendor namespace.
+# Use the msm8996 CAF V4L2 OMX implementation with the standard AOSP OMX
+# service.  The kernel already exposes the Venus VIDC decoder/encoder nodes;
+# these source-built libraries provide the missing userspace registration for
+# all hardware codecs (AVC, HEVC, VP8/9, MPEG-2/4, H.263, VC-1 and DivX).
+# Do not rely on incompatible Oreo video codec blobs.
 PRODUCT_PACKAGES += \
     android.hardware.media.omx@1.0 \
     android.hidl.memory@1.0 \
-    libminijail
+    libminijail \
+    libOmxCore \
+    libOmxVdec \
+    libOmxVenc \
+    libstagefrighthw \
+    libhypv_intercept \
+    libgpustats \
+    libc2d30-a5xx \
+    libc2d30_bltlib
 
 # The stock 32-bit CAS service is retained; keep its HIDL interface libraries
 # available in the vendor namespace.
@@ -272,6 +283,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/permissions/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.freeform_window_management.xml \
     $(LOCAL_PATH)/configs/display/display_settings.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display_settings.xml \
     $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml \
+    $(LOCAL_PATH)/rootdir/etc/seccomp_policy/mediacodec.policy:$(TARGET_COPY_OUT_VENDOR)/etc/seccomp_policy/mediacodec.policy \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
