@@ -26,7 +26,6 @@ PRODUCT_PACKAGES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
     audio.smartpa.channel=right \
-    ro.adb.secure=0 \
     persist.sys.usb.config=adb \
     sys.usb.config=adb \
     sys.usb.configfs=1 \

@@ -62,7 +62,6 @@ persist.sys.usb.config=adb
 sys.usb.config=adb
 sys.usb.configfs=1
 sys.usb.controller=6a00000.dwc3
-ro.adb.secure=0
 
 
 # USB uses configfs on 4.4.
