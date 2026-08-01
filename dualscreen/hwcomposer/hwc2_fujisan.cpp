@@ -81,6 +81,9 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #ifndef MDP_COMMIT_FUJISAN_WIDE
 #define MDP_COMMIT_FUJISAN_WIDE 0x40000000
 #endif
+#ifndef MDP_COMMIT_FUJISAN_SINGLE
+#define MDP_COMMIT_FUJISAN_SINGLE 0x20000000
+#endif
 
 using android::hardware::hidl_handle;
 using android::hardware::graphics::common::V1_0::BufferUsage;
@@ -326,7 +329,12 @@ struct Device {
      * target into both physical CTLs. */
     int wide_fd = -1;
     bool wide_route_active = false;
+    /* SurfaceFlinger owns each returned fence.  Retain a duplicate of the
+     * newest C completion fence so WIDE -> SINGLE can drain both CTLs before
+     * the wrapped CAF composer receives another primary frame. */
+    int wide_drain_fence = -1;
     uint32_t wide_submit_count = 0;
+    uint32_t single_submit_count = 0;
     char last_mode[16] = "single";
     bool mode_seen = false;
     bool topology_seen = false;
@@ -378,12 +386,6 @@ static bool WantZoomMode() {
     char buf[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.display_mode", buf, "single");
     return strcmp(buf, "zoom") == 0;
-}
-
-static bool WantPrimaryB() {
-    char buf[PROPERTY_VALUE_MAX] = {};
-    property_get("vendor.fujisan.active_primary", buf, "a");
-    return buf[0] == 'b' || buf[0] == 'B';
 }
 
 static bool SecondaryPanelAvailable() {
@@ -569,12 +571,48 @@ static bool OpenWideFramebuffer(Device* d) {
 }
 
 static void CloseWideFramebuffer(Device* d) {
+    int stale_drain_fence = -1;
+    {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        stale_drain_fence = d->wide_drain_fence;
+        d->wide_drain_fence = -1;
+        d->wide_route_active = false;
+        d->wide_submit_count = 0;
+    }
+    if (stale_drain_fence >= 0)
+        close(stale_drain_fence);
     if (d->wide_fd >= 0) {
         close(d->wide_fd);
         d->wide_fd = -1;
     }
-    d->wide_route_active = false;
-    d->wide_submit_count = 0;
+}
+
+/* The C release fence is signaled only after the second native command-mode
+ * pingpong completes.  CAF must not reclaim fb0 until that transaction ends. */
+static bool DrainWideRoute(Device* d, const char* reason) {
+    if (!d)
+        return false;
+
+    {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        if (!d->wide_route_active)
+            return true;
+        if (d->wide_drain_fence < 0) {
+            ALOGE("wide drain (%s) has no merged completion fence", reason);
+            return false;
+        }
+        if (sync_wait(d->wide_drain_fence, 1000) != 0) {
+            ALOGE("wide drain (%s) timed out: %s", reason, strerror(errno));
+            return false;
+        }
+        close(d->wide_drain_fence);
+        d->wide_drain_fence = -1;
+        d->wide_route_active = false;
+    }
+
+    ALOGI("wide drain complete (%s)", reason);
+    CloseWideFramebuffer(d);
+    return true;
 }
 
 static hwc2_vsync_period_t PrimaryVsyncPeriodNs(Device* d, hwc2_display_t display) {
@@ -1125,6 +1163,18 @@ static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquir
         ALOGE("wide atomic submit returned no merged A+B completion fence");
         return false;
     }
+    const int drain_fence = dup(merged_fence);
+    if (drain_fence < 0) {
+        ALOGE("wide atomic submit could not retain merged fence: %s", strerror(errno));
+    } else {
+        std::lock_guard<std::mutex> zl(d->zoom_lock);
+        /* MDP completion fences are timeline ordered, so the newest one
+         * drains every earlier C transaction as well. */
+        if (d->wide_drain_fence >= 0)
+            close(d->wide_drain_fence);
+        d->wide_drain_fence = drain_fence;
+        d->wide_route_active = true;
+    }
     if (out_retire_fence)
         *out_retire_fence = merged_fence;
     else
@@ -1135,6 +1185,120 @@ static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquir
         ALOGI("wide atomic submit #%u: %dx%d stride=%d format=%d acquire=%d merged=%d",
               d->wide_submit_count, width, height, stride_px, format, layer.buffer.fence,
               merged_fence);
+    }
+    return true;
+}
+
+/* fb0 remains a native dual-CTL endpoint even while Android is in config 0.
+ * CAF consequently expands a 1080 client buffer to a 2160 source rect and
+ * MDSS rejects it.  Submit the complete 1080 client target directly to the
+ * physical-A half instead; panel power is still coordinated by fujisan_halld. */
+static bool SubmitSingleClientTarget(Device* d, buffer_handle_t handle, int acquire_fence,
+                                     int32_t* out_retire_fence) {
+    if (out_retire_fence)
+        *out_retire_fence = -1;
+
+    const auto close_acquire = [&]() {
+        if (acquire_fence >= 0) {
+            close(acquire_fence);
+            acquire_fence = -1;
+        }
+    };
+
+    if (!d || !handle) {
+        ALOGE("single atomic submit has no client target");
+        close_acquire();
+        return false;
+    }
+
+    const auto* gralloc = reinterpret_cast<const FujisanPrivateHandle*>(handle);
+    int stride_px = 0;
+    int width = 0;
+    int height = 0;
+    int format = 0;
+    int flags = 0;
+    if (gralloc->magic != kFujisanGrallocMagic || gralloc->fd < 0 ||
+        !GetGrallocStridePx(handle, &stride_px, &width, &height, &format, &flags)) {
+        ALOGE("single atomic submit received an invalid gralloc handle");
+        close_acquire();
+        return false;
+    }
+
+    const bool rgba = format == HAL_PIXEL_FORMAT_RGBA_8888;
+    const bool rgbx = format == HAL_PIXEL_FORMAT_RGBX_8888;
+    const bool linear = (flags & PRIV_FLAGS_UBWC_ALIGNED) == 0;
+    if (!linear || (!rgba && !rgbx) || width != FUJISAN_SEC_WIDTH ||
+        height != FUJISAN_SEC_HEIGHT || stride_px < FUJISAN_SEC_WIDTH ||
+        gralloc->size < static_cast<unsigned int>(stride_px * height * 4)) {
+        ALOGE("single atomic contract mismatch: %dx%d stride=%d format=%d flags=0x%x size=%u",
+              width, height, stride_px, format, flags, gralloc->size);
+        close_acquire();
+        return false;
+    }
+    if (!OpenWideFramebuffer(d)) {
+        close_acquire();
+        return false;
+    }
+
+    mdp_input_layer layer {};
+    layer.alpha = 0xff;
+    layer.transp_mask = MDP_TRANSP_NOP;
+    layer.blend_op = BLEND_OP_OPAQUE;
+    /* The kernel expands this client target into the native A+B command
+     * transaction.  It pins A to VIG0 and retains a paired dark B layer so
+     * one logical single frame still arms both CTLs. */
+    layer.pipe_ndx = 1U;
+    layer.src_rect = {0, 0, FUJISAN_SEC_WIDTH, FUJISAN_SEC_HEIGHT};
+    layer.dst_rect = {0, 0, FUJISAN_SEC_WIDTH, FUJISAN_SEC_HEIGHT};
+    layer.buffer.width = static_cast<uint32_t>(stride_px);
+    layer.buffer.height = static_cast<uint32_t>(height);
+    layer.buffer.format = rgba ? MDP_RGBA_8888 : MDP_RGBX_8888;
+    layer.buffer.planes[0].fd = gralloc->fd;
+    layer.buffer.planes[0].offset = gralloc->offset;
+    layer.buffer.planes[0].stride = static_cast<uint32_t>(stride_px * 4);
+    layer.buffer.plane_count = 1;
+    layer.buffer.comp_ratio.numer = 1000;
+    layer.buffer.comp_ratio.denom = 1000;
+    layer.buffer.fence = acquire_fence;
+
+    mdp_layer_commit commit {};
+    commit.version = MDP_COMMIT_VERSION_1_0;
+    commit.commit_v1.flags = MDP_COMMIT_FUJISAN_SINGLE;
+    commit.commit_v1.release_fence = -1;
+    commit.commit_v1.retire_fence = -1;
+    commit.commit_v1.input_layers = &layer;
+    commit.commit_v1.input_layer_cnt = 1;
+
+    const int ret = ioctl(d->wide_fd, MSMFB_ATOMIC_COMMIT, &commit);
+    close_acquire();
+    if (ret != 0) {
+        ALOGE("single atomic submit failed: %s (layer=%d, release=%d, retire=%d)",
+              strerror(errno), layer.error_code, commit.commit_v1.release_fence,
+              commit.commit_v1.retire_fence);
+        if (commit.commit_v1.release_fence >= 0)
+            close(commit.commit_v1.release_fence);
+        if (commit.commit_v1.retire_fence >= 0)
+            close(commit.commit_v1.retire_fence);
+        return false;
+    }
+
+    const int completion_fence = commit.commit_v1.release_fence;
+    if (commit.commit_v1.retire_fence >= 0)
+        close(commit.commit_v1.retire_fence);
+    if (completion_fence < 0) {
+        ALOGE("single atomic submit returned no completion fence");
+        return false;
+    }
+    if (out_retire_fence)
+        *out_retire_fence = completion_fence;
+    else
+        close(completion_fence);
+
+    ++d->single_submit_count;
+    if (d->single_submit_count <= 5 || (d->single_submit_count % 120) == 0) {
+        ALOGI("single atomic submit #%u: %dx%d stride=%d format=%d acquire=%d completion=%d",
+              d->single_submit_count, width, height, stride_px, format, layer.buffer.fence,
+              completion_fence);
     }
     return true;
 }
@@ -1373,7 +1537,7 @@ static bool __attribute__((unused)) ReplayZoomLayersToRealLocked(Device* d) {
     return true;
 }
 
-static bool ZoomCanHardwareComposeLocked(Device* d) {
+static bool __attribute__((unused)) ZoomCanHardwareComposeLocked(Device* d) {
     if (!d || d->zoom_force_client || d->zoom_layers.empty())
         return false;
     unsigned int candidates = 0;
@@ -2026,7 +2190,7 @@ static int32_t AcceptDisplayChanges(hwc2_device_t* device, hwc2_display_t displa
             kv.second.changed = false;
         return HWC2_ERROR_NONE;
     }
-    if (display == kPrimaryDisplay && WantZoomMode()) {
+    if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         for (auto& kv : d->zoom_layers)
             kv.second.changed = false;
@@ -2098,8 +2262,12 @@ static int32_t GetChangedCompositionTypes(hwc2_device_t* device, hwc2_display_t 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecGetChanged(d, out_count, out_layers, out_types);
-    if (display == kPrimaryDisplay && WantZoomMode()) {
+    if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
+        /* ValidateDisplay is implemented by this wrapper for both logical
+         * primary configurations.  Returning CAF's changes in single mode
+         * loses the CLIENT requests that ValidateDisplay just issued, so SF
+         * never renders the 1080 client target. */
         uint32_t need = 0;
         for (const auto& kv : d->zoom_layers)
             if (kv.second.changed)
@@ -2141,17 +2309,21 @@ static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t disp
             return HWC2_ERROR_NONE;
         return HWC2_ERROR_UNSUPPORTED;
     }
-    if (display == kPrimaryDisplay && WantZoomMode() && width == kZoomWidth &&
-        height == FUJISAN_SEC_HEIGHT &&
-        (format == HAL_PIXEL_FORMAT_RGBA_8888 || format == HAL_PIXEL_FORMAT_RGBX_8888 ||
-         format == HAL_PIXEL_FORMAT_BGRA_8888)) {
-        /* The real CAF composer advertises only its physical
-         * 1080-wide limit.  Returning that answer for our virtual 2160-wide
-         * config makes SurfaceFlinger allocate a 1080 target and scale the
-         * whole desktop into it, leaving no distinct right half for panel B.
-         * We have a working MDP crop path for a 2160 RGBA client target, so
-         * advertise that capability at the wrapper boundary. */
-        return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        const bool rgba = format == HAL_PIXEL_FORMAT_RGBA_8888 ||
+                          format == HAL_PIXEL_FORMAT_RGBX_8888 ||
+                          format == HAL_PIXEL_FORMAT_BGRA_8888;
+        if (WantZoomMode() && width == kZoomWidth && height == FUJISAN_SEC_HEIGHT && rgba) {
+            /* C owns the 2160-wide target; CAF's physical contract is not
+             * relevant to this virtual config. */
+            return HWC2_ERROR_NONE;
+        }
+        if (!WantZoomMode() && width == FUJISAN_SEC_WIDTH &&
+            height == FUJISAN_SEC_HEIGHT && rgba) {
+            /* fb0 is natively dual-CTL and reports 2160 to CAF, but config 0
+             * is deliberately the 1080-wide single backend. */
+            return HWC2_ERROR_NONE;
+        }
     }
     return d->fns.getClientTargetSupport
                ? d->fns.getClientTargetSupport(d->real, display, width, height, format, dataspace)
@@ -2201,10 +2373,11 @@ static int32_t GetDisplayAttribute(hwc2_device_t* device, hwc2_display_t display
                 return HWC2_ERROR_NONE;
         }
     }
-    if (display == kPrimaryDisplay && config == kZoomConfig) {
+    if (display == kPrimaryDisplay &&
+        (config == kSingleConfig || config == kZoomConfig)) {
         switch (attribute) {
             case HWC2_ATTRIBUTE_WIDTH:
-                *out = kZoomWidth; /* 2160 */
+                *out = config == kZoomConfig ? kZoomWidth : FUJISAN_SEC_WIDTH;
                 return HWC2_ERROR_NONE;
             case HWC2_ATTRIBUTE_HEIGHT:
                 *out = FUJISAN_SEC_HEIGHT;
@@ -2289,7 +2462,7 @@ static int32_t GetDisplayRequests(hwc2_device_t* device, hwc2_display_t display,
                                   int32_t* out_display_requests, uint32_t* out_num_elements,
                                   hwc2_layer_t* out_layers, int32_t* out_layer_requests) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay || (display == kPrimaryDisplay && WantZoomMode())) {
+    if (display == kSecondaryDisplay || display == kPrimaryDisplay) {
         if (out_display_requests)
             *out_display_requests = 0;
         if (out_num_elements)
@@ -2376,13 +2549,14 @@ static int32_t SetActiveConfigWithConstraints(
          * and quietly returns a narrow client target after a hotplug
          * reprobe.  Keep config 1 visible to SurfaceFlinger while applying
          * config 0 beneath it. */
-        bool zoom = false;
+        const bool zoom = WantZoomMode();
+        if (!zoom && !DrainWideRoute(d, "SetActiveConfigWithConstraints"))
+            return HWC2_ERROR_NO_RESOURCES;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
             /* config may be the previous topology requested by SurfaceFlinger
              * before the hinge mode refresh.  The hall daemon is authoritative
              * for this virtual display's geometry. */
-            zoom = WantZoomMode();
             d->zoom_active = zoom;
             d->active_config = zoom ? kZoomConfig : kSingleConfig;
         }
@@ -2479,7 +2653,7 @@ static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display,
 static int32_t GetReleaseFences(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_num,
                                 hwc2_layer_t* layers, int32_t* fences) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay || (display == kPrimaryDisplay && WantZoomMode())) {
+    if (display == kSecondaryDisplay || display == kPrimaryDisplay) {
         if (out_num)
             *out_num = 0;
         return HWC2_ERROR_NONE;
@@ -2497,7 +2671,6 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
     if (display == kPrimaryDisplay) {
         bool zoom = WantZoomMode();
         const bool dual_internal = DualInternalEnabled();
-        bool primary_b = WantPrimaryB();
         buffer_handle_t target = nullptr;
         int fence = -1;
         bool refresh_secondary = false;
@@ -2589,12 +2762,10 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             NoteZoomPresent(d, w, h, stride);
             if (w == kZoomWidth && h == FUJISAN_SEC_HEIGHT) {
                 if (!d->wide_route_active) {
-                    d->wide_route_active = true;
                     ALOGI("wide: route complete client target to atomic C (no fb1)");
                 }
                 if (SubmitWideClientTarget(d, target, fence, out_retire_fence))
                     return HWC2_ERROR_NONE;
-                d->wide_route_active = false;
                 return HWC2_ERROR_NO_RESOURCES;
             }
             /* One old-geometry frame is legal during config transition.  It
@@ -2617,21 +2788,36 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             return HWC2_ERROR_NONE;
         }
 
-        CloseWideFramebuffer(d);
-        int32_t ret = d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
-                                            : HWC2_ERROR_UNSUPPORTED;
-        /* Single mode: retire B completely.  Merely setting its DCS
-         * brightness to zero leaves fb1 open, so MDSS keeps the panel
-         * scanning the last zoom frame with a faint residual glow.  Closing
-         * the last fb1 client after its overlay is removed takes the safe
-         * kernel release path, which powers the panel down. */
-        if (!dual_internal)
-            CloseFb1(d);
-        if (fence >= 0)
-            close(fence);
-        (void)primary_b;
-        (void)target;
-        return ret;
+        if (!DrainWideRoute(d, "PresentDisplay single")) {
+            if (fence >= 0)
+                close(fence);
+            if (out_retire_fence)
+                *out_retire_fence = -1;
+            return HWC2_ERROR_NO_RESOURCES;
+        }
+        if (!target) {
+            if (fence >= 0)
+                close(fence);
+            if (out_retire_fence)
+                *out_retire_fence = -1;
+            ALOGW("single: present without client target");
+            return HWC2_ERROR_NONE;
+        }
+
+        int w = 0, h = 0, stride = 0, format = 0, flags = 0;
+        GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
+        if (w != FUJISAN_SEC_WIDTH || h != FUJISAN_SEC_HEIGHT) {
+            if (fence >= 0)
+                close(fence);
+            if (out_retire_fence)
+                *out_retire_fence = -1;
+            ALOGW("single: skip interim client target %dx%d stride=%d format=%d flags=0x%x",
+                  w, h, stride, format, flags);
+            return HWC2_ERROR_NONE;
+        }
+        if (SubmitSingleClientTarget(d, target, fence, out_retire_fence))
+            return HWC2_ERROR_NONE;
+        return HWC2_ERROR_NO_RESOURCES;
     }
     return d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                 : HWC2_ERROR_UNSUPPORTED;
@@ -2644,8 +2830,11 @@ static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
     if (display == kPrimaryDisplay) {
         if (config != kSingleConfig && config != kZoomConfig)
             return HWC2_ERROR_BAD_CONFIG;
+        const bool zoom = WantZoomMode();
+        if (!zoom && !DrainWideRoute(d, "SetActiveConfig"))
+            return HWC2_ERROR_NO_RESOURCES;
         std::lock_guard<std::mutex> zl(d->zoom_lock);
-        d->zoom_active = WantZoomMode();
+        d->zoom_active = zoom;
         d->active_config = d->zoom_active ? kZoomConfig : kSingleConfig;
         ALOGI("SetActiveConfig primary -> %s", d->zoom_active ? "ZOOM 2160" : "SINGLE 1080");
         if (config == kSingleConfig && d->fns.setActiveConfig)
@@ -2674,6 +2863,8 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
     }
     if (display == kPrimaryDisplay) {
         const bool zoom = WantZoomMode();
+        if (!zoom && !DrainWideRoute(d, "SetClientTarget"))
+            return HWC2_ERROR_NO_RESOURCES;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
             if (d->client_acquire_fence >= 0)
@@ -2703,14 +2894,12 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
             (void)damage;
             return HWC2_ERROR_NONE;
         }
-        /* Single: real path owns the fence; we dup for optional fb1 post. */
-        int fence_for_real = -1;
-        if (acquire_fence >= 0)
-            fence_for_real = dup(acquire_fence);
-        return d->fns.setClientTarget
-                       ? d->fns.setClientTarget(d->real, display, target, fence_for_real, dataspace,
-                                                damage)
-                       : HWC2_ERROR_UNSUPPORTED;
+        /* config 0 uses the device-side atomic A route for the same reason
+         * as wide C: CAF sees fb0's native 2160 geometry and cannot consume
+         * this 1080 client target without manufacturing an invalid crop. */
+        (void)dataspace;
+        (void)damage;
+        return HWC2_ERROR_NONE;
     }
     return d->fns.setClientTarget
                ? d->fns.setClientTarget(d->real, display, target, acquire_fence, dataspace, damage)
@@ -3034,107 +3223,29 @@ static int32_t ValidateDisplay(hwc2_device_t* device, hwc2_display_t display, ui
     if (display == kSecondaryDisplay)
         return SecValidate(d, out_types, out_requests);
     if (display == kPrimaryDisplay) {
-        const bool zoom = WantZoomMode();
-        if (zoom) {
-            std::lock_guard<std::mutex> zl(d->zoom_lock);
-            uint32_t changes = 0;
-            d->zoom_force_client = true;
-            d->zoom_layer_path_active = false;
-            for (auto& kv : d->zoom_layers) {
-                ZoomLayer& layer = kv.second;
-                layer.device_candidate = false;
-                layer.changed = layer.requested != HWC2_COMPOSITION_CLIENT;
-                layer.validated = HWC2_COMPOSITION_CLIENT;
-                if (layer.changed)
-                    ++changes;
-            }
-            d->zoom_layers_validated = true;
-            if (out_types)
-                *out_types = changes;
-            if (out_requests)
-                *out_requests = 0;
-            return changes ? HWC2_ERROR_HAS_CHANGES : HWC2_ERROR_NONE;
-        }
         std::lock_guard<std::mutex> zl(d->zoom_lock);
-        if (zoom && !d->zoom_force_client) {
-            /*
-             * Panel B is fed by a crop of SurfaceFlinger's client target.
-             * A layer promoted to DEVICE is removed from that target, while
-             * the experimental direct-layer path is not used to scan the
-             * same layer out on B.  The result is a right-panel-only missing
-             * or stale layer for applications that exercise the promotion.
-             *
-             * Keep the virtual 2160-wide display fully client-composed until
-             * both panels share one complete device-composition transaction.
-             * This deliberately affects zoom only; single-panel CAF HWC
-             * composition remains unchanged.
-             */
-            d->zoom_force_client = true;
-            ALOGI("zoom: force full client composition; B requires the complete client target");
-        }
-        if (zoom && ZoomCanHardwareComposeLocked(d)) {
-            /* Keep CAF's normal primary Present path alive.  It receives
-             * only the selected lower application layers as DEVICE; all
-             * SystemUI/small UBWC layers remain CLIENT and retain the wide
-             * target used by the established B crop path. */
-            for (auto& kv : d->zoom_layers) {
-                if (kv.second.device_candidate && d->fns.setLayerCompositionType) {
-                    const int32_t err = d->fns.setLayerCompositionType(
-                            d->real, kPrimaryDisplay, kv.first, HWC2_COMPOSITION_DEVICE);
-                    if (err != HWC2_ERROR_NONE)
-                        goto client_fallback;
-                }
-            }
-            d->zoom_layer_path_active = true;
-            uint32_t changes = 0;
-            for (auto& kv : d->zoom_layers) {
-                ZoomLayer& layer = kv.second;
-                layer.changed = layer.device_candidate &&
-                                layer.requested != HWC2_COMPOSITION_DEVICE;
-                layer.validated = layer.device_candidate ? HWC2_COMPOSITION_DEVICE
-                                                         : HWC2_COMPOSITION_CLIENT;
-                if (layer.changed)
-                    ++changes;
-            }
-            d->zoom_layers_validated = true;
-            uint32_t real_types = 0, real_requests = 0;
-            const int32_t real_ret = d->fns.validateDisplay
-                    ? d->fns.validateDisplay(d->real, display, &real_types, &real_requests)
-                    : HWC2_ERROR_UNSUPPORTED;
-            if (real_ret != HWC2_ERROR_NONE)
-                goto client_fallback;
-            if (out_types)
-                *out_types = changes;
-            if (out_requests)
-                *out_requests = real_requests;
-            return changes ? HWC2_ERROR_HAS_CHANGES : HWC2_ERROR_NONE;
-        }
-client_fallback:
         if (d->zoom_layer_path_active)
             ResetAllZoomLayerOverlays(d);
         d->zoom_layer_path_active = false;
-        if (zoom) {
-            /* We suppressed the normal setter calls while the direct route
-             * was active.  Give the wrapped composer a complete,
-             * self-consistent client-layer transaction before it validates
-             * the fallback. */
-            for (auto& kv : d->zoom_layers) {
-                kv.second.device_candidate = false;
-                if (d->fns.setLayerCompositionType)
-                    (void)d->fns.setLayerCompositionType(d->real, kPrimaryDisplay, kv.first,
-                                                         kv.second.requested);
-            }
-        } else {
-            /* The next single-panel transaction is passed through normally;
-             * only retire fence descriptors retained by the old direct path.
-             */
-            for (auto& kv : d->zoom_layers) {
-                if (kv.second.acquire_fence >= 0) {
-                    close(kv.second.acquire_fence);
-                    kv.second.acquire_fence = -1;
-                }
-            }
+        /* The native fb0 topology is dual-CTL in both logical configs.  Keep
+         * every primary layer in SurfaceFlinger's one client target and let
+         * the Fujisan atomic submit choose A-only or A+B scanout. */
+        uint32_t changes = 0;
+        d->zoom_force_client = true;
+        for (auto& kv : d->zoom_layers) {
+            ZoomLayer& layer = kv.second;
+            layer.device_candidate = false;
+            layer.changed = layer.requested != HWC2_COMPOSITION_CLIENT;
+            layer.validated = HWC2_COMPOSITION_CLIENT;
+            if (layer.changed)
+                ++changes;
         }
+        d->zoom_layers_validated = true;
+        if (out_types)
+            *out_types = changes;
+        if (out_requests)
+            *out_requests = 0;
+        return changes ? HWC2_ERROR_HAS_CHANGES : HWC2_ERROR_NONE;
     }
     return d->fns.validateDisplay ? d->fns.validateDisplay(d->real, display, out_types, out_requests)
                                  : HWC2_ERROR_UNSUPPORTED;
