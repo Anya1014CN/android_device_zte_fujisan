@@ -1113,18 +1113,28 @@ static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquir
         return false;
     }
 
-    if (commit.commit_v1.release_fence >= 0)
-        close(commit.commit_v1.release_fence);
-    if (out_retire_fence)
-        *out_retire_fence = commit.commit_v1.retire_fence;
-    else if (commit.commit_v1.retire_fence >= 0)
+    /* In native dual-CTL mode the MDP release timeline advances from
+     * MDP_NOTIFY_FRAME_DONE, emitted only by the second pingpong completion.
+     * That is the client target's real A+B completion fence.  The generic
+     * retire fence instead follows fb0's master read-pointer vsync and can
+     * signal before the split CTL has consumed its crop. */
+    const int merged_fence = commit.commit_v1.release_fence;
+    if (commit.commit_v1.retire_fence >= 0)
         close(commit.commit_v1.retire_fence);
+    if (merged_fence < 0) {
+        ALOGE("wide atomic submit returned no merged A+B completion fence");
+        return false;
+    }
+    if (out_retire_fence)
+        *out_retire_fence = merged_fence;
+    else
+        close(merged_fence);
 
     ++d->wide_submit_count;
     if (d->wide_submit_count <= 5 || (d->wide_submit_count % 120) == 0) {
-        ALOGI("wide atomic submit #%u: %dx%d stride=%d format=%d acquire=%d retire=%d",
+        ALOGI("wide atomic submit #%u: %dx%d stride=%d format=%d acquire=%d merged=%d",
               d->wide_submit_count, width, height, stride_px, format, layer.buffer.fence,
-              commit.commit_v1.retire_fence);
+              merged_fence);
     }
     return true;
 }
