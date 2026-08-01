@@ -817,26 +817,6 @@ static void* PrimaryReprobeThreadMain(void* arg) {
     if (fn) {
         ALOGI("reprobe primary display: in-place mode refresh");
         fn(data, kPrimaryDisplay, HWC2_CONNECTION_CONNECTED);
-        /* The callback returns after SurfaceFlinger has re-enumerated the
-         * current one-config topology.  Let the hall daemon refresh its
-         * display-bound SystemUI cache only after that point. */
-        property_set("vendor.fujisan.hwc_topology_ready",
-                     WantZoomMode() ? "zoom" : "single");
-        /* local:0 survives the 1080<->2160 change, while Android 12 SystemUI
-         * caches StatusBarContentInsets by that ID.  This point is after the
-         * in-place SurfaceFlinger re-enumeration, so it is the only safe place
-         * to request its one-shot rebuild.  Keeping it in HWC avoids losing
-         * the request when init restarts the hall daemon for display power. */
-        const char* topology = WantZoomMode() ? "zoom" : "single";
-        char systemui_geometry[PROPERTY_VALUE_MAX] = "single";
-        property_get("vendor.fujisan.systemui_geometry", systemui_geometry,
-                     "single");
-        if (strcmp(systemui_geometry, topology) != 0) {
-            property_set("vendor.fujisan.systemui_geometry", topology);
-            property_set("vendor.fujisan.systemui_refresh", "0");
-            property_set("vendor.fujisan.systemui_refresh", "1");
-            ALOGI("requested SystemUI refresh after %s topology", topology);
-        }
     }
     d->primary_reprobe_pending.store(false);
     return nullptr;
@@ -2310,9 +2290,12 @@ static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t disp
         return HWC2_ERROR_UNSUPPORTED;
     }
     if (display == kPrimaryDisplay) {
+        /* The device C ABI currently has one explicit client-target
+         * contract: linear RGBA/RGBX.  Do not advertise BGRA merely because
+         * the generic mapper can name it; Submit*ClientTarget() would reject
+         * it after SurfaceFlinger had already rendered a frame. */
         const bool rgba = format == HAL_PIXEL_FORMAT_RGBA_8888 ||
-                          format == HAL_PIXEL_FORMAT_RGBX_8888 ||
-                          format == HAL_PIXEL_FORMAT_BGRA_8888;
+                          format == HAL_PIXEL_FORMAT_RGBX_8888;
         if (WantZoomMode() && width == kZoomWidth && height == FUJISAN_SEC_HEIGHT && rgba) {
             /* C owns the 2160-wide target; CAF's physical contract is not
              * relevant to this virtual config. */
@@ -2927,6 +2910,17 @@ static int32_t SetCursorPosition(hwc2_device_t* device, hwc2_display_t display, 
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
+    if (display == kPrimaryDisplay) {
+        /* ValidateDisplay always makes primary cursor layers CLIENT, so the
+         * cursor pixels are already included in the client target submitted
+         * through the Fujisan atomic route. Forwarding this callback into
+         * CAF's real composer programs legacy MDSS cursor SSPPs outside that
+         * route; their stale IOVAs can fault after a panel blank/unblank. */
+        (void)layer;
+        (void)x;
+        (void)y;
+        return HWC2_ERROR_NONE;
+    }
     return d->fns.setCursorPosition ? d->fns.setCursorPosition(d->real, display, layer, x, y)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
