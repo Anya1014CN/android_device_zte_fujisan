@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fujisan opens as a 2160x1920 natural-landscape display.  Make a
+         portrait-only app rotate clockwise so physical A is below B. -->
+    <bool name="config_reverseDefaultRotation">true</bool>
+</resources>
