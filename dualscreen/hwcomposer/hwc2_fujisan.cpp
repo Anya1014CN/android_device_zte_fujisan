@@ -58,6 +58,7 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <linux/msm_mdp.h>
+#include <linux/msm_mdp_ext.h>
 #include <pthread.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -73,6 +74,13 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #include <map>
 #include <mutex>
 #include <vector>
+
+/* The Android generated kernel headers are refreshed independently from the
+ * boot image.  Keep the userspace value in lockstep with the committed UAPI
+ * while those headers still predate the Fujisan extension. */
+#ifndef MDP_COMMIT_FUJISAN_WIDE
+#define MDP_COMMIT_FUJISAN_WIDE 0x40000000
+#endif
 
 using android::hardware::hidl_handle;
 using android::hardware::graphics::common::V1_0::BufferUsage;
@@ -108,6 +116,7 @@ constexpr int kZoomWidth = 2160;  /* 1080 + 1 hinge + 1079 usable right? 1080+10
  * declared to WM via device_state/fold overlays; pixels at x=1080 may be skipped when splitting.
  */
 constexpr char kFb1Path[] = "/dev/graphics/fb1";
+constexpr char kFb0Path[] = "/dev/graphics/fb0";
 constexpr char kBl2Path[] = "/sys/class/leds/lcd-backlight-2/brightness";
 
 #ifndef MSMFB_DISPLAY_COMMIT
@@ -179,7 +188,11 @@ struct RealFns {
 };
 
 struct SecLayer {
-    int32_t requested = HWC2_COMPOSITION_CLIENT;
+    /* SurfaceFlinger initially treats a new output layer as DEVICE.  HWC2
+     * does not send an explicit SetLayerCompositionType until that state
+     * changes, so starting this at CLIENT makes the first wide validation
+     * falsely report zero changes and leaves the client target unrendered. */
+    int32_t requested = HWC2_COMPOSITION_DEVICE;
     int32_t validated = HWC2_COMPOSITION_CLIENT;
     bool changed = false;
 };
@@ -226,7 +239,10 @@ struct ZoomOverlay {
 };
 
 struct ZoomLayer {
-    int32_t requested = HWC2_COMPOSITION_CLIENT;
+    /* See SecLayer: DEVICE is the HWC2 initial request.  Wide validation
+     * must actively return CLIENT for every layer before C consumes the
+     * client target. */
+    int32_t requested = HWC2_COMPOSITION_DEVICE;
     int32_t validated = HWC2_COMPOSITION_CLIENT;
     bool changed = false;
     buffer_handle_t buffer = nullptr;
@@ -305,6 +321,12 @@ struct Device {
     size_t fb0_map_size = 0;
     struct fb_var_screeninfo vinfo0 {};
     struct fb_fix_screeninfo finfo0 {};
+    /* Wide is submitted through the standard atomic ABI on fb0.  Do not use
+     * the legacy fb1 overlay route: the Fujisan kernel expands this one C
+     * target into both physical CTLs. */
+    int wide_fd = -1;
+    bool wide_route_active = false;
+    uint32_t wide_submit_count = 0;
     char last_mode[16] = "single";
     bool mode_seen = false;
     bool topology_seen = false;
@@ -314,6 +336,16 @@ struct Device {
     bool zoom_layers_validated = false;
     bool zoom_layer_path_active = false;
     bool zoom_force_client = false;
+
+    /* Bring-up telemetry only.  The client target's allocation geometry is
+     * the authoritative indication of whether SurfaceFlinger has rotated the
+     * virtual wide framebuffer; HWC2 does not pass a display rotation to
+     * setClientTarget(). */
+    int zoom_target_width = 0;
+    int zoom_target_height = 0;
+    int zoom_target_stride = 0;
+    int64_t zoom_present_window_ns = 0;
+    uint32_t zoom_present_count = 0;
 
     /* Physical B power is owned by fujisan_halld.  These track its hinge
      * availability so the independent logical display gets one redraw only
@@ -373,6 +405,21 @@ static int64_t MonotonicNs() {
     struct timespec ts {};
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return static_cast<int64_t>(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
+}
+
+static void NoteZoomPresent(Device* d, int width, int height, int stride) {
+    const int64_t now = MonotonicNs();
+    if (d->zoom_present_window_ns == 0)
+        d->zoom_present_window_ns = now;
+    ++d->zoom_present_count;
+    const int64_t elapsed = now - d->zoom_present_window_ns;
+    if (elapsed < 1000000000LL)
+        return;
+    const float fps = static_cast<float>(d->zoom_present_count) * 1000000000.0f /
+                      static_cast<float>(elapsed);
+    ALOGI("zoom target=%dx%d stride=%d present=%.1ffps", width, height, stride, fps);
+    d->zoom_present_window_ns = now;
+    d->zoom_present_count = 0;
 }
 
 static void SetDisplayPowerProp(bool on) {
@@ -508,6 +555,26 @@ static bool OpenFb0(Device* d) {
     ALOGI("fb0 mapped %ux%u line=%u smem=%zu", d->vinfo0.xres, d->vinfo0.yres,
           d->finfo0.line_length, d->fb0_map_size);
     return true;
+}
+
+static bool OpenWideFramebuffer(Device* d) {
+    if (d->wide_fd >= 0)
+        return true;
+    d->wide_fd = open(kFb0Path, O_RDWR | O_CLOEXEC);
+    if (d->wide_fd < 0) {
+        ALOGE("open %s for wide atomic submit failed: %s", kFb0Path, strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+static void CloseWideFramebuffer(Device* d) {
+    if (d->wide_fd >= 0) {
+        close(d->wide_fd);
+        d->wide_fd = -1;
+    }
+    d->wide_route_active = false;
+    d->wide_submit_count = 0;
 }
 
 static hwc2_vsync_period_t PrimaryVsyncPeriodNs(Device* d, hwc2_display_t display) {
@@ -947,6 +1014,119 @@ static bool GetGrallocStridePx(buffer_handle_t handle, int* out_stride_px, int* 
         }
     }
     return false;
+}
+
+/*
+ * Temporary wide-primary bridge.  SurfaceFlinger has already composed the
+ * whole 2160x1920 scene into one linear client target.  Submit that target to
+ * fb0 with the normal MDSS atomic ABI; MDP_COMMIT_FUJISAN_WIDE is consumed in
+ * the kernel and expanded into the A/B CTL transaction.  There is deliberately
+ * no fb1 open, overlay, copy, or fence wait in this route.
+ */
+static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquire_fence,
+                                   int32_t* out_retire_fence) {
+    if (out_retire_fence)
+        *out_retire_fence = -1;
+
+    const auto close_acquire = [&]() {
+        if (acquire_fence >= 0) {
+            close(acquire_fence);
+            acquire_fence = -1;
+        }
+    };
+
+    if (!d || !handle) {
+        ALOGE("wide atomic submit has no client target");
+        close_acquire();
+        return false;
+    }
+
+    const auto* gralloc = reinterpret_cast<const FujisanPrivateHandle*>(handle);
+    int stride_px = 0;
+    int width = 0;
+    int height = 0;
+    int format = 0;
+    int flags = 0;
+    if (gralloc->magic != kFujisanGrallocMagic || gralloc->fd < 0 ||
+        !GetGrallocStridePx(handle, &stride_px, &width, &height, &format, &flags)) {
+        ALOGE("wide atomic submit received an invalid gralloc handle");
+        close_acquire();
+        return false;
+    }
+
+    const bool rgba = format == HAL_PIXEL_FORMAT_RGBA_8888;
+    const bool rgbx = format == HAL_PIXEL_FORMAT_RGBX_8888;
+    const bool linear = (flags & PRIV_FLAGS_UBWC_ALIGNED) == 0;
+    if (!linear || (!rgba && !rgbx) || width != kZoomWidth ||
+        height != FUJISAN_SEC_HEIGHT || stride_px < kZoomWidth) {
+        ALOGE("wide atomic contract mismatch: %dx%d stride=%d format=%d flags=0x%x",
+              width, height, stride_px, format, flags);
+        close_acquire();
+        return false;
+    }
+    if (gralloc->size < static_cast<unsigned int>(stride_px * height * 4)) {
+        ALOGE("wide atomic target too small: size=%u need=%zu", gralloc->size,
+              static_cast<size_t>(stride_px) * height * 4);
+        close_acquire();
+        return false;
+    }
+    if (!OpenWideFramebuffer(d)) {
+        close_acquire();
+        return false;
+    }
+
+    mdp_input_layer layer {};
+    layer.alpha = 0xff;
+    layer.transp_mask = MDP_TRANSP_NOP;
+    layer.blend_op = BLEND_OP_OPAQUE;
+    layer.src_rect = {0, 0, kZoomWidth, FUJISAN_SEC_HEIGHT};
+    layer.dst_rect = {0, 0, kZoomWidth, FUJISAN_SEC_HEIGHT};
+    layer.buffer.width = static_cast<uint32_t>(stride_px);
+    layer.buffer.height = static_cast<uint32_t>(height);
+    layer.buffer.format = rgba ? MDP_RGBA_8888 : MDP_RGBX_8888;
+    layer.buffer.planes[0].fd = gralloc->fd;
+    layer.buffer.planes[0].offset = gralloc->offset;
+    layer.buffer.planes[0].stride = static_cast<uint32_t>(stride_px * 4);
+    layer.buffer.plane_count = 1;
+    layer.buffer.comp_ratio.numer = 1000;
+    layer.buffer.comp_ratio.denom = 1000;
+    layer.buffer.fence = acquire_fence;
+
+    mdp_layer_commit commit {};
+    commit.version = MDP_COMMIT_VERSION_1_0;
+    commit.commit_v1.flags = MDP_COMMIT_FUJISAN_WIDE;
+    commit.commit_v1.release_fence = -1;
+    commit.commit_v1.retire_fence = -1;
+    commit.commit_v1.input_layers = &layer;
+    commit.commit_v1.input_layer_cnt = 1;
+
+    const int ret = ioctl(d->wide_fd, MSMFB_ATOMIC_COMMIT, &commit);
+    close_acquire();
+    if (ret != 0) {
+        ALOGE("wide atomic submit failed: %s (layer=%d, release=%d, retire=%d)",
+              strerror(errno), layer.error_code, commit.commit_v1.release_fence,
+              commit.commit_v1.retire_fence);
+        if (commit.commit_v1.release_fence >= 0)
+            close(commit.commit_v1.release_fence);
+        if (commit.commit_v1.retire_fence >= 0)
+            close(commit.commit_v1.retire_fence);
+        return false;
+    }
+
+    if (commit.commit_v1.release_fence >= 0)
+        close(commit.commit_v1.release_fence);
+    if (out_retire_fence)
+        *out_retire_fence = commit.commit_v1.retire_fence;
+    else if (commit.commit_v1.retire_fence >= 0)
+        close(commit.commit_v1.retire_fence);
+
+    ++d->wide_submit_count;
+    if (d->wide_submit_count <= 5 || (d->wide_submit_count % 120) == 0) {
+        ALOGI("wide atomic submit #%u: %dx%d stride=%d format=%d acquire=%d retire=%d",
+              d->wide_submit_count, width, height, stride_px, format, layer.buffer.fence,
+              commit.commit_v1.retire_fence);
+    }
+    return true;
 }
 
 static void ResetZoomOverlay(int fd, ZoomOverlay* overlay) {
@@ -1599,40 +1779,6 @@ static bool __attribute__((unused)) PostZoomOverlays(Device* d, buffer_handle_t 
     return a && b;
 }
 
-/* A is always composed by the vendor Qualcomm HWC.  In zoom it consumes the
- * full client target through its native primary path; B receives only the
- * right 1080-pixel crop through the working legacy overlay path. */
-static bool PostZoomSecondaryOverlay(Device* d, buffer_handle_t handle, int fence) {
-    if (!handle)
-        return false;
-    if (fence >= 0) {
-        (void)sync_wait(fence, 1000);
-        close(fence);
-    }
-    if (!OpenFb1(d))
-        return false;
-    const bool posted = PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle,
-                                          FUJISAN_SEC_WIDTH, "fb1");
-    return posted;
-}
-
-
-/* Post full 1080 client target to fb1 (closed_b primary or zoom interim). */
-static bool PostClientToFb1(Device* d, buffer_handle_t handle, int fence) {
-    if (!handle)
-        return false;
-    if (fence >= 0) {
-        (void)sync_wait(fence, 1000);
-        close(fence);
-    }
-    if (!PostHandleOverlayToFb1(d, handle))
-        return false;
-    /* Panel B power and brightness are owned by fujisan_halld / Lights.
-     * In particular, never restore a hard-coded brightness while posting a
-     * composition frame: a touch can cause a present at any time. */
-    return true;
-}
-
 /* Split 2160x1920 client target: left -> fb0, right -> fb1 (1px hinge at x=1080 skipped into B col0). */
 static bool __attribute__((unused)) CopyZoomSplit(Device* d, buffer_handle_t handle, int fence) {
     if (!handle)
@@ -1754,7 +1900,34 @@ static int32_t __attribute__((unused)) SecPresent(Device* d, int32_t* out_retire
 static void WrapperGetCapabilities(struct hwc2_device* device, uint32_t* out_count,
                                    int32_t* out_capabilities) {
     auto* d = ToDev(device);
-    d->real->getCapabilities(d->real, out_count, out_capabilities);
+    /* The CAF composer supports SKIP_VALIDATE for its native 1080-wide
+     * device-composition path.  Wide C always requires a validation pass:
+     * that pass changes every visible layer to CLIENT before SurfaceFlinger
+     * renders the one 2160-wide target submitted below.  Advertising the
+     * CAF capability lets the composer call Present directly after the first
+     * frame, bypassing that change and producing an unrendered target. */
+    uint32_t real_count = 0;
+    d->real->getCapabilities(d->real, &real_count, nullptr);
+    std::vector<int32_t> real_caps(real_count);
+    if (real_count)
+        d->real->getCapabilities(d->real, &real_count, real_caps.data());
+
+    std::vector<int32_t> caps;
+    caps.reserve(real_count);
+    for (uint32_t i = 0; i < real_count; ++i) {
+        if (real_caps[i] != HWC2_CAPABILITY_SKIP_VALIDATE)
+            caps.push_back(real_caps[i]);
+    }
+    if (!out_count)
+        return;
+    if (!out_capabilities) {
+        *out_count = static_cast<uint32_t>(caps.size());
+        return;
+    }
+    const uint32_t copy = std::min(*out_count, static_cast<uint32_t>(caps.size()));
+    for (uint32_t i = 0; i < copy; ++i)
+        out_capabilities[i] = caps[i];
+    *out_count = static_cast<uint32_t>(caps.size());
 }
 
 static void HotplugTrampoline(hwc2_callback_data_t cb_data, hwc2_display_t display,
@@ -1845,12 +2018,9 @@ static int32_t AcceptDisplayChanges(hwc2_device_t* device, hwc2_display_t displa
     }
     if (display == kPrimaryDisplay && WantZoomMode()) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
-        if (d->zoom_layer_path_active) {
-            for (auto& kv : d->zoom_layers)
-                kv.second.changed = false;
-            return d->fns.acceptDisplayChanges ? d->fns.acceptDisplayChanges(d->real, display)
-                                               : HWC2_ERROR_UNSUPPORTED;
-        }
+        for (auto& kv : d->zoom_layers)
+            kv.second.changed = false;
+        return HWC2_ERROR_NONE;
     }
     return d->fns.acceptDisplayChanges ? d->fns.acceptDisplayChanges(d->real, display)
                                       : HWC2_ERROR_UNSUPPORTED;
@@ -1920,30 +2090,28 @@ static int32_t GetChangedCompositionTypes(hwc2_device_t* device, hwc2_display_t 
         return SecGetChanged(d, out_count, out_layers, out_types);
     if (display == kPrimaryDisplay && WantZoomMode()) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
-        if (d->zoom_layer_path_active) {
-            uint32_t need = 0;
-            for (const auto& kv : d->zoom_layers)
-                if (kv.second.changed)
-                    ++need;
-            if (!out_layers || !out_types) {
-                if (out_count)
-                    *out_count = need;
-                return HWC2_ERROR_NONE;
-            }
-            if (*out_count < need) {
+        uint32_t need = 0;
+        for (const auto& kv : d->zoom_layers)
+            if (kv.second.changed)
+                ++need;
+        if (!out_layers || !out_types) {
+            if (out_count)
                 *out_count = need;
-                return HWC2_ERROR_NONE;
-            }
-            uint32_t index = 0;
-            for (const auto& kv : d->zoom_layers) {
-                if (!kv.second.changed)
-                    continue;
-                out_layers[index] = kv.first;
-                out_types[index++] = kv.second.validated;
-            }
-            *out_count = index;
             return HWC2_ERROR_NONE;
         }
+        if (*out_count < need) {
+            *out_count = need;
+            return HWC2_ERROR_NONE;
+        }
+        uint32_t index = 0;
+        for (const auto& kv : d->zoom_layers) {
+            if (!kv.second.changed)
+                continue;
+            out_layers[index] = kv.first;
+            out_types[index++] = kv.second.validated;
+        }
+        *out_count = index;
+        return HWC2_ERROR_NONE;
     }
     return d->fns.getChangedCompositionTypes
                ? d->fns.getChangedCompositionTypes(d->real, display, out_count, out_layers, out_types)
@@ -2111,7 +2279,7 @@ static int32_t GetDisplayRequests(hwc2_device_t* device, hwc2_display_t display,
                                   int32_t* out_display_requests, uint32_t* out_num_elements,
                                   hwc2_layer_t* out_layers, int32_t* out_layer_requests) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
+    if (display == kSecondaryDisplay || (display == kPrimaryDisplay && WantZoomMode())) {
         if (out_display_requests)
             *out_display_requests = 0;
         if (out_num_elements)
@@ -2301,7 +2469,7 @@ static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display,
 static int32_t GetReleaseFences(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_num,
                                 hwc2_layer_t* layers, int32_t* fences) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
+    if (display == kSecondaryDisplay || (display == kPrimaryDisplay && WantZoomMode())) {
         if (out_num)
             *out_num = 0;
         return HWC2_ERROR_NONE;
@@ -2408,25 +2576,38 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
         if (zoom && target) {
             int w = 0, h = 0, stride = 0, format = 0, flags = 0;
             GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
-            if (w >= kZoomWidth) {
-                /* fb0 belongs to the vendor composer.  Let it present the
-                 * primary target and feed B only the right-side crop. */
-                int32_t ret = d->fns.presentDisplay
-                                      ? d->fns.presentDisplay(d->real, display, out_retire_fence)
-                                      : HWC2_ERROR_UNSUPPORTED;
-                ResetSecondaryOverlayIfNeeded(d);
-                (void)PostZoomSecondaryOverlay(d, target, fence);
-                return ret;
+            NoteZoomPresent(d, w, h, stride);
+            if (w == kZoomWidth && h == FUJISAN_SEC_HEIGHT) {
+                if (!d->wide_route_active) {
+                    d->wide_route_active = true;
+                    ALOGI("wide: route complete client target to atomic C (no fb1)");
+                }
+                if (SubmitWideClientTarget(d, target, fence, out_retire_fence))
+                    return HWC2_ERROR_NONE;
+                d->wide_route_active = false;
+                return HWC2_ERROR_NO_RESOURCES;
             }
-            /* Still 1080 while zoom prop is set: present on A, mirror to B until SF switches. */
-            int32_t ret = d->fns.presentDisplay
-                                  ? d->fns.presentDisplay(d->real, display, out_retire_fence)
-                                  : HWC2_ERROR_UNSUPPORTED;
-            ResetSecondaryOverlayIfNeeded(d);
-            (void)PostClientToFb1(d, target, fence);
-            return ret;
+            /* One old-geometry frame is legal during config transition.  It
+             * is not a C frame, so consume its fence and wait for 2160-wide. */
+            if (fence >= 0)
+                close(fence);
+            ALOGW("wide: skip interim client target %dx%d stride=%d format=%d flags=0x%x",
+                  w, h, stride, format, flags);
+            if (out_retire_fence)
+                *out_retire_fence = -1;
+            return HWC2_ERROR_NONE;
         }
 
+        if (zoom) {
+            if (fence >= 0)
+                close(fence);
+            ALOGW("wide: present without client target");
+            if (out_retire_fence)
+                *out_retire_fence = -1;
+            return HWC2_ERROR_NONE;
+        }
+
+        CloseWideFramebuffer(d);
         int32_t ret = d->fns.presentDisplay ? d->fns.presentDisplay(d->real, display, out_retire_fence)
                                             : HWC2_ERROR_UNSUPPORTED;
         /* Single mode: retire B completely.  Merely setting its DCS
@@ -2495,29 +2676,22 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
             d->active_config = zoom ? kZoomConfig : kSingleConfig;
         }
         if (zoom) {
-            /* Real msm HWC stays on 1080 config; wrapper owns zoom client target. */
+            /* C owns this target end-to-end.  Do not submit the same buffer
+             * to the wrapped 1080-wide composer as a second fb0 transaction. */
             int w = 0, h = 0, stride = 0, format = 0, flags = 0;
             if (target)
                 GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
-            if (w >= kZoomWidth) {
-                /* Feed the vendor primary composer as well.  Suppressing its
-                 * client target leaves fb0 without any valid scanout pipe. */
-                int fence_for_real = -1;
-                if (acquire_fence >= 0)
-                    fence_for_real = dup(acquire_fence);
-                return d->fns.setClientTarget
-                               ? d->fns.setClientTarget(d->real, display, target, fence_for_real,
-                                                        dataspace, damage)
-                               : HWC2_ERROR_UNSUPPORTED;
+            if (w != d->zoom_target_width || h != d->zoom_target_height ||
+                stride != d->zoom_target_stride) {
+                d->zoom_target_width = w;
+                d->zoom_target_height = h;
+                d->zoom_target_stride = stride;
+                ALOGI("zoom client target geometry=%dx%d stride=%d format=%d flags=0x%x",
+                      w, h, stride, format, flags);
             }
-            /* 1080 interim: still feed real HWC (dup fence). */
-            int fence_for_real = -1;
-            if (acquire_fence >= 0)
-                fence_for_real = dup(acquire_fence);
-            return d->fns.setClientTarget
-                           ? d->fns.setClientTarget(d->real, display, target, fence_for_real, dataspace,
-                                                    damage)
-                           : HWC2_ERROR_UNSUPPORTED;
+            (void)dataspace;
+            (void)damage;
+            return HWC2_ERROR_NONE;
         }
         /* Single: real path owns the fence; we dup for optional fb1 post. */
         int fence_for_real = -1;
@@ -2851,6 +3025,26 @@ static int32_t ValidateDisplay(hwc2_device_t* device, hwc2_display_t display, ui
         return SecValidate(d, out_types, out_requests);
     if (display == kPrimaryDisplay) {
         const bool zoom = WantZoomMode();
+        if (zoom) {
+            std::lock_guard<std::mutex> zl(d->zoom_lock);
+            uint32_t changes = 0;
+            d->zoom_force_client = true;
+            d->zoom_layer_path_active = false;
+            for (auto& kv : d->zoom_layers) {
+                ZoomLayer& layer = kv.second;
+                layer.device_candidate = false;
+                layer.changed = layer.requested != HWC2_COMPOSITION_CLIENT;
+                layer.validated = HWC2_COMPOSITION_CLIENT;
+                if (layer.changed)
+                    ++changes;
+            }
+            d->zoom_layers_validated = true;
+            if (out_types)
+                *out_types = changes;
+            if (out_requests)
+                *out_requests = 0;
+            return changes ? HWC2_ERROR_HAS_CHANGES : HWC2_ERROR_NONE;
+        }
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         if (zoom && !d->zoom_force_client) {
             /*
@@ -3106,6 +3300,7 @@ static int HwcClose(hw_device_t* dev) {
     d->vsync_thread_run.store(false);
     if (d->vsync_thread)
         pthread_join(d->vsync_thread, nullptr);
+    CloseWideFramebuffer(d);
     CloseFb1(d);
     if (d->real && d->real->common.close)
         d->real->common.close(reinterpret_cast<hw_device_t*>(d->real));
@@ -3119,11 +3314,11 @@ static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw
     if (!name || strcmp(name, HWC_HARDWARE_COMPOSER) != 0)
         return -EINVAL;
 
-    /* The legacy msm8996 fb1 overlay path cannot reliably import an UBWC
-     * client target alongside SDM's primary pipe.  It eventually leaves its
-     * XIN client active, makes pipe6 impossible to halt, and SDM resets fb0
-     * in a loop.  Use linear buffers for this dual-panel wrapper. */
-    property_set("debug.gralloc.gfx_ubwc_disable", "1");
+    /* Stage 2 accepts the explicit linear RGBA/RGBX contract only.  CAF
+     * gralloc reads these vendor properties when its module is initialized;
+     * the old debug.gralloc.* spelling is not consumed by this source tree. */
+    property_set("vendor.gralloc.disable_ubwc", "1");
+    property_set("vendor.gralloc.enable_fb_ubwc", "0");
 
     auto* d = new Device();
     int err = OpenRealComposer(&d->real, &d->real_so);
