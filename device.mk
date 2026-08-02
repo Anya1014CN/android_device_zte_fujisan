@@ -309,9 +309,6 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/qcril-setup/init.fujisan.qcril.sh:$(TARGET_COPY_OUT_VENDOR)/bin/init.fujisan.qcril.sh
 
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/rootdir/bin/init.fujisan.statusbar-insets-refresh.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.statusbar-insets-refresh.sh
-
-PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/ramdisk,$(TARGET_COPY_OUT_RAMDISK))
 
 # Fujisan uses the panel-hue LiveDisplay HAL above.  The generic SDM service

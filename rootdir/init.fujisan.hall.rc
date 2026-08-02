@@ -4,16 +4,6 @@ service fujisan_halld /vendor/bin/fujisan_halld
     group root system graphics input
     disabled
 
-# StatusBarContentInsetsProvider clears its geometry cache on a theme
-# configuration change.  Toggle to the opposite night mode and immediately
-# restore the user's selected mode after each folded-area transition.
-service fujisan_statusbar_insets_refresh /system/bin/sh /system/bin/init.fujisan.statusbar-insets-refresh.sh
-    class late_start
-    user root
-    group root system
-    disabled
-    oneshot
-
 # Publish the topology property before SurfaceFlinger registers HWC callbacks.
 # The HWC watcher then always has a property serial to sleep on during the
 # early-boot window, rather than waiting for the first user input.
@@ -47,14 +37,6 @@ on property:vendor.fujisan.display_power=0
 
 on property:vendor.fujisan.display_power=1
     restart fujisan_halld
-
-# Give DeviceState/DisplayFoldController a traversal, then invalidate the
-# SystemUI inset cache without restarting SystemUI or changing battery style.
-on property:sys.boot_completed=1 && property:vendor.fujisan.display_mode=single
-    start fujisan_statusbar_insets_refresh
-
-on property:sys.boot_completed=1 && property:vendor.fujisan.display_mode=zoom
-    start fujisan_statusbar_insets_refresh
 
 # The hall daemon publishes the physical posture on every hinge event.  Keep
 # the kernel touch topology in lockstep without polling from userspace.
