@@ -42,7 +42,7 @@ ro.product.device=fujisan
 ro.product.model=ZTE Axon M
 ro.sf.lcd_density=480
 ro.sf.limit_duplicate_layer_numbers=1
-ro.telephony.default_network=9,9
+ro.telephony.default_network=22,20
 ro.use_data_netmgrd=true
 ro.qualcomm.bt.hci_transport=uart
 wifi.interface=wlan0
@@ -96,11 +96,3 @@ persist.vendor.fujisan.dual_internal=0
 vendor.fujisan.display_power=1
 vendor.fujisan.active_primary=a
 ro.feature.target_dual_display=1
-
-# Force VoLTE provisioned state (override carrier config for 4G-only networks)
-persist.dbg.volte_avail_ovr=1
-persist.dbg.vt_avail_ovr=1
-persist.dbg.ims_volte_enable=1
-persist.vendor.radio.force_on_dc_ims=1
-persist.vendor.radio.ims_pdn_req=1
-persist.radio.VOLTE_ENABLE=1

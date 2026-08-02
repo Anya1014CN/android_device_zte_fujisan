@@ -1,5 +1,0 @@
-service imsdatadaemon /system/bin/true
-    override
-    class late_start
-    disabled
-    oneshot
