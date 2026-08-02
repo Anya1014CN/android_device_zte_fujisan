@@ -120,7 +120,8 @@ public final class MainActivity extends Activity {
         for (int index = 0; index < features.size(); index++) {
             SidecarDisplayFeature feature = features.get(index);
             Rect bounds = feature.getRect();
-            output.append('\n').append("feature[").append(index).append("] type=")
+            output.append('\n').append("feature[").append(index + 1).append('/')
+                    .append(features.size()).append("] type=")
                     .append(feature.getType() == SidecarDisplayFeature.TYPE_HINGE ? "HINGE" : "FOLD")
                     .append(" bounds=").append(bounds);
         }

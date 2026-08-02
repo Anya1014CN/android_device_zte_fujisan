@@ -5,11 +5,16 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".MainActivity"
+            android:exported="false" />
+        <receiver
+            android:name=".SecretCodeReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- Android 12 broadcasts both the legacy and current actions. -->
+                <action android:name="android.provider.Telephony.SECRET_CODE" />
+                <action android:name="android.telephony.action.SECRET_CODE" />
+                <data android:scheme="android_secret_code" android:host="38986" />
             </intent-filter>
-        </activity>
+        </receiver>
     </application>
 </manifest>
