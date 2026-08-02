@@ -440,14 +440,17 @@ int main() {
         const bool posture_wants_b = mode[0] == 'z' ||
                                      (mode[0] == 'd' && st != 1) ||
                                      force_b[0] == '1';
-        /* The startup gate deliberately keeps B dark.  After boot, follow
-         * the real screen power state as usual. */
-        const bool want_b = boot_done && posture_wants_b && power_on;
+        /* The startup gate deliberately keeps B dark.  The primary display
+         * power callback runs after MDSS starts to blank both panels, so do
+         * not write B's LED from that transition: its native callback sends
+         * DCS commands on the paired command-mode CTL. */
+        const bool want_b = posture_wants_b;
+        const bool manage_b = boot_done && power_on;
 
         const int bl0 = read_int_file("/sys/class/leds/lcd-backlight/brightness", -1);
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
         const int want_b_int = want_b ? 1 : 0;
-        if (boot_done && (!boot_panel_reconciled || want_b_int != last_want_b)) {
+        if (manage_b && (!boot_panel_reconciled || want_b_int != last_want_b)) {
             if (want_b)
                 /* Both panels expose the same 0..255 range.  Bring B up at
                  * the current system brightness.  Before Lights has written
@@ -461,13 +464,13 @@ int main() {
         }
         /* A failed brightness write is safe to retry; unlike FBIOBLANK it
          * does not stall the hall worker or tear down the MDP overlay. */
-        if (boot_done && !want_b && bl1 > 0)
+        if (manage_b && !want_b && bl1 > 0)
             secondary_off();
 
         /* msm8996 applies system brightness through Lights, bypassing the
          * composer brightness callback.  The primary sysfs attribute emits
          * an inotify event on every write, so mirror only actual changes. */
-        if (boot_done && want_b && bl0 >= 0 && bl0 != last_bl0) {
+        if (manage_b && want_b && bl0 >= 0 && bl0 != last_bl0) {
             char brightness[16];
             snprintf(brightness, sizeof(brightness), "%d", bl0);
             write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", brightness);
