@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Fujisan (ZTE Axon M) posture map for Android 12L DeviceStateProviderImpl.
-  Lid switch is driven by mxm1120 SW_LID (closed=A/C, open=B).
+  Lid switch is driven by mxm1120 SW_LID (closed=A, open=B/C).
   identifier 0 = CLOSED (single panel)
   identifier 1 = OPENED (virtual large screen / zoom)
 -->
