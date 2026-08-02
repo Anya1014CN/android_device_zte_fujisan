@@ -18,12 +18,10 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <linux/input.h>
-#include <limits.h>
 #include <poll.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
-#include <sys/inotify.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -52,8 +50,7 @@ static void write_sysfs(const char* path, const char* val) {
 
 /* property_set() advances the property's serial even when the value has not
  * changed.  The HWC waits on display_mode's serial to notice real posture
- * transitions, so publishing the same posture again for a brightness update
- * must not make SurfaceFlinger re-run the topology path. */
+ * transitions, so only publish actual geometry changes. */
 static void set_property_if_changed(const char* key, const char* value) {
     char current[PROPERTY_VALUE_MAX] = {};
     property_get(key, current, "");
@@ -131,56 +128,30 @@ static int open_m1120_event() {
     return fd;
 }
 
-static int open_primary_brightness_watch() {
-    const int fd = inotify_init1(IN_CLOEXEC);
-    if (fd < 0)
-        return -1;
-    if (inotify_add_watch(fd, "/sys/class/leds/lcd-backlight/brightness",
-                          IN_CLOSE_WRITE | IN_MODIFY) < 0) {
-        close(fd);
-        return -1;
-    }
-    return fd;
-}
-
-/* Wait for either a real hinge transition or a system/Lights brightness
- * write.  Both kernel sources block this daemon at zero CPU while idle. */
-static void wait_for_hinge_or_brightness_event() {
+/* Brightness mirroring belongs to the paired MDSS backlight transaction.
+ * This daemon only waits for a real hinge transition. */
+static void wait_for_hinge_event() {
     for (;;) {
         const int hinge_fd = open_m1120_event();
-        const int brightness_fd = open_primary_brightness_watch();
-        if (hinge_fd < 0 || brightness_fd < 0) {
-            if (hinge_fd >= 0)
-                close(hinge_fd);
-            if (brightness_fd >= 0)
-                close(brightness_fd);
+        if (hinge_fd < 0) {
             /* This only retries while the input driver is absent during an
              * abnormal boot; normal operation has no timer wakeups. */
-            ALOGW("hinge or brightness event node unavailable; retrying after one second");
+            ALOGW("hinge event node unavailable; retrying after one second");
             sleep(1);
             continue;
         }
 
         for (;;) {
-            struct pollfd pfds[2] {};
-            pfds[0].fd = hinge_fd;
-            pfds[0].events = POLLIN;
-            pfds[1].fd = brightness_fd;
-            pfds[1].events = POLLIN;
-            const int rc = poll(pfds, 2, -1);
+            struct pollfd pfd {};
+            pfd.fd = hinge_fd;
+            pfd.events = POLLIN;
+            const int rc = poll(&pfd, 1, -1);
             if (rc < 0 && errno == EINTR)
                 continue;
             if (rc <= 0)
                 break;
 
-            if (pfds[1].revents & POLLIN) {
-                char events[sizeof(struct inotify_event) + NAME_MAX + 1];
-                (void)read(brightness_fd, events, sizeof(events));
-                close(hinge_fd);
-                close(brightness_fd);
-                return;
-            }
-            if (!(pfds[0].revents & POLLIN))
+            if (!(pfd.revents & POLLIN))
                 break;
 
             struct input_event event;
@@ -190,12 +161,10 @@ static void wait_for_hinge_or_brightness_event() {
             if ((event.type == EV_SW && event.code == SW_LID) ||
                 event.type == EV_REL) {
                 close(hinge_fd);
-                close(brightness_fd);
                 return;
             }
         }
         close(hinge_fd);
-        close(brightness_fd);
     }
 }
 
@@ -214,12 +183,9 @@ static void secondary_on(int bl) {
         bl = 255;
     char b[16];
     snprintf(b, sizeof(b), "%d", bl);
-    /* Never touch fb1/blank here.  Even the apparent "unblank" value 0 can
-     * enter mdss_mdp_display_commit and block forever while the secondary
-     * overlay is idle, which subsequently wedges SurfaceFlinger.  HWC owns
-     * scanout; the hall daemon only controls B's backlight. */
-    write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
-    usleep(20 * 1000);
+    /* Never touch fb1/blank here.  HWC owns scanout; this explicit B write
+     * only establishes the hinge-selected Display On state.  A's MDSS DCS
+     * path mirrors every subsequent brightness and sleep/wake step. */
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
 }
 
@@ -337,7 +303,6 @@ int main() {
     char last_mode[16] = {};
     int last_power = -1;
     int last_bl1 = -1;
-    int last_bl0 = -1;
     int last_want_b = -1;
     bool boot_panel_reconciled = false;
     bool touch_mode_initialized = false;
@@ -455,7 +420,7 @@ int main() {
                 /* Both panels expose the same 0..255 range.  Bring B up at
                  * the current system brightness.  Before Lights has written
                  * A, use the panel's normal boot brightness as a temporary
-                 * value; the existing post-boot mirror takes over later. */
+                 * value; the paired MDSS callback follows every later step. */
                 secondary_on(bl0 > 0 ? bl0 : 87);
             else
                 secondary_off();
@@ -466,17 +431,6 @@ int main() {
          * does not stall the hall worker or tear down the MDP overlay. */
         if (manage_b && !want_b && bl1 > 0)
             secondary_off();
-
-        /* msm8996 applies system brightness through Lights, bypassing the
-         * composer brightness callback.  The primary sysfs attribute emits
-         * an inotify event on every write, so mirror only actual changes. */
-        if (manage_b && want_b && bl0 >= 0 && bl0 != last_bl0) {
-            char brightness[16];
-            snprintf(brightness, sizeof(brightness), "%d", bl0);
-            write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", brightness);
-        }
-        if (bl0 >= 0)
-            last_bl0 = bl0;
 
         if (boot_done &&
             (!touch_mode_initialized || strcmp(mode, touch_mode) != 0)) {
@@ -512,8 +466,8 @@ int main() {
             snprintf(last_mode, sizeof(last_mode), "%s", mode);
         }
 
-        /* Blocks at zero CPU until m1120, Lights or init reports a change. */
-        wait_for_hinge_or_brightness_event();
+        /* Blocks at zero CPU until m1120 or init reports a change. */
+        wait_for_hinge_event();
     }
     return 0;
 }
