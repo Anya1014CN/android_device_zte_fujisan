@@ -1,8 +1,0 @@
-<resources>
-    <string name="app_name">富士山屏幕方向</string>
-    <string name="tile_title">扩展屏幕方向</string>
-    <string name="auto_rotate">自动旋转</string>
-    <string name="force_landscape">强制横屏</string>
-    <string name="force_portrait">强制竖屏</string>
-    <string name="expand_device">请展开设备</string>
-</resources>

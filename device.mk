@@ -55,7 +55,6 @@ PRODUCT_VENDOR_PROPERTIES += \
 PRODUCT_PACKAGES += \
     android.hardware.usb@1.0-service \
     fujisan_halld \
-    FujisanOrientationTile \
     FujisanWindowInfoProbe \
     FujisanRotationOverlay \
     FujisanNetworkStackOverlay \

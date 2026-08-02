@@ -1,8 +1,0 @@
-<resources>
-    <string name="app_name">Fujisan orientation</string>
-    <string name="tile_title">Extended screen orientation</string>
-    <string name="auto_rotate">Auto-rotate</string>
-    <string name="force_landscape">Force landscape</string>
-    <string name="force_portrait">Force portrait</string>
-    <string name="expand_device">Please unfold the device</string>
-</resources>
