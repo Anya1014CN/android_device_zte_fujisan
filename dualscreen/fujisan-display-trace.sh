@@ -35,7 +35,7 @@ set_events() {
 
 capture_state() {
     local out_dir=$1
-    "$adb_cmd" shell 'getprop; cat /sys/module/ah1898/parameters/hall_status; cat /sys/module/zte_touch_expand/parameters/separate_inputs' \
+    "$adb_cmd" shell 'getprop; cat /sys/module/ah1898/parameters/hall_status; cat /sys/module/zte_touch_expand/parameters/separate_inputs; echo "--- device_state ---"; dumpsys device_state; echo "--- window_displays ---"; dumpsys window displays; echo "--- activity_top ---"; dumpsys activity top' \
         >"$out_dir/properties-and-posture.txt"
     "$adb_cmd" shell 'cat /proc/bus/input/devices; dumpsys input; dumpsys display; dumpsys SurfaceFlinger' \
         >"$out_dir/input-display-sf.txt"

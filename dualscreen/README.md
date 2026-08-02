@@ -9,8 +9,8 @@
 | status | posture | mode | panels |
 |--------|---------|------|--------|
 | 1 | closed_a | single | A on, B off |
-| 2 | open | zoom | A+B on, HWC split/mirror |
-| 3 | closed_b | single | A composing (BL 0), B on (HWC copy) |
+| 2 | opening | zoom | A+B on, HWC split/mirror |
+| 3 | fully unfolded | zoom | A+B on, HWC split/mirror |
 
 Sysfs: `/sys/module/ah1898/parameters/hall_status` (mirrors mxm1120).
 Props: `vendor.fujisan.hall_status`, `device_state`, `display_mode`, `active_primary`, `display_power`.

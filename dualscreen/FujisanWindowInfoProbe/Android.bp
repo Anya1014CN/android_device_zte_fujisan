@@ -1,0 +1,9 @@
+android_app {
+    name: "FujisanWindowInfoProbe",
+    manifest: "AndroidManifest.xml",
+    srcs: ["src/**/*.java"],
+    certificate: "platform",
+    platform_apis: true,
+    libs: ["androidx.window.sidecar"],
+    uses_libs: ["androidx.window.sidecar"],
+}
