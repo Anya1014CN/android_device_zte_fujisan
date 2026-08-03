@@ -84,6 +84,9 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #ifndef MDP_COMMIT_FUJISAN_SINGLE
 #define MDP_COMMIT_FUJISAN_SINGLE 0x20000000
 #endif
+#ifndef MDP_COMMIT_FUJISAN_SINGLE_B
+#define MDP_COMMIT_FUJISAN_SINGLE_B 0x10000000
+#endif
 
 using android::hardware::hidl_handle;
 using android::hardware::graphics::common::V1_0::BufferUsage;
@@ -292,6 +295,8 @@ struct Device {
     std::atomic<bool> primary_reprobe_pending{false};
     pthread_t display_mode_thread{};
     std::atomic<bool> display_mode_thread_run{false};
+    pthread_t primary_panel_thread{};
+    std::atomic<bool> primary_panel_thread_run{false};
 
     int fb_fd = -1;
     void* fb_map = MAP_FAILED;
@@ -386,6 +391,14 @@ static bool WantZoomMode() {
     char buf[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.display_mode", buf, "single");
     return strcmp(buf, "zoom") == 0;
+}
+
+static bool WantSingleBPanel() {
+    if (WantZoomMode())
+        return false;
+    char primary[PROPERTY_VALUE_MAX] = {};
+    property_get("vendor.fujisan.active_primary", primary, "a");
+    return primary[0] == 'b';
 }
 
 static bool SecondaryPanelAvailable() {
@@ -1171,8 +1184,8 @@ static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquir
 
 /* fb0 remains a native dual-CTL endpoint even while Android is in config 0.
  * CAF consequently expands a 1080 client buffer to a 2160 source rect and
- * MDSS rejects it.  Submit the complete 1080 client target directly to the
- * physical-A half instead; panel power is still coordinated by fujisan_halld. */
+ * MDSS rejects it.  Submit the complete 1080 client target through the
+ * selected single-panel backend; panel power is coordinated by fujisan_halld. */
 static bool SubmitSingleClientTarget(Device* d, buffer_handle_t handle, int acquire_fence,
                                      int32_t* out_retire_fence) {
     if (out_retire_fence)
@@ -1243,7 +1256,8 @@ static bool SubmitSingleClientTarget(Device* d, buffer_handle_t handle, int acqu
 
     mdp_layer_commit commit {};
     commit.version = MDP_COMMIT_VERSION_1_0;
-    commit.commit_v1.flags = MDP_COMMIT_FUJISAN_SINGLE;
+    commit.commit_v1.flags = MDP_COMMIT_FUJISAN_SINGLE |
+                            (WantSingleBPanel() ? MDP_COMMIT_FUJISAN_SINGLE_B : 0);
     commit.commit_v1.release_fence = -1;
     commit.commit_v1.retire_fence = -1;
     commit.commit_v1.input_layers = &layer;
@@ -1617,6 +1631,50 @@ static void EnsureDisplayModeWatchThread(Device* d) {
                        DisplayModeWatchThreadMain, d) != 0) {
         d->display_mode_thread_run.store(false);
         ALOGE("display_mode watcher create failed");
+    }
+}
+
+/* A/B has one unchanged HWC config.  It therefore needs its own property
+ * wakeup rather than reusing display_mode, whose value correctly remains
+ * "single" across the switch. */
+static void* PrimaryPanelWatchThreadMain(void* arg) {
+    auto* d = reinterpret_cast<Device*>(arg);
+    const prop_info* primary_prop = __system_property_find("vendor.fujisan.active_primary");
+    if (!primary_prop) {
+        ALOGW("active_primary property missing; single-panel wake unavailable");
+        d->primary_panel_thread_run.store(false);
+        return nullptr;
+    }
+
+    DisplayModePropertySnapshot snapshot;
+    __system_property_read_callback(primary_prop, ReadDisplayModeProperty, &snapshot);
+    char last_primary[sizeof(snapshot.value)];
+    snprintf(last_primary, sizeof(last_primary), "%s", snapshot.value);
+    while (d->primary_panel_thread_run.load()) {
+        uint32_t changed_serial = snapshot.serial;
+        const struct timespec timeout = {30, 0};
+        if (!__system_property_wait(primary_prop, snapshot.serial, &changed_serial, &timeout))
+            continue;
+        __system_property_read_callback(primary_prop, ReadDisplayModeProperty, &snapshot);
+        if (!d->primary_panel_thread_run.load())
+            break;
+        if (strcmp(last_primary, snapshot.value) == 0)
+            continue;
+        snprintf(last_primary, sizeof(last_primary), "%s", snapshot.value);
+        ALOGI("active_primary -> %s; requesting primary frame", snapshot.value);
+        RequestPrimaryRefresh(d);
+    }
+    d->primary_panel_thread_run.store(false);
+    return nullptr;
+}
+
+static void EnsurePrimaryPanelWatchThread(Device* d) {
+    bool expected = false;
+    if (!d->primary_panel_thread_run.compare_exchange_strong(expected, true))
+        return;
+    if (pthread_create(&d->primary_panel_thread, nullptr, PrimaryPanelWatchThreadMain, d) != 0) {
+        d->primary_panel_thread_run.store(false);
+        ALOGE("active_primary watcher create failed");
     }
 }
 
@@ -2133,8 +2191,10 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
         }
     }
 
-    if (descriptor == HWC2_CALLBACK_REFRESH)
+    if (descriptor == HWC2_CALLBACK_REFRESH) {
         EnsureDisplayModeWatchThread(d);
+        EnsurePrimaryPanelWatchThread(d);
+    }
 
     if (descriptor == HWC2_CALLBACK_HOTPLUG) {
         int32_t err =
@@ -3412,6 +3472,9 @@ static int HwcClose(hw_device_t* dev) {
     d->display_mode_thread_run.store(false);
     if (d->display_mode_thread)
         pthread_join(d->display_mode_thread, nullptr);
+    d->primary_panel_thread_run.store(false);
+    if (d->primary_panel_thread)
+        pthread_join(d->primary_panel_thread, nullptr);
     d->vsync_thread_run.store(false);
     if (d->vsync_thread)
         pthread_join(d->vsync_thread, nullptr);

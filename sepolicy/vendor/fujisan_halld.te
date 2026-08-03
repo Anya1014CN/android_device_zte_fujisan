@@ -1,5 +1,6 @@
 type fujisan_halld, domain;
 type fujisan_halld_exec, exec_type, vendor_file_type, file_type;
+type fujisan_halld_socket, file_type;
 
 init_daemon_domain(fujisan_halld)
 
@@ -12,5 +13,6 @@ allow fujisan_halld sysfs_leds:file rw_file_perms;
 allow fujisan_halld sysfs:dir search;
 allow fujisan_halld sysfs:file rw_file_perms;
 allow fujisan_halld sysfs_devices_system_cpu:file rw_file_perms;
+allow fujisan_halld self:unix_stream_socket { accept create getopt listen read setopt write };
 set_prop(fujisan_halld, vendor_default_prop)
 get_prop(fujisan_halld, vendor_default_prop)

@@ -2,6 +2,7 @@ service fujisan_halld /vendor/bin/fujisan_halld
     class late_start
     user root
     group root system graphics input
+    socket fujisan_primary stream 0666 root root
     disabled
 
 # Publish the topology property before SurfaceFlinger registers HWC callbacks.

@@ -13,6 +13,7 @@
  */
 #define LOG_TAG "FujisanHalld"
 #include <cutils/properties.h>
+#include <cutils/sockets.h>
 #include <errno.h>
 #include <log/log.h>
 #include <dirent.h>
@@ -22,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -38,6 +40,13 @@ static int read_int_file(const char* path, int fallback) {
     if (sscanf(buf, "%d", &v) != 1)
         return fallback;
     return v;
+}
+
+static int read_hall_status() {
+    int st = read_int_file("/sys/module/ah1898/parameters/hall_status", -1);
+    if (st < 0)
+        st = read_int_file("/sys/module/mxm1120/parameters/hall_status", 1);
+    return st >= 1 && st <= 3 ? st : 1;
 }
 
 static void write_sysfs(const char* path, const char* val) {
@@ -130,28 +139,99 @@ static int open_m1120_event() {
 
 /* Brightness mirroring belongs to the paired MDSS backlight transaction.
  * This daemon only waits for a real hinge transition. */
-static void wait_for_hinge_event() {
+static int open_primary_control_socket() {
+    const int fd = android_get_control_socket("fujisan_primary");
+    if (fd < 0) {
+        ALOGE("missing fujisan_primary control socket");
+        return -1;
+    }
+    const int flags = fcntl(fd, F_GETFL);
+    if (flags >= 0)
+        (void)fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    if (listen(fd, 4) != 0) {
+        ALOGE("listen on fujisan_primary failed: %s", strerror(errno));
+        return -1;
+    }
+    return fd;
+}
+
+static void reply_primary_request(int client, const char* response) {
+    if (client >= 0 && response)
+        (void)write(client, response, strlen(response));
+}
+
+/* The tile only requests a toggle.  The daemon is the authority for the
+ * physical state and persistence, so a stale tile cannot switch while open. */
+static void handle_primary_request(int server_fd) {
+    int client = accept4(server_fd, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
+    if (client < 0)
+        return;
+
+    struct pollfd pollfd {};
+    pollfd.fd = client;
+    pollfd.events = POLLIN;
+    if (poll(&pollfd, 1, 1000) <= 0 || !(pollfd.revents & POLLIN)) {
+        close(client);
+        return;
+    }
+    char request[32] = {};
+    const ssize_t n = read(client, request, sizeof(request) - 1);
+    if (n <= 0) {
+        close(client);
+        return;
+    }
+
+    char preferred[PROPERTY_VALUE_MAX] = "a";
+    property_get("persist.vendor.fujisan.primary_panel", preferred, "a");
+    const int hall = read_hall_status();
+    char response[32];
+    if (strncmp(request, "toggle", 6) != 0) {
+        snprintf(response, sizeof(response), "error protocol\n");
+    } else if (hall != 1) {
+        snprintf(response, sizeof(response), "unavailable %c %d\n",
+                 preferred[0] == 'b' ? 'b' : 'a', hall);
+    } else {
+        const char next = preferred[0] == 'b' ? 'a' : 'b';
+        property_set("persist.vendor.fujisan.primary_panel", next == 'b' ? "b" : "a");
+        property_set("persist.vendor.fujisan.primary_force", next == 'b' ? "1" : "0");
+        snprintf(response, sizeof(response), "ok %c %d\n", next, hall);
+        ALOGI("primary panel request: %c -> %c", preferred[0] == 'b' ? 'b' : 'a', next);
+    }
+    reply_primary_request(client, response);
+    close(client);
+}
+
+static void wait_for_hinge_or_primary_request(int control_fd) {
     for (;;) {
         const int hinge_fd = open_m1120_event();
         if (hinge_fd < 0) {
-            /* This only retries while the input driver is absent during an
-             * abnormal boot; normal operation has no timer wakeups. */
-            ALOGW("hinge event node unavailable; retrying after one second");
-            sleep(1);
+            struct pollfd control {};
+            control.fd = control_fd;
+            control.events = POLLIN;
+            (void)poll(&control, 1, 1000);
+            if (control.revents & POLLIN)
+                handle_primary_request(control_fd);
             continue;
         }
 
         for (;;) {
-            struct pollfd pfd {};
-            pfd.fd = hinge_fd;
-            pfd.events = POLLIN;
-            const int rc = poll(&pfd, 1, -1);
+            struct pollfd pfds[2] = {};
+            pfds[0].fd = hinge_fd;
+            pfds[0].events = POLLIN;
+            pfds[1].fd = control_fd;
+            pfds[1].events = POLLIN;
+            const int rc = poll(pfds, 2, -1);
             if (rc < 0 && errno == EINTR)
                 continue;
             if (rc <= 0)
                 break;
 
-            if (!(pfd.revents & POLLIN))
+            if (pfds[1].revents & POLLIN) {
+                handle_primary_request(control_fd);
+                close(hinge_fd);
+                return;
+            }
+            if (!(pfds[0].revents & POLLIN))
                 break;
 
             struct input_event event;
@@ -187,6 +267,27 @@ static void secondary_on(int bl) {
      * only establishes the hinge-selected Display On state.  A's MDSS DCS
      * path mirrors every subsequent brightness and sleep/wake step. */
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
+}
+
+static void primary_off() {
+    write_sysfs("/sys/class/leds/lcd-backlight/brightness", "0");
+}
+
+static void primary_on(int bl) {
+    if (bl < 0)
+        bl = 0;
+    if (bl > 255)
+        bl = 255;
+    char b[16];
+    snprintf(b, sizeof(b), "%d", bl);
+    write_sysfs("/sys/class/leds/lcd-backlight/brightness", b);
+}
+
+static void set_primary_b_backlight_route(bool enabled) {
+    /* mdss_dsi owns the actual Lights/DCS route.  This avoids a userspace
+     * brightness watcher: wide remains mirrored, while closed B receives the
+     * normal Android brightness endpoint without relighting A. */
+    write_sysfs("/sys/module/mdss_dsi/parameters/fujisan_primary_b", enabled ? "1" : "0");
 }
 
 static bool display_is_on() {
@@ -226,6 +327,61 @@ static bool run_service_call(const char* const argv[]) {
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
+static int get_system_setting_int(const char* key, int fallback) {
+    int pipefd[2];
+    if (pipe2(pipefd, O_CLOEXEC) != 0)
+        return fallback;
+    const pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return fallback;
+    }
+    if (pid == 0) {
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[0]);
+        close(pipefd[1]);
+        const char* argv[] = {"/system/bin/settings", "get", "system", key, nullptr};
+        execv(argv[0], const_cast<char* const*>(argv));
+        _exit(127);
+    }
+    close(pipefd[1]);
+    char output[32] = {};
+    const ssize_t n = read(pipefd[0], output, sizeof(output) - 1);
+    close(pipefd[0]);
+    int status = 0;
+    if (waitpid(pid, &status, 0) != pid || !WIFEXITED(status) || WEXITSTATUS(status) != 0 || n <= 0)
+        return fallback;
+    int value = fallback;
+    return sscanf(output, "%d", &value) == 1 ? value : fallback;
+}
+
+static void put_system_setting_int(const char* key, int value) {
+    char value_s[16];
+    snprintf(value_s, sizeof(value_s), "%d", value);
+    const char* argv[] = {"/system/bin/settings", "put", "system", key, value_s, nullptr};
+    if (!run_service_call(argv))
+        ALOGW("failed to write system setting %s", key);
+}
+
+/* Automatic brightness is global on Android 12.  Save whether this daemon
+ * disabled it, and restore it as soon as B is no longer the folded primary so
+ * wide mode keeps the user's original automatic-brightness behavior. */
+static void reconcile_auto_brightness(bool boot_done, bool primary_b) {
+    const bool b_single = boot_done && primary_b;
+    char restore[PROPERTY_VALUE_MAX] = "0";
+    property_get("persist.vendor.fujisan.restore_auto_brightness", restore, "0");
+    if (b_single) {
+        if (restore[0] != '1' && get_system_setting_int("screen_brightness_mode", 0) == 1) {
+            property_set("persist.vendor.fujisan.restore_auto_brightness", "1");
+            put_system_setting_int("screen_brightness_mode", 0);
+        }
+    } else if (restore[0] == '1') {
+        put_system_setting_int("screen_brightness_mode", 1);
+        property_set("persist.vendor.fujisan.restore_auto_brightness", "0");
+    }
+}
+
 static void set_touch_calibration(const char* descriptor, int rotation,
                                   const char* x_scale, const char* x_offset) {
     /* IInputManager#setTouchCalibrationForInputDevice, transaction 11 in
@@ -245,7 +401,40 @@ static void set_touch_calibration(const char* descriptor, int rotation,
               descriptor, rotation);
 }
 
-static void configure_touch_for_mode(bool zoom) {
+/* Both OEM and the rebase Synaptics drivers expose this per-controller
+ * suspend attribute.  Discover the input directory at runtime because its
+ * number is not an ABI, then stop the hidden controller rather than merely
+ * dropping its events in InputReader. */
+static void set_touch_controller_suspended(const char* expected_name,
+                                           const char* suspend_attr, bool suspend) {
+    DIR* inputs = opendir("/sys/class/input");
+    if (!inputs)
+        return;
+    struct dirent* input;
+    while ((input = readdir(inputs)) != nullptr) {
+        if (strncmp(input->d_name, "input", 5) != 0)
+            continue;
+        char name_path[256];
+        snprintf(name_path, sizeof(name_path), "/sys/class/input/%s/name", input->d_name);
+        int name_fd = open(name_path, O_RDONLY | O_CLOEXEC);
+        if (name_fd < 0)
+            continue;
+        char name[64] = {};
+        (void)read(name_fd, name, sizeof(name) - 1);
+        close(name_fd);
+        name[strcspn(name, "\r\n")] = '\0';
+        if (strcmp(name, expected_name) != 0)
+            continue;
+        char suspend_path[256];
+        snprintf(suspend_path, sizeof(suspend_path), "/sys/class/input/%s/%s",
+                 input->d_name, suspend_attr);
+        write_sysfs(suspend_path, suspend ? "1" : "0");
+        break;
+    }
+    closedir(inputs);
+}
+
+static void configure_touch_for_mode(bool zoom, bool primary_b) {
     static constexpr const char* kPrimaryTouch =
         "954faadc99bb5a7c1d0537b923e0490c90b47e98";
     static constexpr const char* kSecondaryTouch =
@@ -258,9 +447,10 @@ static void configure_touch_for_mode(bool zoom) {
                 zoom ? "N" : "Y");
 
     /* Android 12's name/unique-id association only filters dispatch; its
-     * TouchInputMapper still chooses the first INTERNAL viewport.  A port
-     * association reaches the mapper, so B's physical input port selects
-     * A(port 0) for zoom or B(port 1) for independent mode. */
+     * TouchInputMapper still chooses the first INTERNAL viewport.  B must use
+     * port 0 whenever it is the only logical primary, since single-A and
+     * single-B deliberately share one 1080x1920 display and HWC exposes no
+     * port-1 viewport in either case. */
     const char* remove_unique[] = {
         "/system/bin/service", "call", "input", "40",
         "s16", "zte-touchscreen-2nd", nullptr,
@@ -268,12 +458,32 @@ static void configure_touch_for_mode(bool zoom) {
     if (!run_service_call(remove_unique))
         ALOGW("failed to clear legacy B touch unique-id association");
 
-    const char* associate_port[] = {
+    const char* associate_secondary_port[] = {
         "/system/bin/service", "call", "input", "37",
-        "s16", "synaptics_dsx/touch_input_2nd", "i32", zoom ? "0" : "1", nullptr,
+        "s16", "synaptics_dsx/touch_input_2nd", "i32",
+        (zoom || primary_b) ? "0" : "1", nullptr,
     };
-    if (!run_service_call(associate_port))
-        ALOGW("failed to associate B touch port with %s display", zoom ? "zoom" : "independent");
+    if (!run_service_call(associate_secondary_port))
+        ALOGW("failed to associate B touch port with %s display",
+              zoom ? "zoom" : (primary_b ? "single-B primary" : "single-A"));
+
+    /* The hidden panel is stopped by its vendor driver instead of assigning a
+     * fake display port.  This prevents input at its physical controller and
+     * leaves only the selected panel powered and dispatching while folded. */
+    set_touch_controller_suspended("zte-touchscreen", "suspend", primary_b);
+    set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
+                                   !zoom && !primary_b);
+
+    /* Always restore A's real mapping before it becomes active.  It also
+     * clears a stale runtime association from a previous single-B session. */
+    const char* associate_primary_port[] = {
+        "/system/bin/service", "call", "input", "37",
+        "s16", "synaptics_dsx/touch_input", "i32",
+        "0", nullptr,
+    };
+    if (!run_service_call(associate_primary_port))
+        ALOGW("failed to associate A touch port with %s display",
+              zoom ? "zoom" : (primary_b ? "single-B transition" : "single-A primary"));
 
     if (zoom) {
         /* InputReader stores an affine matrix per display rotation.  The
@@ -294,9 +504,12 @@ static void configure_touch_for_mode(bool zoom) {
 }
 
 int main() {
-    ALOGI("fujisan_halld start (A-primary stable power; B only for zoom)");
+    ALOGI("fujisan_halld start");
     enable_m1120();
     usleep(100 * 1000);
+    const int control_fd = open_primary_control_socket();
+    if (control_fd < 0)
+        return 1;
 
     int last_st = -1;
     char last_primary[8] = {};
@@ -304,6 +517,8 @@ int main() {
     int last_power = -1;
     int last_bl1 = -1;
     int last_want_b = -1;
+    int last_primary_b = -1;
+    int last_touch_primary_b = -1;
     bool boot_panel_reconciled = false;
     bool touch_mode_initialized = false;
     char touch_mode[16] = {};
@@ -321,11 +536,7 @@ int main() {
         property_get("sys.boot_completed", boot_completed, "0");
         const bool boot_done = boot_completed[0] == '1';
 
-        int st = read_int_file("/sys/module/ah1898/parameters/hall_status", -1);
-        if (st < 0)
-            st = read_int_file("/sys/module/mxm1120/parameters/hall_status", 1);
-        if (st < 1 || st > 3)
-            st = 1;
+        const int st = read_hall_status();
 
         char status_s[8];
         snprintf(status_s, sizeof(status_s), "%d", st);
@@ -367,8 +578,7 @@ int main() {
         } else if (force_mode[0] == 'b' && force_mode[1] != 'o') {
             state = "closed_b";
             mode = "single";
-            /* Still drive content on A until B path is solid. */
-            snprintf(primary, sizeof(primary), "a");
+            snprintf(primary, sizeof(primary), "b");
         } else if (force_b[0] == '1') {
             state = "force_b";
             mode = "single";
@@ -386,19 +596,13 @@ int main() {
                 snprintf(primary, sizeof(primary), "a");
         }
 
-        /* Before boot completes Android is intentionally kept single-panel.
-         * Record that baseline so an unfolded cold boot also gets exactly one
-         * post-boot SystemUI refresh.  HWC owns the later refresh handshake:
-         * init may restart this hall service during a mode switch, so a waiter
-         * here could be killed before HWC completes. */
-        if (!boot_done)
-            set_property_if_changed("vendor.fujisan.systemui_geometry", "single");
-
         set_property_if_changed("vendor.fujisan.device_state", state);
         set_property_if_changed("vendor.fujisan.display_mode", mode);
         set_property_if_changed("vendor.fujisan.active_primary", primary);
 
         const bool power_on = display_is_on();
+        const bool primary_b = mode[0] == 's' && primary[0] == 'b';
+        reconcile_auto_brightness(boot_done, primary_b);
         /* Actual fujisan posture order is A(1) folded, B(2) mid-open,
          * C(3) fully open.  Both 2 and 3 expose the two inside panels; only
          * the folded A posture must turn B off. */
@@ -409,39 +613,60 @@ int main() {
          * power callback runs after MDSS starts to blank both panels, so do
          * not write B's LED from that transition: its native callback sends
          * DCS commands on the paired command-mode CTL. */
-        const bool want_b = posture_wants_b;
+        const bool want_b = posture_wants_b || primary_b;
         const bool manage_b = boot_done && power_on;
 
         const int bl0 = read_int_file("/sys/class/leds/lcd-backlight/brightness", -1);
         int bl1 = read_int_file("/sys/class/leds/lcd-backlight-2/brightness", -1);
         const int want_b_int = want_b ? 1 : 0;
-        if (manage_b && (!boot_panel_reconciled || want_b_int != last_want_b)) {
-            if (want_b)
-                /* Both panels expose the same 0..255 range.  Bring B up at
-                 * the current system brightness.  Before Lights has written
-                 * A, use the panel's normal boot brightness as a temporary
-                 * value; the paired MDSS callback follows every later step. */
+        if (manage_b && (!boot_panel_reconciled || want_b_int != last_want_b ||
+                         static_cast<int>(primary_b) != last_primary_b)) {
+            if (primary_b) {
+                /* The atomic single-B backend still arms both CTLs.  Dark A
+                 * through the normal mirrored route first, then direct future
+                 * Android brightness updates to B before it is lit. */
+                set_primary_b_backlight_route(false);
+                primary_off();
+                set_primary_b_backlight_route(true);
+                secondary_on(bl0 > 0 ? bl0 : (bl1 > 0 ? bl1 :
+                             get_system_setting_int("screen_brightness", 87)));
+            } else if (want_b) {
+                if (last_primary_b == 1) {
+                    set_primary_b_backlight_route(false);
+                    primary_on(bl1 > 0 ? bl1 :
+                               get_system_setting_int("screen_brightness", 87));
+                }
                 secondary_on(bl0 > 0 ? bl0 : 87);
-            else
+            } else {
+                if (last_primary_b == 1) {
+                    set_primary_b_backlight_route(false);
+                    primary_on(bl1 > 0 ? bl1 : get_system_setting_int("screen_brightness", 87));
+                }
                 secondary_off();
+            }
             last_want_b = want_b_int;
+            last_primary_b = primary_b ? 1 : 0;
             boot_panel_reconciled = true;
         }
         /* A failed brightness write is safe to retry; unlike FBIOBLANK it
          * does not stall the hall worker or tear down the MDP overlay. */
         if (manage_b && !want_b && bl1 > 0)
             secondary_off();
+        if (!power_on && primary_b)
+            secondary_off();
 
         if (boot_done &&
-            (!touch_mode_initialized || strcmp(mode, touch_mode) != 0)) {
+            (!touch_mode_initialized || strcmp(mode, touch_mode) != 0 ||
+             static_cast<int>(primary_b) != last_touch_primary_b)) {
             const bool was_initialized = touch_mode_initialized;
-            configure_touch_for_mode(mode[0] == 'z');
+            configure_touch_for_mode(mode[0] == 'z', primary_b);
             /* Do not use `wm size` for posture changes.  It persists a
              * forced display size in Settings and makes the next folded boot
              * render BootAnimation as a 2160-wide desktop until this daemon
              * reaches sys.boot_completed.  HWC's active topology is the
              * authoritative logical size. */
             snprintf(touch_mode, sizeof(touch_mode), "%s", mode);
+            last_touch_primary_b = primary_b ? 1 : 0;
             touch_mode_initialized = true;
 
             /* HWC observes vendor.fujisan.display_mode and asks
@@ -467,7 +692,7 @@ int main() {
         }
 
         /* Blocks at zero CPU until m1120 or init reports a change. */
-        wait_for_hinge_event();
+        wait_for_hinge_or_primary_request(control_fd);
     }
     return 0;
 }
