@@ -1,0 +1,10 @@
+# The legacy Oreo vendor rc defines the charger service as /charger.  This
+# fragment is parsed later from the same vendor init context and replaces only
+# that service with the platform AOSP implementation.
+service charger /system/bin/charger
+    class charger
+    user system
+    group system graphics input
+    capabilities SYS_BOOT
+    seclabel u:r:charger:s0
+    override
