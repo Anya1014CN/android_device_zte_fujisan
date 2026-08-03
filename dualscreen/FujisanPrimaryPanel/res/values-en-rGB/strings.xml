@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Fujisan Primary Panel</string>
+    <string name="tile_title">Main screen switch</string>
+    <string name="panel_a">A screen</string>
+    <string name="panel_b">B screen</string>
+    <string name="fold_device">Please fold the device</string>
+</resources>
