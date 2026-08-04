@@ -1,0 +1,9 @@
+android_app {
+    name: "FujisanFlashlight",
+    manifest: "AndroidManifest.xml",
+    srcs: ["src/**/*.java"],
+    resource_dirs: ["res"],
+    certificate: "platform",
+    platform_apis: true,
+    privileged: true,
+}

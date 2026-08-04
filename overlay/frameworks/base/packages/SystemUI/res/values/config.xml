@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="quick_settings_tiles_default" translatable="false">
-        internet,bt,flashlight,custom(com.zte.fujisan.primarypanel/.PrimaryPanelTileService),dnd,alarm,airplane,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle
+        internet,bt,custom(com.zte.fujisan.flashlight/.FujisanFlashlightTileService),custom(com.zte.fujisan.primarypanel/.PrimaryPanelTileService),dnd,alarm,airplane,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle
+    </string>
+    <string name="quick_settings_tiles_stock" translatable="false">
+        internet,wifi,cell,bt,dnd,alarm,airplane,nfc,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle,location,hotspot,inversion,saver,dark,work,night,reverse,reduce_brightness,ambient_display,aod,caffeine,heads_up,reading_mode,sync,powershare,profiles,usb_tether,vpn
     </string>
 </resources>

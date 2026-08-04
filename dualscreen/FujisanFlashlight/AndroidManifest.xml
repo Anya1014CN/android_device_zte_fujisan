@@ -1,0 +1,20 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.zte.fujisan.flashlight">
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <application android:label="@string/tile_label">
+        <service
+            android:name=".FujisanFlashlightTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_flashlight"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

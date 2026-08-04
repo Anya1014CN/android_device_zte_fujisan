@@ -1,0 +1,4 @@
+<resources>
+    <style name="Theme.FujisanFlashlight.Dialog.Alert"
+           parent="@android:style/Theme.DeviceDefault.Dialog.Alert" />
+</resources>
