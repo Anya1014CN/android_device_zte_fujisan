@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">기기를 뒤집어 주세요</string>
+    <string name="close_device">기기를 접은 후 후면 카메라를 사용하세요</string>
+</resources>

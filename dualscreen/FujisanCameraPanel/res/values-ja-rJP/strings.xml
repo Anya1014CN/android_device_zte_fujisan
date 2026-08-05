@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">端末を裏返してください</string>
+    <string name="close_device">端末を折りたたんでから背面カメラを使用してください</string>
+</resources>

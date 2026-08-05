@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Drehen Sie das Gerät um</string>
+    <string name="close_device">Klappen Sie das Gerät zusammen, bevor Sie die Rückkamera verwenden</string>
+</resources>

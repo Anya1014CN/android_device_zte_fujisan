@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Vänd enheten</string>
+    <string name="close_device">Vik ihop enheten innan du använder den bakre kameran</string>
+</resources>

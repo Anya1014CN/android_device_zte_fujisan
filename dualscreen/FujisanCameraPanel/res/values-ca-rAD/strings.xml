@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Gira el dispositiu</string>
+    <string name="close_device">Plega el dispositiu abans d’utilitzar la càmera posterior</string>
+</resources>

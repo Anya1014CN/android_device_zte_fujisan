@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Окрените уређај</string>
+    <string name="close_device">Преклопите уређај пре коришћења задње камере</string>
+</resources>

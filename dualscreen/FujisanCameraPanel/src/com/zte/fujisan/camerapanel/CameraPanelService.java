@@ -80,6 +80,10 @@ public final class CameraPanelService extends Service {
     }
 
     private void handleCameraStart(String cameraId) {
+        if (mPendingSwitch != null) {
+            mHandler.removeCallbacks(mPendingSwitch);
+            mPendingSwitch = null;
+        }
         final int facing = logicalFacing(cameraId);
         final String mode = SystemProperties.get("vendor.fujisan.display_mode", "single");
         if ("zoom".equals(mode)) {
@@ -121,7 +125,14 @@ public final class CameraPanelService extends Service {
         final String restore = mOriginalPanel;
         mSwitchedForCamera = false;
         mOriginalPanel = null;
-        requestPanel(restore);
+        Toast.makeText(this, R.string.flip_device, Toast.LENGTH_SHORT).show();
+        mPendingSwitch = () -> {
+            mPendingSwitch = null;
+            if (mUnavailable.isEmpty()) {
+                requestPanel(restore);
+            }
+        };
+        mHandler.postDelayed(mPendingSwitch, 2000L);
     }
 
     private String panel() {

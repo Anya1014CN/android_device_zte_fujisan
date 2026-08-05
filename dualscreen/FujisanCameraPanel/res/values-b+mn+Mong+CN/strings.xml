@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Төхөөрөмжийг эргүүлнэ үү</string>
+    <string name="close_device">Төхөөрөмжийг нугалсны дараа арын камерыг ашиглана уу</string>
+</resources>

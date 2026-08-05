@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Cihazı çevirin</string>
+    <string name="close_device">Arka kamerayı kullanmadan önce cihazı katlayın</string>
+</resources>

@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Fordítsa meg az eszközt</string>
+    <string name="close_device">Hajtsa össze az eszközt a hátlapi kamera használata előtt</string>
+</resources>

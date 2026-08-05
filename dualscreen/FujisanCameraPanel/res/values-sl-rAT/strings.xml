@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Obrnite napravo</string>
+    <string name="close_device">Zložite napravo, preden uporabite zadnjo kamero</string>
+</resources>

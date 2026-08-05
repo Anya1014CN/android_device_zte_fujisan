@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">請反轉裝置</string>
+    <string name="close_device">請合起裝置後使用後置鏡頭</string>
+</resources>

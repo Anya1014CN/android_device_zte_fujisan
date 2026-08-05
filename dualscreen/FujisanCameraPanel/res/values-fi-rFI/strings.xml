@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Käännä laite ympäri</string>
+    <string name="close_device">Taita laite ennen takakameran käyttöä</string>
+</resources>

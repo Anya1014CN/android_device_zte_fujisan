@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Переверните устройство</string>
+    <string name="close_device">Сложите устройство перед использованием задней камеры</string>
+</resources>

@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Свртете го уредот</string>
+    <string name="close_device">Преклопете го уредот пред да ја користите задната камера</string>
+</resources>

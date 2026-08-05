@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Retournez l’appareil</string>
+    <string name="close_device">Pliez l’appareil avant d’utiliser l’appareil photo arrière</string>
+</resources>

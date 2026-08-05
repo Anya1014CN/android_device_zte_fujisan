@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Capovolgi il dispositivo</string>
+    <string name="close_device">Piega il dispositivo prima di usare la fotocamera posteriore</string>
+</resources>

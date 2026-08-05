@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">请翻转设备</string>
+    <string name="close_device">请合起设备后使用后置摄像头</string>
+</resources>

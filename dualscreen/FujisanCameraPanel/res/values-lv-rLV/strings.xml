@@ -1,0 +1,4 @@
+<resources>
+    <string name="flip_device">Apgrieziet ierīci</string>
+    <string name="close_device">Salokiet ierīci pirms aizmugurējās kameras lietošanas</string>
+</resources>
