@@ -1,7 +1,7 @@
 /*
  * Fujisan HWC2 wrapper (Composer 2.4)
  *  Closed (single): passthrough CAF hwcomposer.msm8996 on panel A or B (primary_panel).
- *  Open (zoom): one logical 2160x1920 INTERNAL, client target split to fb0|fb1 with 1px hinge.
+ *  Open (zoom): one logical 2160x1915 INTERNAL, client target split to fb0|fb1.
  *  Secondary hotplug disabled — stock dual-LCD ZOOM path, not dual INTERNAL.
  */
 #define LOG_TAG "HwcFujisan"
@@ -117,10 +117,10 @@ constexpr hwc2_display_t kSecondaryDisplay = 1;
 constexpr hwc2_config_t kSecondaryConfig = 0;
 constexpr hwc2_config_t kSingleConfig = 0;
 constexpr hwc2_config_t kZoomConfig = 1;
-constexpr int kZoomWidth = 2160;  /* 1080 + 1 hinge + 1079 usable right? 1080+1080 */
-/* Open virtual size is 2160x1920: left 1080 (A) + right 1080 (B). Hinge is 1px at x=1080
- * declared to WM via device_state/fold overlays; pixels at x=1080 may be skipped when splitting.
- */
+constexpr int kZoomWidth = 2160;
+constexpr int kZoomHeight = 1915;
+/* A leaves its bottom five rows unscanned; B starts five rows down because
+ * its physical panel is five rows higher than A. */
 constexpr char kFb1Path[] = "/dev/graphics/fb1";
 constexpr char kFb0Path[] = "/dev/graphics/fb0";
 constexpr char kBl2Path[] = "/sys/class/leds/lcd-backlight-2/brightness";
@@ -1049,7 +1049,7 @@ static bool GetGrallocStridePx(buffer_handle_t handle, int* out_stride_px, int* 
 
 /*
  * Temporary wide-primary bridge.  SurfaceFlinger has already composed the
- * whole 2160x1920 scene into one linear client target.  Submit that target to
+ * whole 2160x1915 scene into one linear client target.  Submit that target to
  * fb0 with the normal MDSS atomic ABI; MDP_COMMIT_FUJISAN_WIDE is consumed in
  * the kernel and expanded into the A/B CTL transaction.  There is deliberately
  * no fb1 open, overlay, copy, or fence wait in this route.
@@ -1089,7 +1089,7 @@ static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquir
     const bool rgbx = format == HAL_PIXEL_FORMAT_RGBX_8888;
     const bool linear = (flags & PRIV_FLAGS_UBWC_ALIGNED) == 0;
     if (!linear || (!rgba && !rgbx) || width != kZoomWidth ||
-        height != FUJISAN_SEC_HEIGHT || stride_px < kZoomWidth) {
+        height != kZoomHeight || stride_px < kZoomWidth) {
         ALOGE("wide atomic contract mismatch: %dx%d stride=%d format=%d flags=0x%x",
               width, height, stride_px, format, flags);
         close_acquire();
@@ -1110,8 +1110,8 @@ static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquir
     layer.alpha = 0xff;
     layer.transp_mask = MDP_TRANSP_NOP;
     layer.blend_op = BLEND_OP_OPAQUE;
-    layer.src_rect = {0, 0, kZoomWidth, FUJISAN_SEC_HEIGHT};
-    layer.dst_rect = {0, 0, kZoomWidth, FUJISAN_SEC_HEIGHT};
+    layer.src_rect = {0, 0, kZoomWidth, kZoomHeight};
+    layer.dst_rect = {0, 0, kZoomWidth, kZoomHeight};
     layer.buffer.width = static_cast<uint32_t>(stride_px);
     layer.buffer.height = static_cast<uint32_t>(height);
     layer.buffer.format = rgba ? MDP_RGBA_8888 : MDP_RGBX_8888;
@@ -1991,7 +1991,8 @@ static bool __attribute__((unused)) PostZoomOverlays(Device* d, buffer_handle_t 
     return a && b;
 }
 
-/* Split 2160x1920 client target: left -> fb0, right -> fb1 (1px hinge at x=1080 skipped into B col0). */
+/* Split the wide client target: left -> fb0, right -> fb1; the kernel applies
+ * the five-row physical-panel offset for B. */
 static bool __attribute__((unused)) CopyZoomSplit(Device* d, buffer_handle_t handle, int fence) {
     if (!handle)
         return false;
@@ -2356,7 +2357,7 @@ static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t disp
          * it after SurfaceFlinger had already rendered a frame. */
         const bool rgba = format == HAL_PIXEL_FORMAT_RGBA_8888 ||
                           format == HAL_PIXEL_FORMAT_RGBX_8888;
-        if (WantZoomMode() && width == kZoomWidth && height == FUJISAN_SEC_HEIGHT && rgba) {
+        if (WantZoomMode() && width == kZoomWidth && height == kZoomHeight && rgba) {
             /* C owns the 2160-wide target; CAF's physical contract is not
              * relevant to this virtual config. */
             return HWC2_ERROR_NONE;
@@ -2423,7 +2424,7 @@ static int32_t GetDisplayAttribute(hwc2_device_t* device, hwc2_display_t display
                 *out = config == kZoomConfig ? kZoomWidth : FUJISAN_SEC_WIDTH;
                 return HWC2_ERROR_NONE;
             case HWC2_ATTRIBUTE_HEIGHT:
-                *out = FUJISAN_SEC_HEIGHT;
+                *out = config == kZoomConfig ? kZoomHeight : FUJISAN_SEC_HEIGHT;
                 return HWC2_ERROR_NONE;
             case HWC2_ATTRIBUTE_VSYNC_PERIOD:
                 *out = FUJISAN_SEC_VSYNC_NS;
@@ -2803,7 +2804,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             int w = 0, h = 0, stride = 0, format = 0, flags = 0;
             GetGrallocStridePx(target, &stride, &w, &h, &format, &flags);
             NoteZoomPresent(d, w, h, stride);
-            if (w == kZoomWidth && h == FUJISAN_SEC_HEIGHT) {
+            if (w == kZoomWidth && h == kZoomHeight) {
                 if (!d->wide_route_active) {
                     ALOGI("wide: route complete client target to atomic C (no fb1)");
                 }
