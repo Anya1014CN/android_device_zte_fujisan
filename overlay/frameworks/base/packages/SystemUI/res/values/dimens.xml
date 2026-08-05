@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Side fingerprint sensor center on the unfolded 2160x1920 display. -->
+    <dimen name="physical_fingerprint_sensor_center_screen_location_x">0px</dimen>
+    <dimen name="physical_fingerprint_sensor_center_screen_location_y">861px</dimen>
+</resources>

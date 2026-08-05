@@ -59,15 +59,22 @@ vendor.display.enable_default_color_mode=1
 
 # Bring-up: keep adb enabled even if userspace restarts early.
 persist.sys.usb.config=adb
+persist.sys.usb.config.extra=none
 sys.usb.config=adb
 sys.usb.configfs=1
 sys.usb.controller=6a00000.dwc3
+sys.usb.rndis.func.name=rndis_bam
 
 
 # USB uses configfs on 4.4.
 
 # QTI gatekeeper module for HIDL passthrough service
 ro.hardware.gatekeeper=msm8996
+
+# The OEM MSM8996 HAL includes a complete camera3 implementation, but defaults
+# to HAL1 when this property is absent. Android 12's standard provider rejects
+# HAL1 devices, so select the OEM HAL3 path before the provider starts.
+persist.camera.HAL3.enabled=1
 
 # Dual-panel L1 (independent secondary FB / display)
 persist.vendor.display.primary_first=1

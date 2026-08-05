@@ -105,6 +105,11 @@ DEVICE_MANIFEST_FILE := vendor/zte/fujisan/proprietary/vendor/manifest.xml \
 DEVICE_MATRIX_FILE := vendor/zte/fujisan/proprietary/vendor/compatibility_matrix.xml
 
 # Display
+# Fujisan's OEM camera HAL uses the device-specific MCT capability ABI.
+BOARD_QTI_CAMERA_32BIT_ONLY := true
+TARGET_SUPPORT_HAL1 := false
+TARGET_USES_FUJISAN_SOURCE_QCAMERA := false
+
 BOARD_USES_ADRENO := true
 TARGET_CONTINUOUS_SPLASH_ENABLED := true
 TARGET_SCREEN_DENSITY := 480
@@ -124,6 +129,8 @@ OVERRIDE_RS_DRIVER := libRSDriver_adreno.so
 # GPS / radio
 TARGET_NO_RPC := true
 USE_DEVICE_SPECIFIC_GPS := true
+BOARD_VENDOR_QCOM_GPS_LOC_API_HARDWARE := default
+BOARD_VENDOR_QCOM_LOC_PDK_FEATURE_SET := true
 TARGET_RIL_VARIANT := caf
 # The device supplies its own dual-SIM RIL services in vendor init.
 ENABLE_VENDOR_RIL_SERVICE := true
@@ -138,6 +145,9 @@ ENABLE_VENDOR_RIL_SERVICE := true
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/rootdir/etc/fstab.qcom
 TARGET_RECOVERY_PIXEL_FORMAT := "RGBX_8888"
 RECOVERY_GRAPHICS_USE_LINELENGTH := true
+
+# Keep user-installed recovery images intact when installing a non-A/B OTA.
+TARGET_RELEASETOOLS_EXTENSIONS := $(DEVICE_PATH)/releasetools
 BOARD_HAS_NO_SELECT_BUTTON := true
 BOARD_USES_MMCUTILS := true
 

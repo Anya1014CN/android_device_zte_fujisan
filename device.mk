@@ -27,9 +27,11 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
     audio.smartpa.channel=right \
     persist.sys.usb.config=adb \
+    persist.sys.usb.config.extra=none \
     sys.usb.config=adb \
     sys.usb.configfs=1 \
     sys.usb.controller=6a00000.dwc3 \
+    sys.usb.rndis.func.name=rndis_bam \
 
 # product/system_ext defaults ship persist.sys.usb.config=none; override them.
 # Settings ships its 12L two-pane implementation but leaves it behind a
@@ -38,18 +40,22 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 # Settings fork.
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.usb.config=adb \
+    persist.sys.usb.config.extra=none \
     sys.usb.configfs=1 \
     persist.sys.fflag.override.settings_support_large_screen=true \
 
 PRODUCT_SYSTEM_EXT_PROPERTIES += \
     persist.sys.usb.config=adb \
+    persist.sys.usb.config.extra=none \
     sys.usb.configfs=1 \
 
 # Keep the modern framework-side Bluetooth stack source-built. Fujisan still
 # uses the legacy wcnss_filter userspace path, so BoardConfigVendor enables the
 # old wc_transport property contract for the source-built libbt-vendor.
 PRODUCT_VENDOR_PROPERTIES += \
-    vendor.qcom.bluetooth.soc=rome
+    vendor.qcom.bluetooth.soc=rome \
+    vendor.gralloc.disable_ubwc=1 \
+    vendor.gralloc.enable_fb_ubwc=0
 
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
@@ -67,6 +73,12 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
     bugreports_root_dir \
+    android.hardware.camera.provider@2.4-impl:32 \
+    android.hardware.camera.provider@2.4-service \
+    camera.device@1.0-impl \
+    camera.device@3.2-impl \
+    camera.msm8996 \
+    vendor.qti.hardware.camera.device@1.0 \
     copybit.msm8996 \
     gralloc.msm8996 \
     hwcomposer.msm8996 \
@@ -122,7 +134,6 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     android.hardware.biometrics.fingerprint@2.1-service \
     android.hidl.base@1.0 \
-    FujisanFingerprintOverlay \
     fujisan_fingerprint_blob_overlay
 
 # Oreo vendor blobs depend on vendor-visible HIDL runtime libraries. The
