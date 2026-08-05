@@ -185,17 +185,32 @@ static void handle_primary_request(int server_fd) {
     property_get("persist.vendor.fujisan.primary_panel", preferred, "a");
     const int hall = read_hall_status();
     char response[32];
-    if (strncmp(request, "toggle", 6) != 0) {
-        snprintf(response, sizeof(response), "error protocol\n");
-    } else if (hall != 1) {
-        snprintf(response, sizeof(response), "unavailable %c %d\n",
-                 preferred[0] == 'b' ? 'b' : 'a', hall);
+    if (strncmp(request, "toggle", 6) == 0) {
+        if (hall != 1) {
+            snprintf(response, sizeof(response), "unavailable %c %d\n",
+                     preferred[0] == 'b' ? 'b' : 'a', hall);
+        } else {
+            const char next = preferred[0] == 'b' ? 'a' : 'b';
+            property_set("persist.vendor.fujisan.primary_panel", next == 'b' ? "b" : "a");
+            property_set("persist.vendor.fujisan.primary_force", next == 'b' ? "1" : "0");
+            snprintf(response, sizeof(response), "ok %c %d\n", next, hall);
+            ALOGI("primary panel request: %c -> %c", preferred[0] == 'b' ? 'b' : 'a', next);
+        }
+    } else if (request[0] == 's' && request[1] == 'e' && request[2] == 't'
+            && (request[3] == ' ' || request[3] == '\t')
+            && (request[4] == 'a' || request[4] == 'b')) {
+        const char next = request[4];
+        if (hall != 1) {
+            snprintf(response, sizeof(response), "unavailable %c %d\n",
+                     preferred[0] == 'b' ? 'b' : 'a', hall);
+        } else {
+            property_set("persist.vendor.fujisan.primary_panel", next == 'b' ? "b" : "a");
+            property_set("persist.vendor.fujisan.primary_force", next == 'b' ? "1" : "0");
+            snprintf(response, sizeof(response), "ok %c %d\n", next, hall);
+            ALOGI("primary panel request: %c -> %c", preferred[0] == 'b' ? 'b' : 'a', next);
+        }
     } else {
-        const char next = preferred[0] == 'b' ? 'a' : 'b';
-        property_set("persist.vendor.fujisan.primary_panel", next == 'b' ? "b" : "a");
-        property_set("persist.vendor.fujisan.primary_force", next == 'b' ? "1" : "0");
-        snprintf(response, sizeof(response), "ok %c %d\n", next, hall);
-        ALOGI("primary panel request: %c -> %c", preferred[0] == 'b' ? 'b' : 'a', next);
+        snprintf(response, sizeof(response), "error protocol\n");
     }
     reply_primary_request(client, response);
     close(client);

@@ -1,1 +1,2 @@
 user=_app seinfo=platform name=com.zte.fujisan.primarypanel domain=fujisan_primarypanel_app type=app_data_file levelFrom=user
+user=_app seinfo=platform name=com.zte.fujisan.camerapanel domain=fujisan_primarypanel_app type=app_data_file levelFrom=user

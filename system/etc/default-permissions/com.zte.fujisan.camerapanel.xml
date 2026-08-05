@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<exceptions>
+    <exception package="com.zte.fujisan.camerapanel">
+        <permission name="android.permission.CAMERA" fixed="true" />
+    </exception>
+</exceptions>
