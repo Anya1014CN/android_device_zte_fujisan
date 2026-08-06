@@ -646,12 +646,17 @@ int main() {
                 secondary_on(bl0 > 0 ? bl0 : (bl1 > 0 ? bl1 :
                              get_system_setting_int("screen_brightness", 87)));
             } else if (want_b) {
-                if (last_primary_b == 1) {
-                    set_primary_b_backlight_route(false);
-                    primary_on(bl1 > 0 ? bl1 :
-                               get_system_setting_int("screen_brightness", 87));
-                }
-                secondary_on(bl0 > 0 ? bl0 : 87);
+                const int active_bl = bl0 > 0 ? bl0 : (bl1 > 0 ? bl1 :
+                                      get_system_setting_int("screen_brightness", 87));
+
+                /* This service is restarted on display-power transitions, so
+                 * last_primary_b cannot be used to recover the wide route.
+                 * Clear the B-only route before replaying A's brightness:
+                 * the paired MDSS DCS transaction then restores A while the
+                 * native B path completes B's Display On lifecycle. */
+                set_primary_b_backlight_route(false);
+                primary_on(active_bl);
+                secondary_on(active_bl);
             } else {
                 if (last_primary_b == 1) {
                     set_primary_b_backlight_route(false);
