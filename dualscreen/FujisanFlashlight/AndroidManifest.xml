@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.zte.fujisan.flashlight">
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.STATUS_BAR" />
 
     <application android:label="@string/tile_label">
         <service

@@ -1,6 +1,7 @@
 package com.zte.fujisan.flashlight;
 
 import android.app.AlertDialog;
+import android.app.StatusBarManager;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.pm.PackageManager;
@@ -60,6 +61,7 @@ public final class FujisanFlashlightTileService extends TileService {
         mCameraManager = getSystemService(CameraManager.class);
         mCameraId = findBackFlashCamera();
         mTorchAvailable = mCameraId != null;
+        startTorchMonitoring();
         try {
             mSystemUiResources = createPackageContext("com.android.systemui",
                     Context.CONTEXT_IGNORE_SECURITY).getResources();
@@ -71,25 +73,17 @@ public final class FujisanFlashlightTileService extends TileService {
     @Override
     public void onStartListening() {
         super.onStartListening();
-        if (mCameraId != null && !mListening) {
-            try {
-                mCameraManager.registerTorchCallback(mTorchCallback, mMainHandler);
-                mListening = true;
-            } catch (SecurityException e) {
-                Log.e(TAG, "cannot observe torch state", e);
-                mTorchAvailable = false;
-            }
-        }
+        startTorchMonitoring();
         refreshTile();
     }
 
     @Override
-    public void onStopListening() {
+    public void onDestroy() {
         if (mListening) {
             mCameraManager.unregisterTorchCallback(mTorchCallback);
             mListening = false;
         }
-        super.onStopListening();
+        super.onDestroy();
     }
 
     @Override
@@ -113,7 +107,24 @@ public final class FujisanFlashlightTileService extends TileService {
                 .setPositiveButton(android.R.string.ok, (unused, which) -> setTorchEnabled(true))
                 .create();
         dialog.setOnDismissListener(unused -> mWarningShowing = false);
+        final StatusBarManager statusBarManager = getSystemService(StatusBarManager.class);
+        if (statusBarManager != null) {
+            statusBarManager.collapsePanels();
+        }
         showDialog(dialog);
+    }
+
+    private void startTorchMonitoring() {
+        if (mCameraId == null || mListening) {
+            return;
+        }
+        try {
+            mCameraManager.registerTorchCallback(mTorchCallback, mMainHandler);
+            mListening = true;
+        } catch (SecurityException e) {
+            Log.e(TAG, "cannot observe torch state", e);
+            mTorchAvailable = false;
+        }
     }
 
     private void setTorchEnabled(boolean enabled) {
