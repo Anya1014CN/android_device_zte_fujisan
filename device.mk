@@ -79,6 +79,9 @@ PRODUCT_PACKAGES += \
     camera.device@1.0-impl \
     camera.device@3.2-impl \
     camera.msm8996 \
+    libfujisan_graphicbuffer_compat \
+    libmmcamera_interface \
+    libmmjpeg_interface \
     vendor.qti.hardware.camera.device@1.0 \
     copybit.msm8996 \
     gralloc.msm8996 \
