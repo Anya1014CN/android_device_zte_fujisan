@@ -263,11 +263,18 @@ static void wait_for_hinge_or_primary_request(int control_fd) {
     }
 }
 
+static void set_secondary_display_allowed(bool allowed) {
+    write_sysfs("/sys/module/mdss_fb/parameters/fujisan_secondary_display_allowed",
+                allowed ? "1" : "0");
+}
+
 static void secondary_off() {
     /* Do not FBIOBLANK fb1 here.  On this MDSS it waits for a kickoff that
      * never comes once the secondary overlay is idle, blocking this daemon
      * for 30 seconds and resetting B on the next attempted transition.
      * Backlight=0 is sufficient to hide the folded panel. */
+    /* Gate late non-zero Lights writes before sending Display Off. */
+    set_secondary_display_allowed(false);
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
 }
 
@@ -281,6 +288,11 @@ static void secondary_on(int bl) {
     /* Never touch fb1/blank here.  HWC owns scanout; this explicit B write
      * only establishes the hinge-selected Display On state.  A's MDSS DCS
      * path mirrors every subsequent brightness and sleep/wake step. */
+    set_secondary_display_allowed(true);
+    /* A suppressed late write while folded can leave the LED class cached at
+     * this same value.  Force a real callback after reopening so B cannot
+     * remain in Display Off because the target brightness appears unchanged. */
+    write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
 }
 
