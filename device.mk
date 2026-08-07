@@ -127,7 +127,7 @@ PRODUCT_PACKAGES += \
 # libxml2 API is not ABI-compatible with this legacy Qualcomm surface.
 PRODUCT_PACKAGES += \
     libril-compat \
-    libprotobuf-cpp-full-legacy
+    libprotobuf-cpp-full-vendorcompat
 
 # The FPC service itself remains proprietary on this device.  Keep only the
 # standard framework interface libraries and wrapper service source-built, then
