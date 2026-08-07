@@ -1,4 +1,10 @@
+on boot
+    chown wifi wifi /sys/module/wlan/parameters/fwpath
+    chmod 0660 /sys/module/wlan/parameters/fwpath
+
 on post-fs-data
+    chown wifi wifi /sys/module/wlan/parameters/fwpath
+    chmod 0660 /sys/module/wlan/parameters/fwpath
     mkdir /data/vendor/wifi 0770 wifi wifi
     mkdir /data/vendor/wifi/sockets 0770 wifi wifi
     mkdir /data/vendor/wifi/hostapd 0770 wifi wifi
@@ -15,10 +21,6 @@ on post-fs-data
     chmod 0660 /data/misc/wifi/p2p_supplicant.conf
 
 on property:init.svc.vendor.wifi_hal_legacy=running
+    chown wifi wifi /sys/module/wlan/parameters/fwpath
+    chmod 0660 /sys/module/wlan/parameters/fwpath
     setprop wlan.driver.status ok
-
-# The QCA CLD driver is built into the 4.4 kernel, unlike ZTE's original
-# loadable module. Start it only after /vendor firmware is available: doing so
-# from post-fs can block init while the driver waits for firmware.
-on property:sys.boot_completed=1
-    write /sys/module/wlan/parameters/fwpath sta

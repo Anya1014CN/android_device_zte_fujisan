@@ -136,10 +136,13 @@ TARGET_RIL_VARIANT := caf
 ENABLE_VENDOR_RIL_SERVICE := true
 
 # Wi-Fi
-# The stock kernel already exposes a live wlan module/interface and does not
-# expose the legacy fwpath sysfs node. Advertising legacy fwpath switching to
-# libwifi-hal makes startup fail while trying to switch firmware mode on a
-# non-existent node.
+# QCACLD is built into the 4.4 kernel, but its built-in init is deliberately
+# deferred until libwifi-hal selects a firmware mode through this parameter.
+# These are the standard msm8996 qcwcn declarations used by AOSP/LineageOS.
+WIFI_DRIVER_FW_PATH_PARAM := "/sys/module/wlan/parameters/fwpath"
+WIFI_DRIVER_FW_PATH_STA := "sta"
+WIFI_DRIVER_FW_PATH_AP := "ap"
+WIFI_DRIVER_FW_PATH_P2P := "p2p"
 
 # Recovery
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/rootdir/etc/fstab.qcom
