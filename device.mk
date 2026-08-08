@@ -1,5 +1,9 @@
 LOCAL_PATH := device/zte/fujisan
 
+# P1 builds only the services needed to reach a single-screen Android userspace.
+# Re-enable a deferred hardware group only while working on that subsystem.
+FUJISAN_ENABLE_DEFERRED_HARDWARE ?= false
+
 $(call inherit-product, $(SRC_TARGET_DIR)/product/product_launched_with_n_mr1.mk)
 $(call inherit-product, vendor/zte/fujisan/fujisan-vendor.mk)
 
@@ -17,11 +21,6 @@ TARGET_SCREEN_WIDTH := 1080
 PRODUCT_SOONG_NAMESPACES += \
     $(LOCAL_PATH) \
     vendor/zte/fujisan
-
-# Fujisan exposes panel-native color balance through /proc/panel_hue_0_set.
-# This LiveDisplay HAL maps Lineage color balance to that main-panel control.
-PRODUCT_PACKAGES += \
-    vendor.lineage.livedisplay@2.0-service.fujisan
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
@@ -60,6 +59,10 @@ PRODUCT_VENDOR_PROPERTIES += \
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
     android.hardware.usb@1.0-service \
+    NavigationBarModeGesturalOverlay
+
+ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
+PRODUCT_PACKAGES += \
     fujisan_halld \
     FujisanFlashlight \
     FujisanCameraPanel \
@@ -67,13 +70,38 @@ PRODUCT_PACKAGES += \
     FujisanWindowInfoProbe \
     FujisanRotationOverlay \
     FujisanNetworkStackOverlay \
-    NavigationBarModeGesturalOverlay \
     androidx.window.sidecar \
     androidx.window.extensions
+endif
 
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
+    libtinyxml \
+    android.hardware.graphics.allocator@2.0-impl \
+    android.hardware.graphics.allocator@2.0-service \
+    android.hardware.graphics.composer@2.4-service \
+    android.hardware.graphics.mapper@2.0-impl \
+    android.hardware.memtrack@1.0-impl \
+    android.hardware.memtrack@1.0-service
+
+# LineageOS 23.2 no longer ships the MSM8996 CAF display project.  The
+# matching HWC/gralloc implementation is an OEM closed component and must be
+# reinstated only after its linker/VINTF audit during the single-panel stage.
+ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
+PRODUCT_PACKAGES += \
     bugreports_root_dir \
+    copybit.msm8996 \
+    gralloc.msm8996 \
+    hwcomposer.msm8996 \
+    hwcomposer.fujisan \
+    memtrack.msm8996 \
+    libdisplayconfig \
+    liboverlay \
+    libqdMetaData.system
+endif
+
+ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
+PRODUCT_PACKAGES += \
     android.hardware.camera.provider@2.4-impl:32 \
     android.hardware.camera.provider@2.4-service \
     camera.device@1.0-impl \
@@ -82,23 +110,7 @@ PRODUCT_PACKAGES += \
     libfujisan_graphicbuffer_compat \
     libmmcamera_interface \
     libmmjpeg_interface \
-    vendor.qti.hardware.camera.device@1.0 \
-    copybit.msm8996 \
-    gralloc.msm8996 \
-    hwcomposer.msm8996 \
-    hwcomposer.fujisan \
-    memtrack.msm8996 \
-    libdisplayconfig \
-    liboverlay \
-    libqdMetaData.system \
-    libtinyxml \
-    android.hardware.configstore@1.1-service \
-    android.hardware.graphics.allocator@2.0-impl \
-    android.hardware.graphics.allocator@2.0-service \
-    android.hardware.graphics.composer@2.4-service \
-    android.hardware.graphics.mapper@2.0-impl \
-    android.hardware.memtrack@1.0-impl \
-    android.hardware.memtrack@1.0-service
+    vendor.qti.hardware.camera.device@1.0
 
 # Keep the Bluetooth HIDL service/impl and the Qualcomm transport
 # library source-built. Device-specific compatibility lives in
@@ -107,12 +119,6 @@ PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-service \
     android.hardware.bluetooth@1.0-impl \
     libbt-vendor
-
-# The stock legacy module drives /sys/class/timed_output/vibrator. Wrap it in
-# the HIDL service expected by Android 12's VibratorManagerService.
-PRODUCT_PACKAGES += \
-    android.hardware.vibrator@1.0-service \
-    android.hardware.vibrator@1.0-impl
 
 # The OEM image provides the modem-facing location stack. Add only the
 # framework-facing GNSS HIDL bridge; libloc_core and libgps.utils stay OEM.
@@ -139,6 +145,7 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1-service \
     android.hidl.base@1.0 \
     fujisan_fingerprint_blob_overlay
+endif
 
 # Oreo vendor blobs depend on vendor-visible HIDL runtime libraries. The
 # legacy interface sonames android.hidl.base@1.0.so and
@@ -152,6 +159,7 @@ PRODUCT_PACKAGES += \
 # Audio: use the source-built CAF msm8996 ALSA HAL.  The Fujisan card is an
 # AK4962 SLIMbus codec, so the generic AOSP in-memory primary HAL cannot
 # drive its mixer routes or capture paths.
+ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
     android.hardware.audio@6.0-impl \
     android.hardware.audio.effect@6.0-impl \
@@ -163,6 +171,7 @@ PRODUCT_PACKAGES += \
     libaudio-resampler \
     libaudioroute \
     tinymix
+endif
 
 # The legacy vendor manifest exposes IPower 1.0.  SystemServer waits for this
 # HAL while creating PowerManagerService, so use the Android 11 wrapper for
@@ -171,12 +180,16 @@ PRODUCT_PACKAGES += \
     android.hardware.power@1.0-impl \
     android.hardware.power@1.0-service
 
-# The HIDL light service wraps the legacy msm8996 module that drives the
-# primary panel backlight.
+# The HIDL light service remains framework-provided for P1. The legacy module
+# that drives the panel is brought back only with the audited display stack.
 PRODUCT_PACKAGES += \
-    lights.msm8996 \
     android.hardware.light@2.0-impl \
     android.hardware.light@2.0-service
+
+ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
+PRODUCT_PACKAGES += \
+    lights.msm8996
+endif
 
 # HardwarePropertiesManagerService acquires the declared thermal HAL during
 # SystemServer startup.  The stock service is excluded from the vendor image,
@@ -185,27 +198,10 @@ PRODUCT_PACKAGES += \
     android.hardware.thermal@1.0-impl \
     android.hardware.thermal@1.0-service
 
-# BatteryExternalStatsWorker synchronously queries the Wi-Fi HAL before
-# returning battery statistics.  Without a registered IWifi service, Settings
-# exhausts its parallel controller pool and ANRs while opening dashboards.
-PRODUCT_PACKAGES += \
-    android.hardware.wifi@1.0 \
-    android.hardware.wifi@1.0-impl \
-    android.hardware.wifi@1.0-service \
-    android.hardware.wifi@1.1 \
-    android.hardware.wifi@1.2 \
-    android.hardware.wifi@1.3 \
-    android.hardware.wifi@1.4 \
-    android.hardware.wifi.supplicant@1.0 \
-    android.hardware.wifi.supplicant@1.1 \
-    android.hardware.wifi.supplicant@1.2 \
-    android.hardware.wifi.supplicant@1.3 \
-    wpa_supplicant \
-    wpa_supplicant.conf
-
 # Gatekeeper is declared in VINTF. AOSP no longer ships gatekeeper.default on
 # 12L; the HIDL service is passthrough and needs a legacy module. Ship the
 # existing QTI module + AOSP HIDL wrapper so user 0 can leave BOOTING.
+ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
     android.hardware.gatekeeper@1.0-impl \
     android.hardware.gatekeeper@1.0-service \
@@ -265,6 +261,7 @@ PRODUCT_PACKAGES += \
     librmnetctl \
     libxml2 \
     libprotobuf-cpp-full
+endif
 
 # Android 12L requires health@2.1.  Use the AOSP default implementation
 # instead of the stock health@1.0 prebuilt.
@@ -285,6 +282,28 @@ PRODUCT_PRODUCT_PROPERTIES += \
     ro.charger.draw_split_offset=0
 
 PRODUCT_COPY_FILES += \
+    system/core/libprocessgroup/profiles/cgroups_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \
+    system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
+    $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.charger.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-charger.rc \
+    $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
+    $(LOCAL_PATH)/rootdir/dsp/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/dsp/.placeholder \
+    $(LOCAL_PATH)/rootdir/persist/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/persist/.placeholder \
+    $(LOCAL_PATH)/rootdir/etc/fstab.ramdisk.qcom:$(TARGET_COPY_OUT_RAMDISK)/fstab.qcom \
+    $(LOCAL_PATH)/rootdir/etc/fstab.qcom:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.qcom \
+    $(LOCAL_PATH)/system/usr/idc/goodix-touchscreen.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/goodix-touchscreen.idc \
+    $(LOCAL_PATH)/system/usr/idc/synaptics_dsx.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/synaptics_dsx.idc \
+    $(LOCAL_PATH)/system/usr/idc/zte-touchscreen.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchscreen.idc \
+    $(LOCAL_PATH)/system/usr/idc/zte-touchscreen-2nd.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchscreen-2nd.idc \
+    $(LOCAL_PATH)/system/usr/idc/zte-touchsrceen-3nd.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchsrceen-3nd.idc \
+    $(LOCAL_PATH)/system/usr/keylayout/gpio-keys.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/gpio-keys.kl \
+    $(LOCAL_PATH)/system/usr/keylayout/qpnp_pon.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/qpnp_pon.kl \
+    $(LOCAL_PATH)/system/usr/keylayout/synaptics_dsx.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/synaptics_dsx.kl
+
+ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
+PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/audio_effects.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_effects.xml \
     $(LOCAL_PATH)/audio/audio_output_policy.conf:$(TARGET_COPY_OUT_VENDOR)/etc/audio_output_policy.conf \
     $(LOCAL_PATH)/audio/mixer_paths.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths.xml \
@@ -300,14 +319,10 @@ PRODUCT_COPY_FILES += \
     frameworks/av/services/audiopolicy/config/bluetooth_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/bluetooth_audio_policy_configuration.xml \
     frameworks/av/services/audiopolicy/config/usb_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/usb_audio_policy_configuration.xml \
     frameworks/av/services/audiopolicy/config/r_submix_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/r_submix_audio_policy_configuration.xml \
-    system/core/libprocessgroup/profiles/cgroups_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \
-    system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     frameworks/av/media/libstagefright/data/media_codecs_google_audio.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_audio.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_telephony.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_telephony.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml \
     $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
-    $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
     $(LOCAL_PATH)/rootdir/init.dualscreen.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.dualscreen.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
     $(LOCAL_PATH)/system/etc/default-permissions/com.zte.fujisan.camerapanel.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/default-permissions/com.zte.fujisan.camerapanel.xml \
@@ -315,36 +330,11 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/display/display_settings.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display_settings.xml \
     $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml \
     $(LOCAL_PATH)/rootdir/etc/seccomp_policy/mediacodec.policy:$(TARGET_COPY_OUT_VENDOR)/etc/seccomp_policy/mediacodec.policy \
-    $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.charger.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-charger.rc \
-    $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/bt_firmware/.placeholder \
-    $(LOCAL_PATH)/rootdir/dsp/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/dsp/.placeholder \
-    $(LOCAL_PATH)/rootdir/persist/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/persist/.placeholder \
-    $(LOCAL_PATH)/rootdir/etc/fstab.ramdisk.qcom:$(TARGET_COPY_OUT_RAMDISK)/fstab.qcom \
-    $(LOCAL_PATH)/rootdir/etc/fstab.qcom:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.qcom \
-    $(LOCAL_PATH)/system/usr/idc/goodix-touchscreen.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/goodix-touchscreen.idc \
-    $(LOCAL_PATH)/system/usr/idc/synaptics_dsx.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/synaptics_dsx.idc \
-    $(LOCAL_PATH)/system/usr/idc/zte-touchscreen.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchscreen.idc \
-    $(LOCAL_PATH)/system/usr/idc/zte-touchscreen-2nd.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchscreen-2nd.idc \
-    $(LOCAL_PATH)/system/usr/idc/zte-touchsrceen-3nd.idc:$(TARGET_COPY_OUT_SYSTEM)/usr/idc/zte-touchsrceen-3nd.idc \
-    $(LOCAL_PATH)/system/usr/keylayout/gpio-keys.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/gpio-keys.kl \
-    $(LOCAL_PATH)/system/usr/keylayout/qpnp_pon.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/qpnp_pon.kl \
-    $(LOCAL_PATH)/system/usr/keylayout/synaptics_dsx.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/synaptics_dsx.kl \
     $(LOCAL_PATH)/system/etc/permissions/android.hardware.fingerprint.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/android.hardware.fingerprint.xml
+endif
 
 PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/ramdisk,$(TARGET_COPY_OUT_RAMDISK))
-
-# Fujisan uses the panel-hue LiveDisplay HAL above.  The generic SDM service
-# is for Qualcomm SDM display stacks and crashes here after failing to load
-# libsdm-disp-vndapis.  Exclude both install variants at product definition
-# time; do not ship an init override for a service this device never uses.
-
-
-PRODUCT_PACKAGES := $(filter-out \
-    lineage.livedisplay@2.0-service-sdm \
-    vendor.lineage.livedisplay@2.0-service-sdm, \
-    $(PRODUCT_PACKAGES))

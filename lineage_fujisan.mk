@@ -1,12 +1,10 @@
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
-$(call inherit-product, $(SRC_TARGET_DIR)/product/verity.mk)
 $(call inherit-product, vendor/lineage/config/common_full_phone.mk)
 
-# The stock firmware has no separate vendor image.  Keep APEXes unpacked and
-# allow the device manifest to provide the legacy vendor HAL declarations.
+# The stock firmware has no separate vendor image. Keep APEXes unpacked and
+# use the device manifests selected in BoardConfig.mk.
 PRODUCT_COMPRESSED_APEX := false
-PRODUCT_ENFORCE_VINTF_MANIFEST_OVERRIDE := true
 
 $(call inherit-product, device/zte/fujisan/device.mk)
 
@@ -17,20 +15,14 @@ PRODUCT_MODEL := ZTE Axon M
 PRODUCT_MANUFACTURER := ZTE
 
 PRODUCT_BUILD_PROP_OVERRIDES += \
-    PRODUCT_NAME=P996A26 \
-    PRIVATE_BUILD_DESC="P996A26-user 8.1.0 OPM1.171019.026 303 release-keys"
+    DeviceProduct=P996A26 \
+    BuildDesc="P996A26-user 8.1.0 OPM1.171019.026 303 release-keys"
 
-BUILD_FINGERPRINT := "ZTE/P996A26/fujisan:8.1.0/OPM1.171019.026/20190218.120220:user/release-keys"
+BUILD_FINGERPRINT := ZTE/P996A26/fujisan:8.1.0/OPM1.171019.026/20190218.120220:user/release-keys
 
 TARGET_VENDOR := zte
 
-# Stock bootloader accepts custom-signed images in yellow state, but rejects
-# completely unsigned boot/system images (red state). Keep boot signer + verity.
-PRODUCT_SUPPORTS_BOOT_SIGNER := true
-PRODUCT_SUPPORTS_VERITY := true
-PRODUCT_SUPPORTS_VERITY_FEC := true
-PRODUCT_VERITY_SIGNING_KEY := build/make/target/product/security/verity
+# The physical system block device is retained as a P2 boot-metadata input.
+# Android 16 removed the old VB1 product flags; select and validate AVB only
+# after a recovery-bootable image exists.
 PRODUCT_SYSTEM_VERITY_PARTITION := /dev/block/bootdevice/by-name/system
-
-PRODUCT_PACKAGES += \
-    verity_key

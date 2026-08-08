@@ -1,4 +1,4 @@
-# Android 12 first-stage fstab used from the boot ramdisk.
+# Android 16 first-stage fstab used from the boot ramdisk.
 # Fujisan is non-Treble and has no separate vendor partition.
 # Mount system for second-stage handoff, plus dcmlog/cache for early breadcrumb logs.
 

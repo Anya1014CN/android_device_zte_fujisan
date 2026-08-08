@@ -1,0 +1,9 @@
+// The generic QTI build configuration requires this public header target for
+// legacy UM devices. SurfaceFlinger has no MSM8996-specific header includes.
+cc_library_headers {
+    name: "display_intf_headers",
+    vendor_available: true,
+    export_include_dirs: ["."],
+    header_libs: ["libhardware_headers"],
+    export_header_lib_headers: ["libhardware_headers"],
+}

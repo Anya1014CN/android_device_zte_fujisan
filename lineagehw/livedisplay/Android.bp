@@ -1,18 +1,3 @@
-cc_binary {
-    name: "vendor.lineage.livedisplay@2.0-service.fujisan",
-    vendor: true,
-    relative_install_path: "hw",
-    init_rc: ["vendor.lineage.livedisplay@2.0-service.fujisan.rc"],
-    srcs: [
-        "ColorBalance.cpp",
-        "service.cpp",
-    ],
-    defaults: ["hidl_defaults"],
-    shared_libs: [
-        "libbase",
-        "libbinder",
-        "libhidlbase",
-        "libutils",
-        "vendor.lineage.livedisplay@2.0",
-    ],
-}
+// The HIDL LiveDisplay 2.0 interface was removed before LineageOS 23.2.
+// Keep the Fujisan implementation source here for its future migration to
+// the current AIDL interface, but do not expose the obsolete service.

@@ -10,6 +10,12 @@ TARGET_NO_BOOTLOADER := true
 TARGET_NO_RADIOIMAGE := true
 BOARD_USES_QCOM_HARDWARE := true
 
+# LineageOS 23.2 no longer publishes the MSM8996 CAF display project.  Keep
+# the generic CAF configuration in use, but satisfy its header-only
+# SurfaceFlinger contract from this device tree instead of selecting another
+# platform's display stack.
+QCOM_SOONG_NAMESPACE := $(DEVICE_PATH)
+
 # Android 12L still accepts the legacy system/vendor layout used by the
 # Oreo firmware.  Permit the prebuilt product copies from that image while
 # keeping the device out of the unsupported VNDK-Lite path.
@@ -57,6 +63,9 @@ TARGET_KERNEL_ARCH := arm64
 TARGET_KERNEL_HEADER_ARCH := arm64
 TARGET_KERNEL_SOURCE := kernel/zte/msm8996
 TARGET_KERNEL_CONFIG := lineageos_fujisan_defconfig
+# The legacy bootloader verifies an AOSP BootSignature DER trailer rather than
+# an AVB footer. Keep that device-specific post-processing outside AOSP.
+BOARD_CUSTOM_BOOTIMG_MK := $(DEVICE_PATH)/bootimg.mk
 # The 4.4 msm8996 base builds a 32-bit compat vDSO with clang.
 TARGET_KERNEL_MAKE_ENV += CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 NEED_KERNEL_MODULE_ROOT := true
@@ -94,14 +103,10 @@ BOARD_ROOT_EXTRA_FOLDERS += \
     system
 
 BOARD_ROOT_EXTRA_SYMLINKS += \
-    /system/etc:/etc \
-    /system/vendor:/vendor \
-    /vendor/lib/dsp:/dsp \
-    /sys/kernel/debug:/d
+    /vendor/lib/dsp:/dsp
 
 # VINTF
-DEVICE_MANIFEST_FILE := vendor/zte/fujisan/proprietary/vendor/manifest.xml \
-    $(DEVICE_PATH)/manifest.xml
+DEVICE_MANIFEST_FILE := vendor/zte/fujisan/proprietary/vendor/manifest.xml
 DEVICE_MATRIX_FILE := vendor/zte/fujisan/proprietary/vendor/compatibility_matrix.xml
 
 # Display
@@ -120,7 +125,6 @@ TARGET_USES_GRALLOC1 := true
 TARGET_USES_HWC2 := true
 TARGET_USES_ION := true
 TARGET_USES_OVERLAY := true
-TARGET_USES_QCOM_DISPLAY_BSP := true
 USE_OPENGL_RENDERER := true
 MAX_EGL_CACHE_KEY_SIZE := 12*1024
 MAX_EGL_CACHE_SIZE := 2048*1024
@@ -146,7 +150,7 @@ WIFI_DRIVER_FW_PATH_P2P := "p2p"
 
 # Recovery
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/rootdir/etc/fstab.qcom
-TARGET_RECOVERY_PIXEL_FORMAT := "RGBX_8888"
+TARGET_RECOVERY_PIXEL_FORMAT := RGBX_8888
 RECOVERY_GRAPHICS_USE_LINELENGTH := true
 
 # Keep user-installed recovery images intact when installing a non-A/B OTA.
