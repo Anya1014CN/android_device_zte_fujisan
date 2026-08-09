@@ -33,6 +33,8 @@ ro.opengles.version=196610
 ro.config.navkeys=0
 qemu.hw.mainkeys=0
 ro.hardware=qcom
+ro.hardware.egl=adreno
+ro.hardware.gralloc=msm8996
 ro.product.device=fujisan
 ro.product.model=ZTE Axon M
 ro.sf.lcd_density=480
@@ -81,8 +83,9 @@ dalvik.vm.heapstartsize=16m
 dalvik.vm.heapgrowthlimit=256m
 dalvik.vm.heapsize=512m
 
-# Use device HWC wrapper for independent panel B (not mirror)
-ro.hardware.hwcomposer=fujisan
+# Use the OEM MSM8996 HWC2 HAL.  It is the only display implementation
+# compatible with this device's legacy MDSS/KGSL ABI.
+ro.hardware.hwcomposer=msm8996
 
 # Fujisan hinge / dual-LCD posture (stock-compatible semantics)
 # hall_status: 1=A closed, 2=B open, 3=C closed(B face)

@@ -77,9 +77,10 @@ endif
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
     libtinyxml \
+    android.hardware.security.keymint-service \
     android.hardware.graphics.allocator@2.0-impl \
     android.hardware.graphics.allocator@2.0-service \
-    android.hardware.graphics.composer@2.4-service \
+    android.hardware.graphics.composer@2.1-service \
     android.hardware.graphics.mapper@2.0-impl \
     android.hardware.memtrack@1.0-impl \
     android.hardware.memtrack@1.0-service
@@ -147,12 +148,13 @@ PRODUCT_PACKAGES += \
     fujisan_fingerprint_blob_overlay
 endif
 
-# Oreo vendor blobs depend on vendor-visible HIDL runtime libraries. The
-# legacy interface sonames android.hidl.base@1.0.so and
-# android.hidl.manager@1.0.so no longer build as standalone libraries on
-# Android 11, so rootdir/Android.mk provides vendor-side compatibility
-# symlinks to the source-built libhidlbase.so instead.
+# Oreo vendor blobs depend on the vendor variants of the legacy HIDL runtime.
+# LineageOS supplies the ABI shim for the removed Bn constructor maps.
 PRODUCT_PACKAGES += \
+    android.hidl.base@1.0 \
+    android.hidl.manager@1.0 \
+    libhidlbase_shim \
+    libhidlbase_fujisan_legacy_map_shim \
     libhidltransport.vendor \
     libhwbinder.vendor
 
@@ -198,9 +200,15 @@ PRODUCT_PACKAGES += \
     android.hardware.thermal@1.0-impl \
     android.hardware.thermal@1.0-service
 
-# Gatekeeper is declared in VINTF. AOSP no longer ships gatekeeper.default on
-# 12L; the HIDL service is passthrough and needs a legacy module. Ship the
-# existing QTI module + AOSP HIDL wrapper so user 0 can leave BOOTING.
+# The Android 8 vendor manifest declared HIDL Keymaster 4.0, but its service
+# is not part of the P1 image and Android 16 no longer provides the legacy
+# wrapper.  Use AOSP's standard AIDL KeyMint service for the temporary P1
+# userspace instead.  It is intentionally a bring-up implementation only: it
+# is software-backed and must be replaced with a TrustZone-backed KeyMint HAL
+# before this tree can be considered a secure daily-driver configuration.
+#
+# Gatekeeper remains deferred: its legacy OEM implementation requires a
+# separate linker and interface audit.
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
     android.hardware.gatekeeper@1.0-impl \
@@ -285,7 +293,9 @@ PRODUCT_COPY_FILES += \
     system/core/libprocessgroup/profiles/cgroups_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \
     system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
+    $(LOCAL_PATH)/rootdir/zz-fujisan-bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/zz-fujisan-bpfloader.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
+    $(LOCAL_PATH)/rootdir/zz-fujisan-hwc2-compat.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-hwc2-compat.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.charger.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-charger.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \

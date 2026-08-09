@@ -7,3 +7,22 @@ cc_library_headers {
     header_libs: ["libhardware_headers"],
     export_header_lib_headers: ["libhardware_headers"],
 }
+
+// Android 8 generated HIDL interface blobs populate the deprecated global
+// constructor maps. Android 16's libhidlbase uses the replacement accessors
+// instead. Keep both ABI symbols in this early-loaded, device-local bridge,
+// so their construction precedes the HIDL manager's static constructors.
+cc_library_shared {
+    name: "libhidlbase_fujisan_legacy_map_shim",
+    vendor: true,
+    srcs: ["LegacyHidlBaseMapShim.cpp"],
+    include_dirs: [
+        "system/libhidl/base/include",
+        "system/libhidl/transport/include",
+    ],
+    header_libs: [
+        "libfmq-base",
+        "libhwbinder_headers",
+    ],
+    generated_headers: ["android.hidl.base@1.0_genc++_headers"],
+}

@@ -1,0 +1,2 @@
+// Device-local Soong modules live below this namespace.
+soong_namespace {}

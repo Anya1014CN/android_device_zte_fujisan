@@ -1,0 +1,12 @@
+# Temporary P0 override for the Android 16 BPF loader.
+#
+# Fujisan's 4.4 kernel cannot meet the platform's Android 16 (4.19+) eBPF
+# requirement.  netbpfload.rc first defines bpfloader as updatable; this
+# later system-init fragment replaces it with a successful no-op and
+# deliberately omits "updatable".  The Tethering APEX is consequently unable
+# to replace it, so init can continue to the minimal userspace.  This must be
+# removed when the kernel is brought up to the required BPF interface level.
+service bpfloader /system/bin/true
+    override
+    user root
+    oneshot

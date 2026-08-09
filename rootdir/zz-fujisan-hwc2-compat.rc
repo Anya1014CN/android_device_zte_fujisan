@@ -1,0 +1,12 @@
+# Keep the AOSP HWC2.1 service and add LineageOS's public HIDL ABI shim for
+# the OEM msm8996 display configuration library.
+service vendor.hwcomposer-2-1 /vendor/bin/hw/android.hardware.graphics.composer@2.1-service
+    override
+    interface android.hardware.graphics.composer@2.1::IComposer default
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    setenv LD_PRELOAD /vendor/lib64/libhidlbase_fujisan_legacy_map_shim.so
+    onrestart restart surfaceflinger
+    task_profiles ServiceCapacityLow
