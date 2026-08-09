@@ -9,6 +9,7 @@ TARGET_BOOTLOADER_BOARD_NAME := fujisan
 TARGET_NO_BOOTLOADER := true
 TARGET_NO_RADIOIMAGE := true
 BOARD_USES_QCOM_HARDWARE := true
+AB_OTA_UPDATER := false
 
 # LineageOS 23.2 no longer publishes the MSM8996 CAF display project.  Keep
 # the generic CAF configuration in use, but satisfy its header-only
@@ -106,6 +107,10 @@ BOARD_ROOT_EXTRA_SYMLINKS += \
     /vendor/lib/dsp:/dsp
 
 # VINTF
+DEVICE_FRAMEWORK_COMPATIBILITY_MATRIX_FILE += \
+    hardware/qcom-caf/common/vendor_framework_compatibility_matrix.xml \
+    hardware/qcom-caf/common/vendor_framework_compatibility_matrix_legacy.xml \
+    $(DEVICE_PATH)/framework_compatibility_matrix.xml
 DEVICE_MANIFEST_FILE := vendor/zte/fujisan/proprietary/vendor/manifest.xml
 DEVICE_MATRIX_FILE := vendor/zte/fujisan/proprietary/vendor/compatibility_matrix.xml
 
