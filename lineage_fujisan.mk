@@ -6,6 +6,11 @@ $(call inherit-product, vendor/lineage/config/common_full_phone.mk)
 # use the device manifests selected in BoardConfig.mk.
 PRODUCT_COMPRESSED_APEX := false
 
+# The device has a persistent, non-A/B userdata partition.  A factory
+# userdata image is neither flashable by the OTA path nor needed for bring-up,
+# and expanding its 52 GiB sparse image makes OTA packaging impractical.
+PRODUCT_BUILD_USERDATA_IMAGE := false
+
 $(call inherit-product, device/zte/fujisan/device.mk)
 
 PRODUCT_NAME := lineage_fujisan
