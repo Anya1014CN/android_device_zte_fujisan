@@ -57,6 +57,9 @@ PRODUCT_VENDOR_PROPERTIES += \
     vendor.gralloc.enable_fb_ubwc=0 \
     ro.vendor.fujisan.enable_legacy_radio=0
 
+PRODUCT_SYSTEM_PROPERTIES += \
+    ro.hardware.lights=msm8996
+
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
     fujisan_halld \
@@ -193,10 +196,8 @@ PRODUCT_PACKAGES += \
     android.hardware.light@2.0-impl \
     android.hardware.light@2.0-service
 
-ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
     lights.msm8996
-endif
 
 # HardwarePropertiesManagerService acquires the declared thermal HAL during
 # SystemServer startup.  The stock service is excluded from the vendor image,
