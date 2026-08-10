@@ -148,6 +148,13 @@ ENABLE_VENDOR_RIL_SERVICE := true
 # QCACLD is built into the 4.4 kernel, but its built-in init is deliberately
 # deferred until libwifi-hal selects a firmware mode through this parameter.
 # These are the standard msm8996 qcwcn declarations used by AOSP/LineageOS.
+BOARD_WLAN_DEVICE := qcwcn
+BOARD_WPA_SUPPLICANT_DRIVER := NL80211
+WIFI_HIDL_UNIFIED_SUPPLICANT_SERVICE_RC_ENTRY := true
+# QCWCN reports its concurrency matrix dynamically.  Declare the matching
+# single-STA V3 mode up front, as done by the LineageOS msm8996 common tree,
+# so the AIDL Wi-Fi HAL keeps the configured mode after reloading that matrix.
+WIFI_HAL_INTERFACE_COMBINATIONS := {{{STA}, 1}}
 WIFI_DRIVER_FW_PATH_PARAM := "/sys/module/wlan/parameters/fwpath"
 WIFI_DRIVER_FW_PATH_STA := "sta"
 WIFI_DRIVER_FW_PATH_AP := "ap"

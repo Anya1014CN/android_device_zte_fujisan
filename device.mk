@@ -66,6 +66,11 @@ PRODUCT_PACKAGES += \
     FujisanPrimaryPanel \
     android.hardware.vibrator-service.legacy \
     vibrator.default \
+    android.hardware.wifi-service \
+    libwifi-hal-qcom \
+    wpa_supplicant \
+    wpa_supplicant.conf \
+    FujisanNetworkStackOverlay \
     android.hardware.usb@1.0-service \
     NavigationBarModeGesturalOverlay
 
@@ -75,7 +80,6 @@ PRODUCT_PACKAGES += \
     FujisanCameraPanel \
     FujisanWindowInfoProbe \
     FujisanRotationOverlay \
-    FujisanNetworkStackOverlay \
     androidx.window.sidecar \
     androidx.window.extensions
 endif
@@ -356,7 +360,8 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.dualscreen.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.dualscreen.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc
+    $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.fujisan.wifi.rc
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_COPY_FILES += \
@@ -367,7 +372,6 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml \
     $(LOCAL_PATH)/rootdir/etc/seccomp_policy/mediacodec.policy:$(TARGET_COPY_OUT_VENDOR)/etc/seccomp_policy/mediacodec.policy \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/bt_firmware/.placeholder \
     $(LOCAL_PATH)/system/etc/permissions/android.hardware.fingerprint.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/android.hardware.fingerprint.xml
 endif
