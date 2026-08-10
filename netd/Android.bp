@@ -1,0 +1,14 @@
+cc_library_shared {
+    name: "libnetd_fujisan_compat",
+    srcs: ["NetdUpdatableCompat.cpp"],
+    compile_multilib: "64",
+    stl: "none",
+}
+
+cc_binary {
+    name: "netd_bpf_compat",
+    srcs: ["NetdBpfCompat.cpp"],
+    compile_multilib: "64",
+    shared_libs: ["liblog"],
+    stl: "none",
+}
