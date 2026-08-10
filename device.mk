@@ -70,6 +70,9 @@ PRODUCT_PACKAGES += \
     libwifi-hal-qcom \
     wpa_supplicant \
     wpa_supplicant.conf \
+    android.hardware.bluetooth@1.0-service \
+    android.hardware.bluetooth@1.0-impl \
+    libbt-vendor \
     FujisanNetworkStackOverlay \
     android.hardware.usb@1.0-service \
     NavigationBarModeGesturalOverlay
@@ -125,14 +128,6 @@ PRODUCT_PACKAGES += \
     libmmcamera_interface \
     libmmjpeg_interface \
     vendor.qti.hardware.camera.device@1.0
-
-# Keep the Bluetooth HIDL service/impl and the Qualcomm transport
-# library source-built. Device-specific compatibility lives in
-# BoardConfigVendor rather than by shipping a second prebuilt libbt-vendor.
-PRODUCT_PACKAGES += \
-    android.hardware.bluetooth@1.0-service \
-    android.hardware.bluetooth@1.0-impl \
-    libbt-vendor
 
 # The OEM image provides the modem-facing location stack. Add only the
 # framework-facing GNSS HIDL bridge; libloc_core and libgps.utils stay OEM.
@@ -361,17 +356,17 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.dualscreen.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.dualscreen.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.fujisan.wifi.rc
+    $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.fujisan.wifi.rc \
+    $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
+    $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
     $(LOCAL_PATH)/system/etc/default-permissions/com.zte.fujisan.camerapanel.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/default-permissions/com.zte.fujisan.camerapanel.xml \
     $(LOCAL_PATH)/configs/permissions/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.freeform_window_management.xml \
     $(LOCAL_PATH)/configs/display/display_settings.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display_settings.xml \
     $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml \
     $(LOCAL_PATH)/rootdir/etc/seccomp_policy/mediacodec.policy:$(TARGET_COPY_OUT_VENDOR)/etc/seccomp_policy/mediacodec.policy \
-    $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/bt_firmware/.placeholder \
     $(LOCAL_PATH)/system/etc/permissions/android.hardware.fingerprint.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/android.hardware.fingerprint.xml
 endif

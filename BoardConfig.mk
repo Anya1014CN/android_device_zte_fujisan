@@ -69,6 +69,7 @@ TARGET_KERNEL_CONFIG := lineageos_fujisan_defconfig
 BOARD_CUSTOM_BOOTIMG_MK := $(DEVICE_PATH)/bootimg.mk
 # The 4.4 msm8996 base builds a 32-bit compat vDSO with clang.
 TARGET_KERNEL_MAKE_ENV += CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+TARGET_KERNEL_MAKE_ENV += CLANG_TRIPLE_ARM32=arm-linux-androideabi-
 NEED_KERNEL_MODULE_ROOT := true
 
 # Partitions

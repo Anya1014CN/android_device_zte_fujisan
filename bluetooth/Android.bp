@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// The AOSP Bluetooth JNI is rebuilt without shadow-call-stack instrumentation
+// for Fujisan.  This standard Soong prebuilt replaces the source module of the
+// same name, so com.android.bt packages it automatically in every device build.
+
+cc_prebuilt_library_shared {
+    name: "libbluetooth_jni",
+    stem: "libbluetooth_jni",
+    srcs: ["prebuilt/lib64/libbluetooth_jni.so"],
+    stl: "none",
+    apex_available: ["com.android.bt"],
+    min_sdk_version: "36",
+    prefer: true,
+    shared_libs: [
+        "libaaudio",
+        "libbinder_ndk",
+        "libc",
+        "libcrypto",
+        "libdl",
+        "liblog",
+        "libm",
+        "libnativehelper",
+        "libstatssocket",
+        "libvndksupport",
+    ],
+    strip: {
+        none: true,
+    },
+}
