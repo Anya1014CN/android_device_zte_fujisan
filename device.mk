@@ -63,6 +63,7 @@ PRODUCT_SYSTEM_PROPERTIES += \
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
     fujisan_halld \
+    FujisanPrimaryPanel \
     android.hardware.usb@1.0-service \
     NavigationBarModeGesturalOverlay
 
@@ -70,7 +71,6 @@ ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
     FujisanFlashlight \
     FujisanCameraPanel \
-    FujisanPrimaryPanel \
     FujisanWindowInfoProbe \
     FujisanRotationOverlay \
     FujisanNetworkStackOverlay \
