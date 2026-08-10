@@ -173,12 +173,11 @@ PRODUCT_PACKAGES += \
     tinymix
 endif
 
-# The legacy vendor manifest exposes IPower 1.0.  SystemServer waits for this
-# HAL while creating PowerManagerService, so use the Android 11 wrapper for
-# the already-installed generic power.default module.
+# Android 16 HintManager requires the current AIDL power SupportInfo contract.
+# Use the standard Qualcomm source service, as on maintained MSM8996 devices;
+# the legacy HIDL entry in the Oreo vendor manifest remains only for blobs.
 PRODUCT_PACKAGES += \
-    android.hardware.power@1.0-impl \
-    android.hardware.power@1.0-service
+    android.hardware.power-service-qti
 
 # The HIDL light service remains framework-provided for P1. The legacy module
 # that drives the panel is brought back only with the audited display stack.
