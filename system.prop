@@ -85,7 +85,7 @@ dalvik.vm.heapsize=512m
 
 # Use the OEM MSM8996 HWC2 HAL.  It is the only display implementation
 # compatible with this device's legacy MDSS/KGSL ABI.
-ro.hardware.hwcomposer=msm8996
+ro.hardware.hwcomposer=fujisan
 
 # Fujisan hinge / dual-LCD posture (stock-compatible semantics)
 # hall_status: 1=A closed, 2=B open, 3=C closed(B face)

@@ -54,16 +54,17 @@ PRODUCT_SYSTEM_EXT_PROPERTIES += \
 PRODUCT_VENDOR_PROPERTIES += \
     vendor.qcom.bluetooth.soc=rome \
     vendor.gralloc.disable_ubwc=1 \
-    vendor.gralloc.enable_fb_ubwc=0
+    vendor.gralloc.enable_fb_ubwc=0 \
+    ro.vendor.fujisan.enable_legacy_radio=0
 
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
+    fujisan_halld \
     android.hardware.usb@1.0-service \
     NavigationBarModeGesturalOverlay
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
-    fujisan_halld \
     FujisanFlashlight \
     FujisanCameraPanel \
     FujisanPrimaryPanel \
@@ -93,11 +94,16 @@ PRODUCT_PACKAGES += \
     copybit.msm8996 \
     gralloc.msm8996 \
     hwcomposer.msm8996 \
-    hwcomposer.fujisan \
     libdisplayconfig \
     liboverlay \
     libqdMetaData.system
 endif
+
+# Fujisan's hinge topology is implemented by this device-side HWC2 wrapper.
+# The wrapper loads the OEM msm8996 HWC internally; keep it independent from
+# the deferred camera/radio hardware group.
+PRODUCT_PACKAGES += \
+    hwcomposer.fujisan
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
@@ -156,22 +162,24 @@ PRODUCT_PACKAGES += \
     libhidltransport.vendor \
     libhwbinder.vendor
 
-# Audio: use the source-built CAF msm8996 ALSA HAL.  The Fujisan card is an
-# AK4962 SLIMbus codec, so the generic AOSP in-memory primary HAL cannot
-# drive its mixer routes or capture paths.
-ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
+# AudioService blocks system_server startup until this standard HIDL service
+# registers, so it is a P0 service rather than deferred hardware.  The CAF
+# msm8996 primary HAL is maintained in this device tree; the Oreo binary links
+# against removed framework-private libraries.
+
 PRODUCT_PACKAGES += \
     android.hardware.audio@6.0-impl \
     android.hardware.audio.effect@6.0-impl \
     android.hardware.audio.service \
-    audio.primary.msm8996 \
+    android.hardware.bluetooth.audio-impl \
+    audio.primary.fujisan \
     audio.bluetooth.default \
     audio.r_submix.default \
     audio.usb.default \
     libaudio-resampler \
-    libaudioroute \
+    libaudioroute.vendor \
+    libdolbyshim \
     tinymix
-endif
 
 # Android 16 HintManager requires the current AIDL power SupportInfo contract.
 # Use the standard Qualcomm source service, as on maintained MSM8996 devices;
@@ -204,17 +212,24 @@ PRODUCT_PACKAGES += \
 # is software-backed and must be replaced with a TrustZone-backed KeyMint HAL
 # before this tree can be considered a secure daily-driver configuration.
 #
-# Gatekeeper remains deferred: its legacy OEM implementation requires a
+# BiometricService requires the declared Gatekeeper HAL during SystemServer
+# startup. Use the framework HIDL bridge with the existing 64-bit Qualcomm
+# module, matching maintained MSM8996 device trees.
+PRODUCT_PACKAGES += \
+    android.hardware.gatekeeper@1.0-impl:64 \
+    android.hardware.gatekeeper@1.0-service
+
+# Keymaster remains deferred: its legacy OEM implementation requires a
 # separate linker and interface audit.
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
-    android.hardware.gatekeeper@1.0-impl \
-    android.hardware.gatekeeper@1.0-service \
     android.hardware.keymaster@4.0-service \
     libhidltransport
 
-# Build the framework-compatible HIDL service; Qualcomm sensor backends remain
-# supplied by the stock vendor image.
+# Fujisan exposes its Qualcomm sensor backends through the standard multi-HAL
+# configuration in vendor/etc/sensors/hals.conf.  Use the source-built AOSP
+# HIDL bridge; it loads those OEM backend modules without an Android 8 HIDL
+# frontend ABI dependency.
 PRODUCT_PACKAGES += \
     android.hardware.sensors@1.0-impl \
     android.hardware.sensors@1.0-service
@@ -293,7 +308,7 @@ PRODUCT_PRODUCT_PROPERTIES += \
     ro.charger.draw_split_offset=0
 
 PRODUCT_COPY_FILES += \
-    system/core/libprocessgroup/profiles/cgroups_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \
+    $(LOCAL_PATH)/rootdir/cgroups.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \
     system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/zz-fujisan-bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/zz-fujisan-bpfloader.rc \
@@ -316,7 +331,6 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/usr/keylayout/qpnp_pon.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/qpnp_pon.kl \
     $(LOCAL_PATH)/system/usr/keylayout/synaptics_dsx.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/synaptics_dsx.kl
 
-ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/audio_effects.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_effects.xml \
     $(LOCAL_PATH)/audio/audio_output_policy.conf:$(TARGET_COPY_OUT_VENDOR)/etc/audio_output_policy.conf \
@@ -335,10 +349,15 @@ PRODUCT_COPY_FILES += \
     frameworks/av/services/audiopolicy/config/r_submix_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/r_submix_audio_policy_configuration.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_audio.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_audio.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_telephony.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_telephony.xml \
-    frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml \
-    $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
+    frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml
+
+PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.dualscreen.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.dualscreen.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc
+
+ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
     $(LOCAL_PATH)/system/etc/default-permissions/com.zte.fujisan.camerapanel.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/default-permissions/com.zte.fujisan.camerapanel.xml \
     $(LOCAL_PATH)/configs/permissions/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.freeform_window_management.xml \
     $(LOCAL_PATH)/configs/display/display_settings.xml:$(TARGET_COPY_OUT_VENDOR)/etc/display_settings.xml \

@@ -1,0 +1,79 @@
+// Device-owned copy of the current CAF msm8996 primary HAL.  Keep this file
+// structurally aligned with hardware/qcom/audio/hal/Android.bp; the only
+// Fujisan-specific build adjustment is the 32-bit format diagnostic below.
+cc_library_shared {
+    name: "audio.primary.fujisan",
+    stem: "audio.primary.msm8996",
+    relative_install_path: "hw",
+    vendor: true,
+    owner: "zte",
+    compile_multilib: "both",
+
+    srcs: [
+        "acdb.c",
+        "audio_hw.c",
+        "audio_perf.cpp",
+        "platform_info.c",
+        "voice.c",
+        "voice_extn/voice_extn.c",
+        "audio_extn/audio_extn.c",
+        "audio_extn/ext_speaker.c",
+        "audio_extn/utils.c",
+        "msm8974/hw_info.c",
+        "msm8974/platform.c",
+    ],
+
+    cflags: [
+        "-Werror",
+        // Android 16's 32-bit logging declaration disagrees with the CAF
+        // ssize_t typedef here. This affects diagnostic output only.
+        "-Wno-error=format",
+        // The upstream module is built as external code and receives this
+        // compatibility flag implicitly. Keep the same legacy C semantics.
+        "-fcommon",
+        "-D_GNU_SOURCE",
+        "-DHW_VARIANTS_ENABLED",
+        "-DMULTI_VOICE_SESSION_ENABLED",
+        "-DPLATFORM_MSM8996",
+        "-DMAX_TARGET_SPECIFIC_CHANNEL_CNT=4",
+        "-DKPI_OPTIMIZE_ENABLED",
+        "-DINCALL_MUSIC_ENABLED",
+    ],
+
+    local_include_dirs: [
+        "msm8974",
+        "audio_extn",
+        "voice_extn",
+    ],
+
+    include_dirs: [
+        "external/expat/lib",
+        "external/tinyalsa/include",
+        "external/tinycompress/include",
+        "system/media/audio_effects/include",
+        "system/media/audio_route/include",
+    ],
+
+    header_libs: [
+        "libhardware_headers",
+        "qti_kernel_headers",
+    ],
+
+    shared_libs: [
+        "android.hardware.power-V1-ndk",
+        "android.hardware.power@1.2",
+        "libaudioroute",
+        "libaudioutils",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "libdl",
+        "libexpat",
+        "libhidlbase",
+        "liblog",
+        "libprocessgroup",
+        "libtinyalsa",
+        "libtinycompress",
+        "libutils",
+    ],
+}

@@ -9,5 +9,5 @@ LOCAL_MODULE_CLASS := ETC
 LOCAL_SRC_FILES := .vendor-root-placeholder
 LOCAL_MODULE_PATH := $(TARGET_OUT)
 LOCAL_MODULE_STEM := .fujisan_legacy_vendor_root
-LOCAL_POST_INSTALL_CMD := rm -rf $(TARGET_ROOT_OUT)/vendor $(TARGET_RECOVERY_ROOT_OUT)/vendor $(TARGET_OUT)/system; ln -s /system/vendor $(TARGET_ROOT_OUT)/vendor; mkdir -p $(TARGET_OUT)/bugreports/bugreports $(TARGET_OUT_VENDOR)/lib $(TARGET_OUT_VENDOR)/lib64; ln -sf /system/lib/libaudioroute.so $(TARGET_OUT_VENDOR)/lib/libaudioroute.so; ln -sf /system/lib64/libaudioroute.so $(TARGET_OUT_VENDOR)/lib64/libaudioroute.so
+LOCAL_POST_INSTALL_CMD := rm -rf $(TARGET_ROOT_OUT)/vendor $(TARGET_RECOVERY_ROOT_OUT)/vendor $(TARGET_OUT)/system; ln -s /system/vendor $(TARGET_ROOT_OUT)/vendor; mkdir -p $(TARGET_OUT)/bugreports/bugreports $(TARGET_OUT_VENDOR)/lib $(TARGET_OUT_VENDOR)/lib64
 include $(BUILD_PREBUILT)
