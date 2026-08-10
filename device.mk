@@ -64,6 +64,8 @@ PRODUCT_SYSTEM_PROPERTIES += \
 PRODUCT_PACKAGES += \
     fujisan_halld \
     FujisanPrimaryPanel \
+    android.hardware.vibrator-service.legacy \
+    vibrator.default \
     android.hardware.usb@1.0-service \
     NavigationBarModeGesturalOverlay
 
