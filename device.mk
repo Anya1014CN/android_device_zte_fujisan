@@ -82,8 +82,7 @@ PRODUCT_PACKAGES += \
     android.hardware.graphics.allocator@2.0-service \
     android.hardware.graphics.composer@2.1-service \
     android.hardware.graphics.mapper@2.0-impl \
-    android.hardware.memtrack@1.0-impl \
-    android.hardware.memtrack@1.0-service
+    vendor.qti.hardware.memtrack-service
 
 # LineageOS 23.2 no longer ships the MSM8996 CAF display project.  The
 # matching HWC/gralloc implementation is an OEM closed component and must be
@@ -95,7 +94,6 @@ PRODUCT_PACKAGES += \
     gralloc.msm8996 \
     hwcomposer.msm8996 \
     hwcomposer.fujisan \
-    memtrack.msm8996 \
     libdisplayconfig \
     liboverlay \
     libqdMetaData.system
