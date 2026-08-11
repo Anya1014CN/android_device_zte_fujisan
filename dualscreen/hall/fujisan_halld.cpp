@@ -461,7 +461,8 @@ static void set_touch_controller_suspended(const char* expected_name,
     closedir(inputs);
 }
 
-static void configure_touch_for_mode(bool zoom, bool primary_b) {
+static void configure_touch_for_mode(bool zoom, bool primary_b,
+                                     bool resume_visible_controllers) {
     static constexpr const char* kPrimaryTouch =
         "954faadc99bb5a7c1d0537b923e0490c90b47e98";
     static constexpr const char* kSecondaryTouch =
@@ -495,11 +496,21 @@ static void configure_touch_for_mode(bool zoom, bool primary_b) {
               zoom ? "zoom" : (primary_b ? "single-B primary" : "single-A"));
 
     /* The hidden panel is stopped by its vendor driver instead of assigning a
-     * fake display port.  This prevents input at its physical controller and
-     * leaves only the selected panel powered and dispatching while folded. */
-    set_touch_controller_suspended("zte-touchscreen", "suspend", primary_b);
-    set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
-                                   !zoom && !primary_b);
+     * fake display port.  A daemon restarted by SetPowerMode must not resume
+     * the visible controller: MDSS has not necessarily restored its rails at
+     * that point, and the driver's FB UNBLANK callback is the power-ready
+     * resume authority. */
+    if (primary_b)
+        set_touch_controller_suspended("zte-touchscreen", "suspend", true);
+    else if (resume_visible_controllers)
+        set_touch_controller_suspended("zte-touchscreen", "suspend", false);
+
+    if (!zoom && !primary_b)
+        set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
+                                       true);
+    else if (resume_visible_controllers)
+        set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
+                                       false);
 
     /* Always restore A's real mapping before it becomes active.  It also
      * clears a stale runtime association from a previous single-B session. */
@@ -691,7 +702,8 @@ int main() {
             (!touch_mode_initialized || strcmp(mode, touch_mode) != 0 ||
              static_cast<int>(primary_b) != last_touch_primary_b)) {
             const bool was_initialized = touch_mode_initialized;
-            configure_touch_for_mode(mode[0] == 'z', primary_b);
+            configure_touch_for_mode(mode[0] == 'z', primary_b,
+                                     touch_mode_initialized && power_on);
             /* Do not use `wm size` for posture changes.  It persists a
              * forced display size in Settings and makes the next folded boot
              * render BootAnimation as a 2160-wide desktop until this daemon
