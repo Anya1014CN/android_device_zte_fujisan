@@ -278,22 +278,18 @@ static void secondary_off() {
     write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
 }
 
+static void primary_on(int bl);
+
 static void secondary_on(int bl) {
     if (bl < 0)
         bl = 0;
     if (bl > 255)
         bl = 255;
-    char b[16];
-    snprintf(b, sizeof(b), "%d", bl);
-    /* Never touch fb1/blank here.  HWC owns scanout; this explicit B write
-     * only establishes the hinge-selected Display On state.  A's MDSS DCS
-     * path mirrors every subsequent brightness and sleep/wake step. */
+    /* Never touch fb1/blank here.  The primary LED callback now owns both
+     * physical backlights, including the B DCS lifecycle.  Replaying that
+     * callback avoids a late B-only 0 -> brightness transition after wake. */
     set_secondary_display_allowed(true);
-    /* A suppressed late write while folded can leave the LED class cached at
-     * this same value.  Force a real callback after reopening so B cannot
-     * remain in Display Off because the target brightness appears unchanged. */
-    write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", "0");
-    write_sysfs("/sys/class/leds/lcd-backlight-2/brightness", b);
+    primary_on(bl);
 }
 
 static void primary_off() {

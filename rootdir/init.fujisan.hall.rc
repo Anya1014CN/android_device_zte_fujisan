@@ -28,15 +28,10 @@ on boot
     chown system system /sys/class/leds/blue/blink
     chmod 0664 /sys/class/leds/blue/blink
 
-# fujisan_halld blocks on the m1120 input event in steady state.  These are
-# the non-hinge transitions which must force one immediate reconciliation.
+# fujisan_halld blocks on the m1120 input event in steady state.  Only boot
+# completion needs a reconciliation; mdss_fb owns both panels' backlight and
+# DCS transitions during display power changes.
 on property:sys.boot_completed=1
-    restart fujisan_halld
-
-on property:vendor.fujisan.display_power=0
-    restart fujisan_halld
-
-on property:vendor.fujisan.display_power=1
     restart fujisan_halld
 
 # The hall daemon publishes the physical posture on every hinge event.  Keep

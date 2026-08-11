@@ -123,7 +123,6 @@ constexpr int kZoomHeight = 1915;
  * its physical panel is five rows higher than A. */
 constexpr char kFb1Path[] = "/dev/graphics/fb1";
 constexpr char kFb0Path[] = "/dev/graphics/fb0";
-constexpr char kBl2Path[] = "/sys/class/leds/lcd-backlight-2/brightness";
 
 #ifndef MSMFB_DISPLAY_COMMIT
 #define MSMFB_IOCTL_MAGIC 'm'
@@ -444,15 +443,6 @@ static void SetDisplayPowerProp(bool on) {
 
 static Device* ToDev(hwc2_device_t* d) {
     return reinterpret_cast<Device*>(d);
-}
-
-static int WriteSysfs(const char* path, const char* value) {
-    int fd = open(path, O_WRONLY | O_CLOEXEC);
-    if (fd < 0)
-        return -errno;
-    ssize_t n = write(fd, value, strlen(value));
-    close(fd);
-    return n < 0 ? -errno : 0;
 }
 
 static int KickFb(int fd, struct fb_var_screeninfo* vinfo) {
@@ -3248,18 +3238,9 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
     if (display == kPrimaryDisplay) {
         const bool on = (mode == HWC2_POWER_MODE_ON);
         SetDisplayPowerProp(on);
-        /* Backlight is owned by halld.  Never FBIOBLANK fb1 from composer:
-         * idle secondary scanout can block the legacy ioctl for 30 seconds. */
-        if (!on) {
-            /* BootAnimation briefly parks the primary in OFF while it takes
-             * ownership of the surface.  In an unfolded boot B already has
-             * a valid zoom overlay and must remain lit; only honor a real
-             * post-boot screen-off transition here. */
-            char boot_completed[PROPERTY_VALUE_MAX] = {};
-            property_get("sys.boot_completed", boot_completed, "0");
-            if (boot_completed[0] == '1')
-                WriteSysfs(kBl2Path, "0");
-        }
+        /* mdss_fb owns the paired backlight and DCS lifecycle.  Do not
+         * inject a separate B=0 write here: it races the framework's fade
+         * and makes the secondary panel flash on wake. */
     }
     return ret;
 }
