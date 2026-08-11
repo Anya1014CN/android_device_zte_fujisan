@@ -58,7 +58,8 @@ PRODUCT_VENDOR_PROPERTIES += \
     ro.vendor.fujisan.enable_legacy_radio=0
 
 PRODUCT_SYSTEM_PROPERTIES += \
-    ro.hardware.lights=msm8996
+    ro.hardware.lights=msm8996 \
+    ro.bpf.kver_override=5.4.299
 
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
@@ -291,12 +292,6 @@ PRODUCT_PACKAGES += \
     android.hardware.health@2.1-service \
     android.hardware.health@2.1-impl
 
-# The 4.4 kernel cannot run Android 16's mainline eBPF program set. Keep netd
-# on the AOSP implementation and provide only its legacy eBPF ABI bridge.
-PRODUCT_PACKAGES += \
-    libnetd_fujisan_compat \
-    netd_bpf_compat
-
 # Match the AOSP charger deployment used by official LineageOS devices: install
 # the platform module in /system/bin and replace the legacy vendor service from
 # a vendor-context rc fragment.
@@ -313,8 +308,6 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/cgroups.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \
     system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
-    $(LOCAL_PATH)/rootdir/zz-fujisan-bpfloader.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/zz-fujisan-bpfloader.rc \
-    $(LOCAL_PATH)/rootdir/zz-fujisan-netd-compat.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/zz-fujisan-netd-compat.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
     $(LOCAL_PATH)/rootdir/zz-fujisan-hwc2-compat.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-hwc2-compat.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
