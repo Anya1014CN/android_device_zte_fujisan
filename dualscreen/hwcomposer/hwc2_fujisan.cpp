@@ -1144,16 +1144,19 @@ static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquir
         return false;
     }
 
-    /* In native dual-CTL mode the MDP release timeline advances from
-     * MDP_NOTIFY_FRAME_DONE, emitted only by the second pingpong completion.
-     * That is the client target's real A+B completion fence.  The generic
-     * retire fence instead follows fb0's master read-pointer vsync and can
-     * signal before the split CTL has consumed its crop. */
+    /* HWC2's present result is the display retire fence.  The atomic release
+     * fence remains an internal A+B completion fence used to drain this
+     * route, but must not be exposed as out_retire_fence: it advances only on
+     * the second command pingpong and throttles SurfaceFlinger to ~30 Hz. */
     const int merged_fence = commit.commit_v1.release_fence;
-    if (commit.commit_v1.retire_fence >= 0)
-        close(commit.commit_v1.retire_fence);
-    if (merged_fence < 0) {
-        ALOGE("wide atomic submit returned no merged A+B completion fence");
+    const int retire_fence = commit.commit_v1.retire_fence;
+    if (merged_fence < 0 || retire_fence < 0) {
+        ALOGE("wide atomic submit returned incomplete fences: release=%d retire=%d",
+              merged_fence, retire_fence);
+        if (merged_fence >= 0)
+            close(merged_fence);
+        if (retire_fence >= 0)
+            close(retire_fence);
         return false;
     }
     const int drain_fence = dup(merged_fence);
@@ -1168,16 +1171,17 @@ static bool SubmitWideClientTarget(Device* d, buffer_handle_t handle, int acquir
         d->wide_drain_fence = drain_fence;
         d->wide_route_active = true;
     }
+    close(merged_fence);
     if (out_retire_fence)
-        *out_retire_fence = merged_fence;
+        *out_retire_fence = retire_fence;
     else
-        close(merged_fence);
+        close(retire_fence);
 
     ++d->wide_submit_count;
     if (d->wide_submit_count <= 5 || (d->wide_submit_count % 120) == 0) {
         ALOGI("wide atomic submit #%u: %dx%d stride=%d format=%d acquire=%d merged=%d",
               d->wide_submit_count, width, height, stride_px, format, layer.buffer.fence,
-              merged_fence);
+              retire_fence);
     }
     return true;
 }
