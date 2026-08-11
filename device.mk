@@ -20,7 +20,8 @@ TARGET_SCREEN_WIDTH := 1080
 
 PRODUCT_SOONG_NAMESPACES += \
     $(LOCAL_PATH) \
-    vendor/zte/fujisan
+    vendor/zte/fujisan \
+    $(LOCAL_PATH)/bluetooth/libbt-vendor
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
@@ -53,6 +54,7 @@ PRODUCT_SYSTEM_EXT_PROPERTIES += \
 # old wc_transport property contract for the source-built libbt-vendor.
 PRODUCT_VENDOR_PROPERTIES += \
     vendor.qcom.bluetooth.soc=rome \
+    bluetooth.le.disable_apcf_extended_features=1 \
     vendor.gralloc.disable_ubwc=1 \
     vendor.gralloc.enable_fb_ubwc=0 \
     ro.vendor.fujisan.enable_legacy_radio=0

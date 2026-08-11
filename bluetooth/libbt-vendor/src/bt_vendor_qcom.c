@@ -332,6 +332,7 @@ void stop_hci_filter() {
            }
        }
 
+       property_set(BT_VND_FILTER_START, "false");
        ALOGV("%s: Exit ", __func__);
 }
 

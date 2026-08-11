@@ -27,6 +27,23 @@ on post-fs-data
     mkdir /data/vendor/ramdump/bluetooth 0770 bluetooth bluetooth
     start fujisan-btaddr
 
+# The source-built CAF transport uses vendor.wc_transport.* while the OEM
+# wcnss_filter service uses the pre-Treble wc_transport.* property contract.
+on property:vendor.wc_transport.start_hci=true
+    setprop wc_transport.start_hci true
+
+on property:vendor.wc_transport.start_hci=false
+    setprop wc_transport.start_hci false
+
+on property:wc_transport.hci_filter_status=1
+    setprop vendor.wc_transport.hci_filter_status 1
+
+on property:wc_transport.hci_filter_status=0
+    setprop vendor.wc_transport.hci_filter_status 0
+
+on property:wc_transport.hci_filter_status=-1
+    setprop vendor.wc_transport.hci_filter_status -1
+
 service fujisan-btaddr /system/bin/sh /system/bin/init.fujisan.btaddr.sh
     class core
     user root
