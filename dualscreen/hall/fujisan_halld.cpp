@@ -495,20 +495,16 @@ static void configure_touch_for_mode(bool zoom, bool primary_b,
         ALOGW("failed to associate B touch port with %s display",
               zoom ? "zoom" : (primary_b ? "single-B primary" : "single-A"));
 
-    /* The hidden panel is stopped by its vendor driver instead of assigning a
-     * fake display port.  A daemon restarted by SetPowerMode must not resume
-     * the visible controller: MDSS has not necessarily restored its rails at
-     * that point, and the driver's FB UNBLANK callback is the power-ready
-     * resume authority. */
+    /* Keep TD4322 powered across posture changes.  Folded mode already removes
+     * B's display association and enables separate inputs, while the panel is
+     * not physically power-cycled.  Suspending its controller here therefore
+     * leaves it asleep after the next unfold because no MDSS reset follows. */
     if (primary_b)
         set_touch_controller_suspended("zte-touchscreen", "suspend", true);
     else if (resume_visible_controllers)
         set_touch_controller_suspended("zte-touchscreen", "suspend", false);
 
-    if (!zoom && !primary_b)
-        set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
-                                       true);
-    else if (resume_visible_controllers)
+    if (zoom && resume_visible_controllers)
         set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
                                        false);
 
