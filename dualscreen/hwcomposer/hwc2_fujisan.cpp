@@ -1270,23 +1270,32 @@ static bool SubmitSingleClientTarget(Device* d, buffer_handle_t handle, int acqu
         return false;
     }
 
+    /* This is still a paired command-mode transaction even in single mode.
+     * The release fence advances after the second pingpong, so exposing it as
+     * HWC's retire fence makes SurfaceFlinger wait an extra vsync and caps
+     * the panel near 30 Hz.  Report the first-frame retire fence instead. */
     const int completion_fence = commit.commit_v1.release_fence;
-    if (commit.commit_v1.retire_fence >= 0)
-        close(commit.commit_v1.retire_fence);
-    if (completion_fence < 0) {
-        ALOGE("single atomic submit returned no completion fence");
+    const int retire_fence = commit.commit_v1.retire_fence;
+    if (completion_fence < 0 || retire_fence < 0) {
+        ALOGE("single atomic submit returned incomplete fences: release=%d retire=%d",
+              completion_fence, retire_fence);
+        if (completion_fence >= 0)
+            close(completion_fence);
+        if (retire_fence >= 0)
+            close(retire_fence);
         return false;
     }
+    close(completion_fence);
     if (out_retire_fence)
-        *out_retire_fence = completion_fence;
+        *out_retire_fence = retire_fence;
     else
-        close(completion_fence);
+        close(retire_fence);
 
     ++d->single_submit_count;
     if (d->single_submit_count <= 5 || (d->single_submit_count % 120) == 0) {
-        ALOGI("single atomic submit #%u: %dx%d stride=%d format=%d acquire=%d completion=%d",
+        ALOGI("single atomic submit #%u: %dx%d stride=%d format=%d acquire=%d retire=%d",
               d->single_submit_count, width, height, stride_px, format, layer.buffer.fence,
-              completion_fence);
+              retire_fence);
     }
     return true;
 }
