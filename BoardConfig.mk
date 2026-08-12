@@ -67,6 +67,9 @@ TARGET_KERNEL_CONFIG := lineageos_fujisan_defconfig
 # The legacy bootloader verifies an AOSP BootSignature DER trailer rather than
 # an AVB footer. Keep that device-specific post-processing outside AOSP.
 BOARD_CUSTOM_BOOTIMG_MK := $(DEVICE_PATH)/bootimg.mk
+# Target-files normally reconstructs boot.img from BOOT/.  Preserve the
+# post-processed BootSignature trailer by copying the installed boot image.
+BOARD_COPY_BOOT_IMAGE_TO_TARGET_FILES := true
 # The 4.4 msm8996 base builds a 32-bit compat vDSO with clang.
 TARGET_KERNEL_MAKE_ENV += CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 TARGET_KERNEL_MAKE_ENV += CLANG_TRIPLE_ARM32=arm-linux-androideabi-
