@@ -143,12 +143,6 @@ PRODUCT_PACKAGES += \
     libmmjpeg_interface \
     vendor.qti.hardware.camera.device@1.0
 
-# The legacy Qualcomm camera stack starts its module server separately.  The
-# OEM init fragment marks it disabled, so start it from the device-side camera
-# provider trigger after its runtime dependencies are available.
-PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/rootdir/init.fujisan.camera.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.camera.rc
-
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 # The OEM image provides the modem-facing location stack. Add only the
 # framework-facing GNSS HIDL bridge; libloc_core and libgps.utils stay OEM.
