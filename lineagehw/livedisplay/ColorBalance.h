@@ -6,27 +6,23 @@
 
 #pragma once
 
-#include <vendor/lineage/livedisplay/2.0/IColorBalance.h>
+#include <aidl/vendor/lineage/livedisplay/BnColorBalance.h>
 
+namespace aidl {
 namespace vendor {
 namespace lineage {
 namespace livedisplay {
-namespace V2_0 {
 namespace fujisan {
 
-using ::android::hardware::Return;
-
-class ColorBalance : public IColorBalance {
+class ColorBalance final : public BnColorBalance {
 public:
     static constexpr const char* kPanelHue = "/proc/panel_hue_0_set";
     static constexpr const char* kSecondaryPanelHue = "/proc/panel_hue_1_set";
     static constexpr int32_t kDefaultHue = 255;
 
-    static bool isSupported();
-
-    Return<void> getColorBalanceRange(getColorBalanceRange_cb _hidl_cb) override;
-    Return<int32_t> getColorBalance() override;
-    Return<bool> setColorBalance(int32_t value) override;
+    ndk::ScopedAStatus getColorBalanceRange(Range* _aidl_return) override;
+    ndk::ScopedAStatus getColorBalance(int32_t* _aidl_return) override;
+    ndk::ScopedAStatus setColorBalance(int32_t value) override;
 
 private:
     static int32_t hueToBalance(int32_t hue);
@@ -34,7 +30,7 @@ private:
 };
 
 }  // namespace fujisan
-}  // namespace V2_0
 }  // namespace livedisplay
 }  // namespace lineage
 }  // namespace vendor
+}  // namespace aidl

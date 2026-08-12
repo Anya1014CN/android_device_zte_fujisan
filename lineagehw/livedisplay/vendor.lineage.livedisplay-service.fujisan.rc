@@ -1,0 +1,4 @@
+service vendor.livedisplay-fujisan /vendor/bin/hw/vendor.lineage.livedisplay-service.fujisan
+    class hal
+    user system
+    group system

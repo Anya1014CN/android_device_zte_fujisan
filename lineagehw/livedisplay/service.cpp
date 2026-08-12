@@ -4,33 +4,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define LOG_TAG "vendor.lineage.livedisplay@2.0-service.fujisan"
+#define LOG_TAG "vendor.lineage.livedisplay-service.fujisan"
 
 #include "ColorBalance.h"
 
-#include <android-base/logging.h>
-#include <hidl/HidlTransportSupport.h>
+#include <cstdlib>
 
-using ::android::OK;
-using ::android::sp;
-using ::android::hardware::configureRpcThreadpool;
-using ::android::hardware::joinRpcThreadpool;
-using ::vendor::lineage::livedisplay::V2_0::fujisan::ColorBalance;
+#include <android-base/logging.h>
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
+
+using ::aidl::vendor::lineage::livedisplay::fujisan::ColorBalance;
 
 int main() {
-    configureRpcThreadpool(1, true);
+    ABinderProcess_setThreadPoolMaxThreadCount(0);
 
-    if (!ColorBalance::isSupported()) {
-        LOG(ERROR) << "Fujisan panel hue interface is unavailable";
-        return 1;
-    }
+    auto colorBalance = ndk::SharedRefBase::make<ColorBalance>();
+    const std::string instance = std::string(ColorBalance::descriptor) + "/default";
+    CHECK_EQ(AServiceManager_addService(colorBalance->asBinder().get(), instance.c_str()), STATUS_OK);
 
-    sp<ColorBalance> colorBalance = new ColorBalance();
-    if (colorBalance->registerAsService() != OK) {
-        LOG(ERROR) << "Could not register IColorBalance";
-        return 1;
-    }
-
-    joinRpcThreadpool();
-    return 0;
+    ABinderProcess_joinThreadPool();
+    return EXIT_FAILURE;
 }

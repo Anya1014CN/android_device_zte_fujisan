@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define LOG_TAG "vendor.lineage.livedisplay@2.0-impl-fujisan"
+#define LOG_TAG "ColorBalanceService"
 
 #include "ColorBalance.h"
 
@@ -27,28 +27,24 @@ constexpr int32_t kBalanceMax = 100;
 using ::android::base::ReadFileToString;
 using ::android::base::Trim;
 using ::android::base::WriteStringToFile;
-using ::android::hardware::Void;
-
+namespace aidl {
 namespace vendor {
 namespace lineage {
 namespace livedisplay {
-namespace V2_0 {
 namespace fujisan {
 
-bool ColorBalance::isSupported() {
-    return access(kPanelHue, R_OK | W_OK) == 0;
+ndk::ScopedAStatus ColorBalance::getColorBalanceRange(Range* _aidl_return) {
+    _aidl_return->max = kBalanceMax;
+    _aidl_return->min = kBalanceMin;
+    _aidl_return->step = 1;
+    return ndk::ScopedAStatus::ok();
 }
 
-Return<void> ColorBalance::getColorBalanceRange(getColorBalanceRange_cb _hidl_cb) {
-    _hidl_cb(Range{kBalanceMax, kBalanceMin, 1});
-    return Void();
-}
-
-Return<int32_t> ColorBalance::getColorBalance() {
+ndk::ScopedAStatus ColorBalance::getColorBalance(int32_t* _aidl_return) {
     std::string value;
     if (!ReadFileToString(kPanelHue, &value)) {
         LOG(ERROR) << "Failed to read " << kPanelHue;
-        return 0;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_SERVICE_SPECIFIC);
     }
 
     char* end = nullptr;
@@ -56,20 +52,21 @@ Return<int32_t> ColorBalance::getColorBalance() {
     const long hue = strtol(trimmed.c_str(), &end, 10);
     if (end == nullptr || *end != '\0') {
         LOG(ERROR) << "Invalid hue value: " << value;
-        return 0;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_SERVICE_SPECIFIC);
     }
 
-    return hueToBalance(static_cast<int32_t>(hue));
+    *_aidl_return = hueToBalance(static_cast<int32_t>(hue));
+    return ndk::ScopedAStatus::ok();
 }
 
-Return<bool> ColorBalance::setColorBalance(int32_t value) {
+ndk::ScopedAStatus ColorBalance::setColorBalance(int32_t value) {
     value = std::max(kBalanceMin, std::min(kBalanceMax, value));
     const int32_t hue = balanceToHue(value);
 
     const std::string encoded = std::to_string(hue);
     if (!WriteStringToFile(encoded, kPanelHue, true)) {
         LOG(ERROR) << "Failed to write " << hue << " to " << kPanelHue;
-        return false;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_SERVICE_SPECIFIC);
     }
 
     /* The second panel is absent while folded.  Its kernel endpoint retains
@@ -78,10 +75,10 @@ Return<bool> ColorBalance::setColorBalance(int32_t value) {
     if (access(kSecondaryPanelHue, W_OK) == 0 &&
             !WriteStringToFile(encoded, kSecondaryPanelHue, true)) {
         LOG(ERROR) << "Failed to write " << hue << " to " << kSecondaryPanelHue;
-        return false;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_SERVICE_SPECIFIC);
     }
 
-    return true;
+    return ndk::ScopedAStatus::ok();
 }
 
 int32_t ColorBalance::hueToBalance(int32_t hue) {
@@ -103,7 +100,7 @@ int32_t ColorBalance::balanceToHue(int32_t balance) {
 }
 
 }  // namespace fujisan
-}  // namespace V2_0
 }  // namespace livedisplay
 }  // namespace lineage
 }  // namespace vendor
+}  // namespace aidl

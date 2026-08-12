@@ -23,6 +23,11 @@ PRODUCT_SOONG_NAMESPACES += \
     vendor/zte/fujisan \
     $(LOCAL_PATH)/bluetooth/libbt-vendor
 
+# The panel exposes its native hue control through the standard LineageOS
+# AIDL LiveDisplay interface.
+PRODUCT_PACKAGES += \
+    vendor.lineage.livedisplay-service.fujisan
+
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
     audio.smartpa.channel=right \
