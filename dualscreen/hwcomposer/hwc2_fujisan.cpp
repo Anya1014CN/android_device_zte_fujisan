@@ -2121,7 +2121,12 @@ static void WrapperGetCapabilities(struct hwc2_device* device, uint32_t* out_cou
      * that pass changes every visible layer to CLIENT before SurfaceFlinger
      * renders the one 2160-wide target submitted below.  Advertising the
      * CAF capability lets the composer call Present directly after the first
-     * frame, bypassing that change and producing an unrendered target. */
+     * frame, bypassing that change and producing an unrendered target.
+     *
+     * The underlying SDM also advertises SKIP_CLIENT_COLOR_TRANSFORM, but
+     * rejects the corresponding setColorTransform request.  Do not expose
+     * that broken capability: SurfaceFlinger will then apply Night Display
+     * and other standard color transforms to the client target itself. */
     uint32_t real_count = 0;
     d->real->getCapabilities(d->real, &real_count, nullptr);
     std::vector<int32_t> real_caps(real_count);
@@ -2131,7 +2136,8 @@ static void WrapperGetCapabilities(struct hwc2_device* device, uint32_t* out_cou
     std::vector<int32_t> caps;
     caps.reserve(real_count);
     for (uint32_t i = 0; i < real_count; ++i) {
-        if (real_caps[i] != HWC2_CAPABILITY_SKIP_VALIDATE)
+        if (real_caps[i] != HWC2_CAPABILITY_SKIP_VALIDATE &&
+            real_caps[i] != HWC2_CAPABILITY_SKIP_CLIENT_COLOR_TRANSFORM)
             caps.push_back(real_caps[i]);
     }
     if (!out_count)
