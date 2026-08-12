@@ -78,6 +78,8 @@ PRODUCT_PACKAGES += \
     libbt-vendor \
     FujisanNetworkStackOverlay \
     android.hardware.usb@1.0-service \
+    android.hardware.sensors@1.0-impl \
+    android.hardware.sensors@1.0-service \
     NavigationBarModeGesturalOverlay
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
@@ -227,14 +229,6 @@ ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
     android.hardware.keymaster@4.0-service \
     libhidltransport
-
-# Fujisan exposes its Qualcomm sensor backends through the standard multi-HAL
-# configuration in vendor/etc/sensors/hals.conf.  Use the source-built AOSP
-# HIDL bridge; it loads those OEM backend modules without an Android 8 HIDL
-# frontend ABI dependency.
-PRODUCT_PACKAGES += \
-    android.hardware.sensors@1.0-impl \
-    android.hardware.sensors@1.0-service
 
 # Use the msm8996 CAF V4L2 OMX implementation with the standard AOSP OMX
 # service.  The kernel already exposes the Venus VIDC decoder/encoder nodes;
