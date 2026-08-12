@@ -307,10 +307,9 @@ static void primary_on(int bl) {
 }
 
 static void set_primary_b_backlight_route(bool enabled) {
-    /* mdss_dsi owns the actual Lights/DCS route.  This avoids a userspace
-     * brightness watcher: wide remains mirrored, while closed B receives the
-     * normal Android brightness endpoint without relighting A. */
-    write_sysfs("/sys/module/mdss_dsi/parameters/fujisan_primary_b", enabled ? "1" : "0");
+    /* mdss_fb owns the actual Lights/DCS route. */
+    write_sysfs("/sys/module/mdss_fb/parameters/fujisan_primary_b",
+                enabled ? "1" : "0");
 }
 
 static bool display_is_on() {
@@ -495,14 +494,23 @@ static void configure_touch_for_mode(bool zoom, bool primary_b,
      * B's display association and enables separate inputs, while the panel is
      * not physically power-cycled.  Suspending its controller here therefore
      * leaves it asleep after the next unfold because no MDSS reset follows. */
-    if (primary_b)
+    if (primary_b) {
         set_touch_controller_suspended("zte-touchscreen", "suspend", true);
-    else if (resume_visible_controllers)
-        set_touch_controller_suspended("zte-touchscreen", "suspend", false);
-
-    if (zoom && resume_visible_controllers)
+        if (resume_visible_controllers)
+            set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
+                                           false);
+    } else if (zoom) {
+        if (resume_visible_controllers) {
+            set_touch_controller_suspended("zte-touchscreen", "suspend", false);
+            set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
+                                           false);
+        }
+    } else {
+        if (resume_visible_controllers)
+            set_touch_controller_suspended("zte-touchscreen", "suspend", false);
         set_touch_controller_suspended("zte-touchscreen-2nd", "suspend_2nd",
-                                       false);
+                                       true);
+    }
 
     /* Always restore A's real mapping before it becomes active.  It also
      * clears a stale runtime association from a previous single-B session. */
