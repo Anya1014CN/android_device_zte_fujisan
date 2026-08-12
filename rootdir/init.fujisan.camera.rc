@@ -1,0 +1,5 @@
+# The OEM camera module daemon is required before the legacy provider probes
+# sensors.  Its original vendor rc intentionally leaves it disabled.
+on post-fs-data
+    mkdir /data/vendor/camera 0770 camera camera
+    start qcamerasvr
