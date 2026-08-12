@@ -80,6 +80,7 @@ PRODUCT_PACKAGES += \
     android.hardware.usb@1.0-service \
     android.hardware.sensors@1.0-impl \
     android.hardware.sensors@1.0-service \
+    libpower.vendor \
     NavigationBarModeGesturalOverlay
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
