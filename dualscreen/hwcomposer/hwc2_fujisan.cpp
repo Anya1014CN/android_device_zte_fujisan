@@ -1,8 +1,9 @@
 /*
  * Fujisan HWC2 wrapper (Composer 2.4)
- *  Closed (single): passthrough CAF hwcomposer.msm8996 on panel A or B (primary_panel).
- *  Open (zoom): one logical 2160x1915 INTERNAL, client target split to fb0|fb1.
- *  Secondary hotplug disabled — stock dual-LCD ZOOM path, not dual INTERNAL.
+ *  One logical INTERNAL display exposes three physical topologies:
+ *    A: 1080x1920 panel A, B: 1080x1920 panel B, C: 2160x1915 A+B.
+ *  Every frame remains client-composed.  The Fujisan MDSS atomic extension
+ *  owns pipe selection, the five-row B offset, and paired fence lifetime.
  */
 #define LOG_TAG "HwcFujisan"
 
@@ -115,8 +116,9 @@ namespace {
 constexpr hwc2_display_t kPrimaryDisplay = 0;
 constexpr hwc2_display_t kSecondaryDisplay = 1;
 constexpr hwc2_config_t kSecondaryConfig = 0;
-constexpr hwc2_config_t kSingleConfig = 0;
-constexpr hwc2_config_t kZoomConfig = 1;
+constexpr hwc2_config_t kPanelAConfig = 0;
+constexpr hwc2_config_t kPanelBConfig = 1;
+constexpr hwc2_config_t kWideConfig = 2;
 constexpr int kZoomWidth = 2160;
 constexpr int kZoomHeight = 1915;
 /* A leaves its bottom five rows unscanned; B starts five rows down because
@@ -317,7 +319,7 @@ struct Device {
     /* ZOOM (open) virtual large screen on primary display id 0. */
     std::mutex zoom_lock;
     bool zoom_active = false;
-    hwc2_config_t active_config = kSingleConfig;
+    hwc2_config_t active_config = kPanelAConfig;
     buffer_handle_t client_target = nullptr;
     int32_t client_acquire_fence = -1;
     buffer_handle_t zoom_client_target = nullptr; /* alias while zoom */
@@ -398,6 +400,19 @@ static bool WantSingleBPanel() {
     char primary[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.active_primary", primary, "a");
     return primary[0] == 'b';
+}
+
+/* Hall policy is authoritative for which physical topology is safe.  HWC2
+ * reports that state as the active config; SurfaceFlinger subsequently asks
+ * for a client target at the matching geometry. */
+static hwc2_config_t TopologyConfig() {
+    if (WantZoomMode())
+        return kWideConfig;
+    return WantSingleBPanel() ? kPanelBConfig : kPanelAConfig;
+}
+
+static bool IsSingleConfig(hwc2_config_t config) {
+    return config == kPanelAConfig || config == kPanelBConfig;
 }
 
 static bool SecondaryPanelAvailable() {
@@ -2298,7 +2313,7 @@ static int32_t GetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
          * can retain its former zoom config as a pending mode request across
          * an in-place hotplug, so never let that stale request keep a folded
          * device at 2160px. */
-        d->active_config = WantZoomMode() ? kZoomConfig : kSingleConfig;
+        d->active_config = TopologyConfig();
         *out = d->active_config;
         return HWC2_ERROR_NONE;
     }
@@ -2427,13 +2442,13 @@ static int32_t GetDisplayAttribute(hwc2_device_t* device, hwc2_display_t display
         }
     }
     if (display == kPrimaryDisplay &&
-        (config == kSingleConfig || config == kZoomConfig)) {
+        (IsSingleConfig(config) || config == kWideConfig)) {
         switch (attribute) {
             case HWC2_ATTRIBUTE_WIDTH:
-                *out = config == kZoomConfig ? kZoomWidth : FUJISAN_SEC_WIDTH;
+                *out = config == kWideConfig ? kZoomWidth : FUJISAN_SEC_WIDTH;
                 return HWC2_ERROR_NONE;
             case HWC2_ATTRIBUTE_HEIGHT:
-                *out = config == kZoomConfig ? kZoomHeight : FUJISAN_SEC_HEIGHT;
+                *out = config == kWideConfig ? kZoomHeight : FUJISAN_SEC_HEIGHT;
                 return HWC2_ERROR_NONE;
             case HWC2_ATTRIBUTE_VSYNC_PERIOD:
                 *out = FUJISAN_SEC_VSYNC_NS;
@@ -2473,15 +2488,24 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
         return HWC2_ERROR_NONE;
     }
     if (display == kPrimaryDisplay) {
-        /* SurfaceFlinger retains its former requested config across an
-         * in-place hinge hotplug.  Expose only the usable topology here, so a
-         * folded device cannot remain pinned to the old 2160px request. */
-        const hwc2_config_t active = WantZoomMode() ? kZoomConfig : kSingleConfig;
+        /* A/B/C are modes of one physical display, but the hinge determines
+         * which topology is electrically usable.  Android has no upstream
+         * posture-to-mode policy: advertising all three makes SurfaceFlinger
+         * correctly retain its former 1080 mode after an unfold and hand C an
+         * invalid 1080 client target.  Re-enumerating just the available
+         * HWC config on the normal connected callback is the standard dynamic
+         * panel path and lets SurfaceFlinger recreate its render surface at
+         * the active topology's dimensions. */
+        const hwc2_config_t active = TopologyConfig();
         if (!out_configs) {
             *out_count = 1;
             return HWC2_ERROR_NONE;
         }
-        if (*out_count >= 1) out_configs[0] = active;
+        if (*out_count < 1) {
+            *out_count = 1;
+            return HWC2_ERROR_NONE;
+        }
+        out_configs[0] = active;
         *out_count = 1;
         return HWC2_ERROR_NONE;
     }
@@ -2593,7 +2617,7 @@ static int32_t SetActiveConfigWithConstraints(
         return HWC2_ERROR_BAD_PARAMETER;
 
     if (display == kPrimaryDisplay) {
-        if (config != kSingleConfig && config != kZoomConfig)
+        if (!IsSingleConfig(config) && config != kWideConfig)
             return HWC2_ERROR_BAD_CONFIG;
 
         /* Android 12 uses this HWC 2.4 entry point rather than the legacy
@@ -2611,15 +2635,15 @@ static int32_t SetActiveConfigWithConstraints(
              * before the hinge mode refresh.  The hall daemon is authoritative
              * for this virtual display's geometry. */
             d->zoom_active = zoom;
-            d->active_config = zoom ? kZoomConfig : kSingleConfig;
+            d->active_config = TopologyConfig();
         }
 
         int32_t err = HWC2_ERROR_UNSUPPORTED;
         if (d->fns.setActiveConfigWithConstraints) {
-            err = d->fns.setActiveConfigWithConstraints(d->real, display, kSingleConfig,
+            err = d->fns.setActiveConfigWithConstraints(d->real, display, kPanelAConfig,
                                                         constraints, out_timeline);
         } else if (d->fns.setActiveConfig) {
-            err = d->fns.setActiveConfig(d->real, display, kSingleConfig);
+            err = d->fns.setActiveConfig(d->real, display, kPanelAConfig);
         }
         if (err != HWC2_ERROR_NONE)
             return err;
@@ -2637,8 +2661,9 @@ static int32_t SetActiveConfigWithConstraints(
             out_timeline->refreshRequired = false;
             out_timeline->refreshTimeNanos = 0;
         }
-        ALOGI("SetActiveConfigWithConstraints primary request=%llu -> %s (real=0)",
-              static_cast<unsigned long long>(config), zoom ? "ZOOM 2160" : "SINGLE 1080");
+        ALOGI("SetActiveConfigWithConstraints primary request=%llu active=%llu (real=0)",
+              static_cast<unsigned long long>(config),
+              static_cast<unsigned long long>(TopologyConfig()));
         return HWC2_ERROR_NONE;
     }
 
@@ -2732,7 +2757,7 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
             d->zoom_active = zoom;
-            d->active_config = zoom ? kZoomConfig : kSingleConfig;
+            d->active_config = TopologyConfig();
             target = d->client_target;
             fence = d->client_acquire_fence;
             d->client_acquire_fence = -1;
@@ -2881,16 +2906,18 @@ static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_BAD_DISPLAY;
     if (display == kPrimaryDisplay) {
-        if (config != kSingleConfig && config != kZoomConfig)
+        if (!IsSingleConfig(config) && config != kWideConfig)
             return HWC2_ERROR_BAD_CONFIG;
         const bool zoom = WantZoomMode();
         if (!zoom && !DrainWideRoute(d, "SetActiveConfig"))
             return HWC2_ERROR_NO_RESOURCES;
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         d->zoom_active = zoom;
-        d->active_config = d->zoom_active ? kZoomConfig : kSingleConfig;
-        ALOGI("SetActiveConfig primary -> %s", d->zoom_active ? "ZOOM 2160" : "SINGLE 1080");
-        if (config == kSingleConfig && d->fns.setActiveConfig)
+        d->active_config = TopologyConfig();
+        ALOGI("SetActiveConfig primary request=%llu active=%llu",
+              static_cast<unsigned long long>(config),
+              static_cast<unsigned long long>(d->active_config));
+        if (IsSingleConfig(config) && d->fns.setActiveConfig)
             return d->fns.setActiveConfig(d->real, display, 0);
         /* Zoom config is wrapper-only; keep real HWC on config 0. */
         if (d->fns.setActiveConfig)
@@ -2927,7 +2954,7 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
             d->zoom_client_target = target;
             d->zoom_acquire_fence = -1; /* ownership kept in client_acquire_fence */
             d->zoom_active = zoom;
-            d->active_config = zoom ? kZoomConfig : kSingleConfig;
+            d->active_config = TopologyConfig();
         }
         if (zoom) {
             /* C owns this target end-to-end.  Do not submit the same buffer
