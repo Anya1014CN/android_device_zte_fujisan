@@ -347,6 +347,7 @@ struct Device {
     bool dual_internal_active = false;
 
     std::map<hwc2_layer_t, ZoomLayer> zoom_layers;
+    hwc2_layer_t next_primary_layer = 1;
     bool zoom_layers_validated = false;
     bool zoom_layer_path_active = false;
     bool zoom_force_client = false;
@@ -2238,14 +2239,18 @@ static int32_t CreateLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_l
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return SecCreateLayer(d, out);
-    const int32_t ret = d->fns.createLayer ? d->fns.createLayer(d->real, display, out)
-                                            : HWC2_ERROR_UNSUPPORTED;
-    if (ret == HWC2_ERROR_NONE && display == kPrimaryDisplay && out) {
+    if (display == kPrimaryDisplay) {
+        if (!out)
+            return HWC2_ERROR_BAD_PARAMETER;
         std::lock_guard<std::mutex> zl(d->zoom_lock);
-        d->zoom_layers[*out] = ZoomLayer{};
+        const hwc2_layer_t layer = d->next_primary_layer++;
+        d->zoom_layers[layer] = ZoomLayer{};
         d->zoom_layers_validated = false;
+        *out = layer;
+        return HWC2_ERROR_NONE;
     }
-    return ret;
+    return d->fns.createLayer ? d->fns.createLayer(d->real, display, out)
+                               : HWC2_ERROR_UNSUPPORTED;
 }
 
 static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer) {
@@ -2255,14 +2260,13 @@ static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
-        if (it != d->zoom_layers.end()) {
-            if (it->second.acquire_fence >= 0)
-                close(it->second.acquire_fence);
-            ResetZoomOverlay(d->fb0_fd, &it->second.a);
-            ResetZoomOverlay(d->fb_fd, &it->second.b);
-            d->zoom_layers.erase(it);
-            d->zoom_layers_validated = false;
-        }
+        if (it == d->zoom_layers.end())
+            return HWC2_ERROR_BAD_LAYER;
+        if (it->second.acquire_fence >= 0)
+            close(it->second.acquire_fence);
+        d->zoom_layers.erase(it);
+        d->zoom_layers_validated = false;
+        return HWC2_ERROR_NONE;
     }
     return d->fns.destroyLayer ? d->fns.destroyLayer(d->real, display, layer)
                                : HWC2_ERROR_UNSUPPORTED;
@@ -3003,8 +3007,7 @@ static int32_t SetLayerBlendMode(hwc2_device_t* device, hwc2_display_t display, 
             it->second.blend = mode;
             d->zoom_layers_validated = false;
         }
-        if (WantZoomMode())
-            return it == d->zoom_layers.end() ? HWC2_ERROR_BAD_LAYER : HWC2_ERROR_NONE;
+        return it == d->zoom_layers.end() ? HWC2_ERROR_BAD_LAYER : HWC2_ERROR_NONE;
     }
     return d->fns.setLayerBlendMode ? d->fns.setLayerBlendMode(d->real, display, layer, mode)
                                    : HWC2_ERROR_UNSUPPORTED;
@@ -3054,8 +3057,10 @@ static int32_t SetLayerColor(hwc2_device_t* device, hwc2_display_t display, hwc2
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerColor ? d->fns.setLayerColor(d->real, display, layer, color)
-                               : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay ? HWC2_ERROR_NONE
+                                      : (d->fns.setLayerColor
+                                             ? d->fns.setLayerColor(d->real, display, layer, color)
+                                             : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerCompositionType(hwc2_device_t* device, hwc2_display_t display,
@@ -3078,9 +3083,11 @@ static int32_t SetLayerCompositionType(hwc2_device_t* device, hwc2_display_t dis
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerCompositionType
-               ? d->fns.setLayerCompositionType(d->real, display, layer, type)
-               : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerCompositionType
+                      ? d->fns.setLayerCompositionType(d->real, display, layer, type)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerDataspace(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
@@ -3096,8 +3103,11 @@ static int32_t SetLayerDataspace(hwc2_device_t* device, hwc2_display_t display, 
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerDataspace ? d->fns.setLayerDataspace(d->real, display, layer, dataspace)
-                                   : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerDataspace
+                      ? d->fns.setLayerDataspace(d->real, display, layer, dataspace)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerDisplayFrame(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
@@ -3113,9 +3123,11 @@ static int32_t SetLayerDisplayFrame(hwc2_device_t* device, hwc2_display_t displa
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerDisplayFrame
-               ? d->fns.setLayerDisplayFrame(d->real, display, layer, frame)
-               : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerDisplayFrame
+                      ? d->fns.setLayerDisplayFrame(d->real, display, layer, frame)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerPlaneAlpha(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
@@ -3131,8 +3143,11 @@ static int32_t SetLayerPlaneAlpha(hwc2_device_t* device, hwc2_display_t display,
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerPlaneAlpha ? d->fns.setLayerPlaneAlpha(d->real, display, layer, alpha)
-                                    : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerPlaneAlpha
+                      ? d->fns.setLayerPlaneAlpha(d->real, display, layer, alpha)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerSidebandStream(hwc2_device_t* device, hwc2_display_t display,
@@ -3149,9 +3164,11 @@ static int32_t SetLayerSidebandStream(hwc2_device_t* device, hwc2_display_t disp
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerSidebandStream
-               ? d->fns.setLayerSidebandStream(d->real, display, layer, stream)
-               : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerSidebandStream
+                      ? d->fns.setLayerSidebandStream(d->real, display, layer, stream)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerSourceCrop(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
@@ -3167,8 +3184,11 @@ static int32_t SetLayerSourceCrop(hwc2_device_t* device, hwc2_display_t display,
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerSourceCrop ? d->fns.setLayerSourceCrop(d->real, display, layer, crop)
-                                    : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerSourceCrop
+                      ? d->fns.setLayerSourceCrop(d->real, display, layer, crop)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerSurfaceDamage(hwc2_device_t* device, hwc2_display_t display,
@@ -3176,9 +3196,11 @@ static int32_t SetLayerSurfaceDamage(hwc2_device_t* device, hwc2_display_t displ
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fns.setLayerSurfaceDamage
-               ? d->fns.setLayerSurfaceDamage(d->real, display, layer, damage)
-               : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerSurfaceDamage
+                      ? d->fns.setLayerSurfaceDamage(d->real, display, layer, damage)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerTransform(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
@@ -3194,8 +3216,11 @@ static int32_t SetLayerTransform(hwc2_device_t* device, hwc2_display_t display, 
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerTransform ? d->fns.setLayerTransform(d->real, display, layer, transform)
-                                   : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerTransform
+                      ? d->fns.setLayerTransform(d->real, display, layer, transform)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerVisibleRegion(hwc2_device_t* device, hwc2_display_t display,
@@ -3203,9 +3228,11 @@ static int32_t SetLayerVisibleRegion(hwc2_device_t* device, hwc2_display_t displ
     auto* d = ToDev(device);
     if (display == kSecondaryDisplay)
         return HWC2_ERROR_NONE;
-    return d->fns.setLayerVisibleRegion
-               ? d->fns.setLayerVisibleRegion(d->real, display, layer, visible)
-               : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerVisibleRegion
+                      ? d->fns.setLayerVisibleRegion(d->real, display, layer, visible)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetLayerZOrder(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
@@ -3221,8 +3248,11 @@ static int32_t SetLayerZOrder(hwc2_device_t* device, hwc2_display_t display, hwc
             d->zoom_layers_validated = false;
         }
     }
-    return d->fns.setLayerZOrder ? d->fns.setLayerZOrder(d->real, display, layer, z)
-                                : HWC2_ERROR_UNSUPPORTED;
+    return display == kPrimaryDisplay
+               ? HWC2_ERROR_NONE
+               : (d->fns.setLayerZOrder
+                      ? d->fns.setLayerZOrder(d->real, display, layer, z)
+                      : HWC2_ERROR_UNSUPPORTED);
 }
 
 static int32_t SetOutputBuffer(hwc2_device_t* device, hwc2_display_t display, buffer_handle_t buffer,
