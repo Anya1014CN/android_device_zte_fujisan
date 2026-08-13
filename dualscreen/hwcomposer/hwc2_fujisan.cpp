@@ -103,8 +103,6 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 namespace {
 
 constexpr hwc2_display_t kPrimaryDisplay = 0;
-constexpr hwc2_display_t kSecondaryDisplay = 1;
-constexpr hwc2_config_t kSecondaryConfig = 0;
 constexpr hwc2_config_t kPanelAConfig = 0;
 constexpr hwc2_config_t kPanelBConfig = 1;
 constexpr hwc2_config_t kWideConfig = 2;
@@ -112,24 +110,7 @@ constexpr int kZoomWidth = 2160;
 constexpr int kZoomHeight = 1915;
 /* A leaves its bottom five rows unscanned; B starts five rows down because
  * its physical panel is five rows higher than A. */
-constexpr char kFb1Path[] = "/dev/graphics/fb1";
 constexpr char kFb0Path[] = "/dev/graphics/fb0";
-
-#ifndef MSMFB_DISPLAY_COMMIT
-#define MSMFB_IOCTL_MAGIC 'm'
-/* ioctl numbers include the full argument size; void* is not interchangeable
- * with mdp_display_commit here. */
-#define MSMFB_DISPLAY_COMMIT _IOW(MSMFB_IOCTL_MAGIC, 164, struct MdpDisplayCommit)
-#endif
-
-struct MdpDisplayCommit {
-    uint32_t flags;
-    uint32_t wait_for_finish;
-    struct fb_var_screeninfo var;
-    struct {
-        int32_t x, y, w, h;
-    } l_roi, r_roi;
-};
 
 struct RealFns {
     HWC2_PFN_ACCEPT_DISPLAY_CHANGES acceptDisplayChanges = nullptr;
@@ -183,61 +164,9 @@ struct RealFns {
     HWC2_PFN_SET_ACTIVE_CONFIG_WITH_CONSTRAINTS setActiveConfigWithConstraints = nullptr;
 };
 
-struct SecLayer {
-    /* SurfaceFlinger initially treats a new output layer as DEVICE.  HWC2
-     * does not send an explicit SetLayerCompositionType until that state
-     * changes, so starting this at CLIENT makes the first wide validation
-     * falsely report zero changes and leaves the client target unrendered. */
-    int32_t requested = HWC2_COMPOSITION_DEVICE;
-    int32_t validated = HWC2_COMPOSITION_CLIENT;
-    bool changed = false;
-};
-
-struct SecondaryState {
-    std::mutex lock;
-    std::map<hwc2_layer_t, SecLayer> layers;
-    hwc2_layer_t next_layer = 1000;
-    bool validated = false;
-    bool power_on = true;
-    bool vsync_on = false;
-    bool hotplugged = false;
-    buffer_handle_t client_target = nullptr;
-    int32_t client_acquire_fence = -1;
-};
-
-/*
- * Zoom is one logical display, but Fujisan has two independent 1080-wide
- * MDSS targets.  Keep the original HWC2 layer state here so the wrapper can
- * submit the visible part of a normal layer to each target directly instead
- * of asking SurfaceFlinger to first render a 2160-wide client target.
- *
- * This deliberately supports only the common, zero-transform RGB path.  A
- * layer that cannot be represented safely is left to the established client
- * target route; correctness is more important than avoiding one GPU frame.
- */
-struct ZoomOverlay {
-    uint32_t id = MSMFB_NEW_REQUEST;
-    int src_w = 0;
-    int src_h = 0;
-    int format = 0;
-    int flags = 0;
-    int src_x = 0;
-    int src_y = 0;
-    int src_crop_w = 0;
-    int src_crop_h = 0;
-    int dst_x = 0;
-    int dst_y = 0;
-    int dst_w = 0;
-    int dst_h = 0;
-    uint32_t z = 0;
-    uint32_t alpha = MDP_ALPHA_NOP;
-    uint32_t blend = BLEND_OP_OPAQUE;
-};
-
 struct ZoomLayer {
-    /* See SecLayer: DEVICE is the HWC2 initial request.  Wide validation
-     * must actively return CLIENT for every layer before C consumes the
-     * client target. */
+    /* HWC2 starts a new layer as DEVICE.  Validation must explicitly return
+     * CLIENT before SurfaceFlinger renders the sole primary client target. */
     int32_t requested = HWC2_COMPOSITION_DEVICE;
     int32_t validated = HWC2_COMPOSITION_CLIENT;
     bool changed = false;
@@ -255,8 +184,6 @@ struct ZoomLayer {
     const native_handle_t* sideband = nullptr;
     bool has_sideband = false;
     bool device_candidate = false;
-    ZoomOverlay a{};
-    ZoomOverlay b{};
 };
 
 struct Device {
@@ -264,7 +191,6 @@ struct Device {
     hwc2_device_t* real = nullptr;
     void* real_so = nullptr;
     RealFns fns{};
-    SecondaryState sec{};
 
     hwc2_callback_data_t hotplug_data = nullptr;
     HWC2_PFN_HOTPLUG hotplug_fn = nullptr;
@@ -276,41 +202,18 @@ struct Device {
     HWC2_PFN_REFRESH refresh_fn = nullptr;
 
     std::mutex cb_lock;
-    pthread_t vsync_thread{};
-    std::atomic<bool> vsync_thread_run{false};
-    std::atomic<bool> secondary_attached{false};
-    std::atomic<bool> secondary_topology_pending{false};
-    std::atomic<bool> secondary_overlay_reset_pending{false};
-    std::atomic<bool> primary_refresh_after_topology{false};
     std::atomic<bool> primary_reprobe_pending{false};
     pthread_t display_mode_thread{};
     std::atomic<bool> display_mode_thread_run{false};
     pthread_t primary_panel_thread{};
     std::atomic<bool> primary_panel_thread_run{false};
 
-    int fb_fd = -1;
-    void* fb_map = MAP_FAILED;
-    size_t fb_map_size = 0;
-    struct fb_var_screeninfo vinfo {};
-    struct fb_fix_screeninfo finfo {};
-    uint32_t sec_overlay_id = MSMFB_NEW_REQUEST;
-    /* The legacy MDP overlay stores its source geometry and pixel format at
-     * OVERLAY_SET time.  SurfaceFlinger may first submit a 1080-wide target
-     * while changing to zoom, then replace it with the 2160-wide target. */
-    uint32_t sec_overlay_src_width = 0;
-    uint32_t sec_overlay_src_height = 0;
-    uint32_t sec_overlay_src_format = 0;
-    int sec_overlay_crop_x = -1;
-    uint32_t sec_overlay_crop_width = 0;
     /* ZOOM (open) virtual large screen on primary display id 0. */
     std::mutex zoom_lock;
     bool zoom_active = false;
     hwc2_config_t active_config = kPanelAConfig;
     buffer_handle_t client_target = nullptr;
     int32_t client_acquire_fence = -1;
-    buffer_handle_t zoom_client_target = nullptr; /* alias while zoom */
-    int32_t zoom_acquire_fence = -1;
-    bool disable_secondary = true; /* dual INTERNAL off for hinge/zoom path */
     /* Wide is submitted through the standard atomic ABI on fb0.  Do not use
      * the legacy fb1 overlay route: the Fujisan kernel expands this one C
      * target into both physical CTLs. */
@@ -324,13 +227,10 @@ struct Device {
     uint32_t single_submit_count = 0;
     char last_mode[16] = "single";
     bool mode_seen = false;
-    bool topology_seen = false;
-    bool dual_internal_active = false;
 
     std::map<hwc2_layer_t, ZoomLayer> zoom_layers;
     hwc2_layer_t next_primary_layer = 1;
     bool zoom_layers_validated = false;
-    bool zoom_layer_path_active = false;
     bool zoom_force_client = false;
 
     /* Bring-up telemetry only.  The client target's allocation geometry is
@@ -343,24 +243,9 @@ struct Device {
     int64_t zoom_present_window_ns = 0;
     uint32_t zoom_present_count = 0;
 
-    /* Physical B power is owned by fujisan_halld.  These track its hinge
-     * availability so the independent logical display gets one redraw only
-     * after the panel has settled following an open. */
-    bool secondary_panel_available = false;
-    bool secondary_panel_refresh_pending = false;
-    int64_t secondary_panel_available_since_ns = 0;
 };
 
-static bool DualInternalEnabled() {
-    /* The product supports only the virtual A+B topology.  Ignore old
-     * persisted dual-mode properties so an OTA from an earlier build cannot
-     * resurrect the retired independent INTERNAL display. */
-    return false;
-}
-
 static bool WantZoomMode() {
-    if (DualInternalEnabled())
-        return false;
     /* BootAnimation is drawn before Android owns a stable 2160-wide client
      * target.  Force the physical primary configuration until halld is
      * restarted by init at sys.boot_completed=1; this also protects against
@@ -395,21 +280,6 @@ static bool IsSingleConfig(hwc2_config_t config) {
     return config == kPanelAConfig || config == kPanelBConfig;
 }
 
-static bool SecondaryPanelAvailable() {
-    if (!DualInternalEnabled())
-        return false;
-
-    char force_b[PROPERTY_VALUE_MAX] = {};
-    property_get("persist.vendor.fujisan.force_b_on", force_b, "0");
-    if (force_b[0] == '1')
-        return true;
-
-    char hall[PROPERTY_VALUE_MAX] = {};
-    property_get("vendor.fujisan.hall_status", hall, "1");
-    /* A(1) is folded; B(2) is mid-open and C(3) is fully open. */
-    return hall[0] == '2' || hall[0] == '3';
-}
-
 static int64_t MonotonicNs() {
     struct timespec ts {};
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -438,78 +308,6 @@ static void SetDisplayPowerProp(bool on) {
 
 static Device* ToDev(hwc2_device_t* d) {
     return reinterpret_cast<Device*>(d);
-}
-
-static bool OpenFb1(Device* d) {
-    if (d->fb_fd >= 0)
-        return true;
-    d->fb_fd = open(kFb1Path, O_RDWR | O_CLOEXEC);
-    if (d->fb_fd < 0) {
-        ALOGE("open %s failed: %s", kFb1Path, strerror(errno));
-        return false;
-    }
-    if (ioctl(d->fb_fd, FBIOGET_VSCREENINFO, &d->vinfo) < 0 ||
-        ioctl(d->fb_fd, FBIOGET_FSCREENINFO, &d->finfo) < 0) {
-        ALOGE("fb1 get screeninfo failed: %s", strerror(errno));
-        close(d->fb_fd);
-        d->fb_fd = -1;
-        return false;
-    }
-    if (d->vinfo.xres == 0)
-        d->vinfo.xres = FUJISAN_SEC_WIDTH;
-    if (d->vinfo.yres == 0)
-        d->vinfo.yres = FUJISAN_SEC_HEIGHT;
-    if (d->vinfo.bits_per_pixel == 0)
-        d->vinfo.bits_per_pixel = 32;
-    if (d->vinfo.xres_virtual < d->vinfo.xres)
-        d->vinfo.xres_virtual = d->vinfo.xres;
-    if (d->vinfo.yres_virtual < d->vinfo.yres * 2)
-        d->vinfo.yres_virtual = d->vinfo.yres * 2;
-    d->vinfo.xoffset = 0;
-    d->vinfo.yoffset = 0;
-    d->vinfo.activate = FB_ACTIVATE_NOW;
-    ioctl(d->fb_fd, FBIOPUT_VSCREENINFO, &d->vinfo);
-    ioctl(d->fb_fd, FBIOGET_FSCREENINFO, &d->finfo);
-    ioctl(d->fb_fd, FBIOGET_VSCREENINFO, &d->vinfo);
-
-    d->fb_map_size = d->finfo.smem_len;
-    if (d->fb_map_size == 0) {
-        d->fb_map_size = (size_t)d->vinfo.xres_virtual * d->vinfo.yres_virtual *
-                         (d->vinfo.bits_per_pixel / 8);
-    }
-    d->fb_map = mmap(nullptr, d->fb_map_size, PROT_READ | PROT_WRITE, MAP_SHARED, d->fb_fd, 0);
-    if (d->fb_map == MAP_FAILED) {
-        ALOGE("fb1 mmap failed: %s", strerror(errno));
-        close(d->fb_fd);
-        d->fb_fd = -1;
-        return false;
-    }
-    /* Map only — do not force unblank/backlight (halld owns B power in single mode). */
-    ALOGI("fb1 mapped %ux%u bpp=%u line=%u smem=%zu", d->vinfo.xres, d->vinfo.yres,
-          d->vinfo.bits_per_pixel, d->finfo.line_length, d->fb_map_size);
-    return true;
-}
-
-static void CloseFb1(Device* d) {
-    if (d->fb_fd >= 0 && d->sec_overlay_id != MSMFB_NEW_REQUEST) {
-        uint32_t id = d->sec_overlay_id;
-        (void)ioctl(d->fb_fd, MSMFB_OVERLAY_UNSET, &id);
-        d->sec_overlay_id = MSMFB_NEW_REQUEST;
-    }
-    d->sec_overlay_src_width = 0;
-    d->sec_overlay_src_height = 0;
-    d->sec_overlay_src_format = 0;
-    d->sec_overlay_crop_x = -1;
-    d->sec_overlay_crop_width = 0;
-    if (d->fb_map != MAP_FAILED) {
-        munmap(d->fb_map, d->fb_map_size);
-        d->fb_map = MAP_FAILED;
-        d->fb_map_size = 0;
-    }
-    if (d->fb_fd >= 0) {
-        close(d->fb_fd);
-        d->fb_fd = -1;
-    }
 }
 
 static bool OpenWideFramebuffer(Device* d) {
@@ -611,148 +409,7 @@ static int32_t WirePrimaryVsync(Device* d) {
                                    reinterpret_cast<hwc2_function_pointer_t>(PrimaryVsyncTrampoline));
 }
 
-static void* VsyncThreadMain(void* arg) {
-    auto* d = static_cast<Device*>(arg);
-    prctl(PR_SET_NAME, "fujisan-sec-vsync", 0, 0, 0);
-    while (d->vsync_thread_run.load()) {
-        bool fire = false;
-        {
-            std::lock_guard<std::mutex> sc(d->sec.lock);
-            fire = d->sec.vsync_on && d->sec.power_on && d->sec.hotplugged;
-        }
-        HWC2_PFN_VSYNC_2_4 fn24 = nullptr;
-        HWC2_PFN_VSYNC fn = nullptr;
-        hwc2_callback_data_t data24 = nullptr;
-        hwc2_callback_data_t data = nullptr;
-        {
-            std::lock_guard<std::mutex> cl(d->cb_lock);
-            fn24 = d->vsync24_fn;
-            data24 = d->vsync24_data;
-            fn = d->vsync_fn;
-            data = d->vsync_data;
-        }
-        if (fire && (fn24 || fn)) {
-            struct timespec ts;
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            int64_t t = int64_t(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
-            if (fn24)
-                fn24(data24, kSecondaryDisplay, t, FUJISAN_SEC_VSYNC_NS);
-            if (fn)
-                fn(data, kSecondaryDisplay, t);
-        }
-        usleep(FUJISAN_SEC_VSYNC_NS / 1000);
-    }
-    return nullptr;
-}
-
-static void EnsureVsyncThread(Device* d) {
-    bool expected = false;
-    if (d->vsync_thread_run.compare_exchange_strong(expected, true)) {
-        if (pthread_create(&d->vsync_thread, nullptr, VsyncThreadMain, d) != 0) {
-            d->vsync_thread_run.store(false);
-            ALOGE("secondary vsync thread create failed");
-        }
-    }
-}
-
-static void ReconcileSecondaryTopology(Device* d) {
-    /* Never call a SurfaceFlinger callback from PresentDisplay. The callback
-     * can synchronously query HWC, so topology changes are serialized by a
-     * detached worker. */
-    HWC2_PFN_HOTPLUG fn = nullptr;
-    hwc2_callback_data_t data = nullptr;
-    {
-        std::lock_guard<std::mutex> cl(d->cb_lock);
-        fn = d->hotplug_fn;
-        data = d->hotplug_data;
-    }
-    if (!fn)
-        return;
-
-    const bool want_dual = DualInternalEnabled();
-    const bool attached = d->secondary_attached.load();
-    if (want_dual == attached)
-        return;
-
-    /* An independent B target and a zoom right-half target have different
-     * source crops. Retire the old MDSS overlay before the next present path
-     * allocates the replacement. */
-    d->secondary_overlay_reset_pending.store(true);
-
-    if (want_dual) {
-        {
-            std::lock_guard<std::mutex> sc(d->sec.lock);
-            d->sec.hotplugged = true;
-            d->sec.power_on = true;
-            d->sec.validated = false;
-        }
-        d->secondary_attached.store(true);
-        EnsureVsyncThread(d);
-        ALOGI("attach independent INTERNAL display 1");
-        fn(data, kSecondaryDisplay, HWC2_CONNECTION_CONNECTED);
-        return;
-    }
-
-    {
-        std::lock_guard<std::mutex> sc(d->sec.lock);
-        d->sec.hotplugged = false;
-        d->sec.power_on = false;
-        d->sec.validated = false;
-        d->sec.layers.clear();
-        d->sec.client_target = nullptr;
-        if (d->sec.client_acquire_fence >= 0) {
-            close(d->sec.client_acquire_fence);
-            d->sec.client_acquire_fence = -1;
-        }
-    }
-    d->secondary_attached.store(false);
-    ALOGI("detach independent INTERNAL display 1 for zoom topology");
-    fn(data, kSecondaryDisplay, HWC2_CONNECTION_DISCONNECTED);
-}
-
-static void ScheduleSecondaryTopology(Device* d);
 static void SchedulePrimaryReprobe(Device* d);
-
-static void* SecondaryTopologyThreadMain(void* arg) {
-    auto* d = reinterpret_cast<Device*>(arg);
-    ReconcileSecondaryTopology(d);
-    if (d->primary_refresh_after_topology.exchange(false))
-        SchedulePrimaryReprobe(d);
-    d->secondary_topology_pending.store(false);
-    /* A user can tap twice while this callback is in flight. Schedule exactly
-     * one follow-up only if the final property differs from the state we just
-     * published; there is no periodic work in the steady state. */
-    if (DualInternalEnabled() != d->secondary_attached.load())
-        ScheduleSecondaryTopology(d);
-    return nullptr;
-}
-
-static void ScheduleSecondaryTopology(Device* d) {
-    if (d->secondary_topology_pending.exchange(true))
-        return;
-    pthread_t thread {};
-    if (pthread_create(&thread, nullptr, SecondaryTopologyThreadMain, d) != 0) {
-        d->secondary_topology_pending.store(false);
-        ALOGE("secondary topology worker create failed");
-        return;
-    }
-    pthread_detach(thread);
-}
-
-static void ResetSecondaryOverlayIfNeeded(Device* d) {
-    if (!d->secondary_overlay_reset_pending.exchange(false))
-        return;
-    if (d->fb_fd >= 0 && d->sec_overlay_id != MSMFB_NEW_REQUEST) {
-        uint32_t id = d->sec_overlay_id;
-        (void)ioctl(d->fb_fd, MSMFB_OVERLAY_UNSET, &id);
-    }
-    d->sec_overlay_id = MSMFB_NEW_REQUEST;
-    d->sec_overlay_src_width = 0;
-    d->sec_overlay_src_height = 0;
-    d->sec_overlay_src_format = 0;
-    d->sec_overlay_crop_x = -1;
-    d->sec_overlay_crop_width = 0;
-}
 
 /* SurfaceFlinger reloads a physical display's supported modes after a connected
  * callback for an already-known HWC display.  Do that off the present path to
@@ -843,70 +500,6 @@ static void LoadRealFns(Device* d) {
     LOAD(getDisplayVsyncPeriod, GET_DISPLAY_VSYNC_PERIOD);
     LOAD(setActiveConfigWithConstraints, SET_ACTIVE_CONFIG_WITH_CONSTRAINTS);
 #undef LOAD
-}
-
-static int32_t SecCreateLayer(Device* d, hwc2_layer_t* out_layer) {
-    std::lock_guard<std::mutex> sc(d->sec.lock);
-    hwc2_layer_t id = d->sec.next_layer++;
-    d->sec.layers[id] = SecLayer{};
-    d->sec.validated = false;
-    *out_layer = id;
-    return HWC2_ERROR_NONE;
-}
-
-static int32_t SecDestroyLayer(Device* d, hwc2_layer_t layer) {
-    std::lock_guard<std::mutex> sc(d->sec.lock);
-    d->sec.layers.erase(layer);
-    d->sec.validated = false;
-    return HWC2_ERROR_NONE;
-}
-
-static int32_t SecValidate(Device* d, uint32_t* out_num_types, uint32_t* out_num_requests) {
-    std::lock_guard<std::mutex> sc(d->sec.lock);
-    uint32_t changes = 0;
-    for (auto& kv : d->sec.layers) {
-        auto& L = kv.second;
-        const int32_t want = HWC2_COMPOSITION_CLIENT;
-        L.changed = (L.requested != want);
-        L.validated = want;
-        if (L.changed)
-            changes++;
-    }
-    d->sec.validated = true;
-    if (out_num_types)
-        *out_num_types = changes;
-    if (out_num_requests)
-        *out_num_requests = 0;
-    return changes ? HWC2_ERROR_HAS_CHANGES : HWC2_ERROR_NONE;
-}
-
-static int32_t SecGetChanged(Device* d, uint32_t* out_count, hwc2_layer_t* out_layers,
-                             int32_t* out_types) {
-    std::lock_guard<std::mutex> sc(d->sec.lock);
-    uint32_t need = 0;
-    for (auto& kv : d->sec.layers) {
-        if (kv.second.changed)
-            need++;
-    }
-    if (!out_layers || !out_types) {
-        if (out_count)
-            *out_count = need;
-        return HWC2_ERROR_NONE;
-    }
-    if (*out_count < need) {
-        *out_count = need;
-        return HWC2_ERROR_NONE;
-    }
-    uint32_t i = 0;
-    for (auto& kv : d->sec.layers) {
-        if (!kv.second.changed)
-            continue;
-        out_layers[i] = kv.first;
-        out_types[i] = kv.second.validated;
-        i++;
-    }
-    *out_count = i;
-    return HWC2_ERROR_NONE;
 }
 
 static bool GetGrallocStridePx(buffer_handle_t handle, int* out_stride_px, int* out_w, int* out_h,
@@ -1336,197 +929,6 @@ static void EnsurePrimaryPanelWatchThread(Device* d) {
     }
 }
 
-/*
- * fb1 is a real MDSS panel.  Its contents must be submitted as an MDP overlay
- * using the client target dma-buf.  Writing its fbdev mmap then pan_display
- * allocates transient base pipes, which collides with the primary HWC and
- * eventually exhausts all SSPPs.
- */
-static bool PostHandleOverlay(Device* d, int fb_fd, uint32_t* overlay_id,
-                              buffer_handle_t handle, int src_x, const char* panel) {
-    if (!handle || fb_fd < 0 || !overlay_id)
-        return false;
-
-    int stride_px = FUJISAN_SEC_WIDTH;
-    int w = FUJISAN_SEC_WIDTH;
-    int h = FUJISAN_SEC_HEIGHT;
-    int format = HAL_PIXEL_FORMAT_RGBA_8888;
-    int flags = 0;
-    GetGrallocStridePx(handle, &stride_px, &w, &h, &format, &flags);
-
-    if (src_x < 0 || src_x >= w)
-        return false;
-    w = std::min(FUJISAN_SEC_WIDTH, w - src_x);
-    if (h > FUJISAN_SEC_HEIGHT)
-        h = FUJISAN_SEC_HEIGHT;
-    if (stride_px < src_x + w)
-        stride_px = src_x + w;
-
-    const auto* gralloc = reinterpret_cast<const FujisanPrivateHandle*>(handle);
-    if (gralloc->magic != kFujisanGrallocMagic || gralloc->fd < 0) {
-        ALOGE("invalid fb1 client target handle magic=0x%x fd=%d", gralloc->magic, gralloc->fd);
-        return false;
-    }
-
-    const bool ubwc = (flags & PRIV_FLAGS_UBWC_ALIGNED) != 0;
-    /* The msm8996 gralloc used by the vendor composer can retain the
-     * RGBA_8888 format field when SurfaceFlinger resizes a folded 1080-wide
-     * client target to 2160-wide.  Its allocation is nevertheless a 16-bpp
-     * RGB565 buffer (about half the RGBA size).  Passing the stale format to
-     * MDSS makes the driver demand twice the dma-buf size and reject B's
-     * overlay.  Trust the allocation extent in that transition. */
-    const uint64_t rgba_bytes = static_cast<uint64_t>(stride_px) * h * 4;
-    const bool compact_rgb565 =
-        gralloc->size > 0 && static_cast<uint64_t>(gralloc->size) < rgba_bytes;
-    const bool rgb565 = format == HAL_PIXEL_FORMAT_RGB_565 || compact_rgb565;
-    const uint32_t mdp_format = rgb565 ? MDP_RGB_565
-                                       : (ubwc ? MDP_RGBA_8888_UBWC : MDP_RGBA_8888);
-
-    /* MDP's OVERLAY_PLAY only imports a dma-buf; it does not update the
-     * geometry or format selected by the earlier OVERLAY_SET.  On a cold
-     * boot while folded, SF first gives B a narrow client target and then a
-     * compact RGB565 wide target on the first open.  Reuse of the narrow
-     * RGBA overlay makes MDSS validate the latter as a 16.8 MiB buffer even
-     * though the allocation is 8.4 MiB.  Retire just B's pipe when its
-     * immutable overlay contract changes; this is internal to HWC and does
-     * not disconnect/recreate the primary display. */
-    const bool is_secondary = overlay_id == &d->sec_overlay_id;
-    const bool secondary_contract_changed =
-        is_secondary && *overlay_id != MSMFB_NEW_REQUEST &&
-        (d->sec_overlay_src_width != static_cast<uint32_t>(stride_px) ||
-         d->sec_overlay_src_height != static_cast<uint32_t>(h) ||
-         d->sec_overlay_src_format != mdp_format ||
-         d->sec_overlay_crop_x != src_x ||
-         d->sec_overlay_crop_width != static_cast<uint32_t>(w));
-    if (secondary_contract_changed) {
-        uint32_t id = *overlay_id;
-        if (ioctl(fb_fd, MSMFB_OVERLAY_UNSET, &id) != 0)
-            ALOGW("%s overlay reset id=0x%x failed: %s", panel, id, strerror(errno));
-        *overlay_id = MSMFB_NEW_REQUEST;
-        d->sec_overlay_src_width = 0;
-        d->sec_overlay_src_height = 0;
-        d->sec_overlay_src_format = 0;
-        d->sec_overlay_crop_x = -1;
-        d->sec_overlay_crop_width = 0;
-        ALOGI("%s overlay contract changed; recreating", panel);
-    }
-
-    if (*overlay_id == MSMFB_NEW_REQUEST) {
-        mdp_overlay overlay {};
-        overlay.src.width = static_cast<uint32_t>(stride_px);
-        overlay.src.height = static_cast<uint32_t>(h);
-        /* The MDSS legacy overlay API imports the complete gralloc dma-buf,
-         * including UBWC metadata, so preserve the producer's real layout.
-         * SurfaceFlinger may choose RGB_565 for the 2160-wide client target;
-         * treating that 2-byte buffer as RGBA makes MDSS request twice the
-         * available dma-buf size and leaves panel B without a valid frame. */
-        overlay.src.format = mdp_format;
-        overlay.src_rect = {static_cast<uint32_t>(src_x), 0,
-                            static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
-        overlay.dst_rect = {0, 0, static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
-        overlay.z_order = 0;
-        overlay.is_fg = 1;
-        overlay.alpha = MDP_ALPHA_NOP;
-        overlay.blend_op = BLEND_OP_OPAQUE;
-        overlay.transp_mask = MDP_TRANSP_NOP;
-        /* Let MDSS choose a pipe compatible with panel B and the imported
-         * UBWC target.  fbdev's forced-DMA base-pipe path is exactly what
-         * exhausted the SSPP pool in the previous implementation. */
-        overlay.pipe_type = PIPE_TYPE_AUTO;
-        overlay.id = MSMFB_NEW_REQUEST;
-        if (ioctl(fb_fd, MSMFB_OVERLAY_SET, &overlay) != 0) {
-            ALOGE("%s overlay set failed: %s", panel, strerror(errno));
-            return false;
-        }
-        *overlay_id = overlay.id;
-        if (is_secondary) {
-            d->sec_overlay_src_width = static_cast<uint32_t>(stride_px);
-            d->sec_overlay_src_height = static_cast<uint32_t>(h);
-            d->sec_overlay_src_format = mdp_format;
-            d->sec_overlay_crop_x = src_x;
-            d->sec_overlay_crop_width = static_cast<uint32_t>(w);
-        }
-        ALOGI("%s overlay configured id=0x%x src=%dx%d crop_x=%d dst=%dx%d fmt=%d size=%u rgb565=%d ubwc=%d", panel,
-              overlay.id, stride_px, h, src_x, w, h, format, gralloc->size,
-              rgb565 ? 1 : 0, ubwc ? 1 : 0);
-    }
-
-    msmfb_overlay_data post {};
-    post.id = *overlay_id;
-    post.data.memory_id = gralloc->fd;
-    post.data.offset = gralloc->offset;
-    if (ioctl(fb_fd, MSMFB_OVERLAY_PLAY, &post) != 0) {
-        const int err = errno;
-        ALOGE("%s overlay play id=0x%x failed: %s", panel, post.id, strerror(err));
-        /* fb1 can be blanked/re-enabled by the display power path after the
-         * logical display is attached.  MDSS then drops its legacy pipes;
-         * recreate this one on the next client-target frame. */
-        if (err == ENODEV || err == EPERM)
-            *overlay_id = MSMFB_NEW_REQUEST;
-        return false;
-    }
-
-    /* Commit with the full mdp_display_commit ABI.  Do not confuse this with
-     * the tiny pointer-sized ioctl used by the standalone fb fill probe: the
-     * latter is rejected, while this HWC structure is the one accepted by
-     * the legacy MDSS overlay path. */
-    MdpDisplayCommit commit {};
-    commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
-    commit.wait_for_finish = 0;
-    if (ioctl(fb_fd, MSMFB_DISPLAY_COMMIT, &commit) != 0) {
-        ALOGE("%s overlay commit failed: %s", panel, strerror(errno));
-        return false;
-    }
-
-    static int once = 0;
-    if (once++ < 5) {
-        ALOGI("%s overlay post id=0x%x %dx%d crop_x=%d stride=%d fmt=%d flags=0x%x ubwc=%d",
-              panel, *overlay_id, w, h, src_x, stride_px, format, flags, ubwc ? 1 : 0);
-    }
-    return true;
-}
-
-static bool PostHandleOverlayToFb1(Device* d, buffer_handle_t handle) {
-    if (!OpenFb1(d))
-        return false;
-    return PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle, 0, "fb1");
-}
-
-static int32_t __attribute__((unused)) SecPresent(Device* d, int32_t* out_retire) {
-    buffer_handle_t target = nullptr;
-    int fence = -1;
-    {
-        std::lock_guard<std::mutex> sc(d->sec.lock);
-        if (!d->sec.validated)
-            return HWC2_ERROR_NOT_VALIDATED;
-        if (!d->sec.power_on) {
-            if (out_retire)
-                *out_retire = -1;
-            return HWC2_ERROR_NONE;
-        }
-        target = d->sec.client_target;
-        fence = d->sec.client_acquire_fence;
-        d->sec.client_acquire_fence = -1;
-        for (auto& kv : d->sec.layers)
-            kv.second.changed = false;
-    }
-    if (fence >= 0) {
-        /* GPU client-target must finish before CPU post to fb1. */
-        if (sync_wait(fence, 1000) != 0)
-            ALOGW("client target fence wait failed/timeout");
-        close(fence);
-    }
-    /* halld blanks fb1 while folded.  Do not create/play an overlay against a
-     * powered-down MDSS panel; it fails with EPERM and leaves no valid pipe
-     * to receive the first frame after the next hinge-open. */
-    ResetSecondaryOverlayIfNeeded(d);
-    if (target && SecondaryPanelAvailable())
-        PostHandleOverlayToFb1(d, target);
-    if (out_retire)
-        *out_retire = -1;
-    return HWC2_ERROR_NONE;
-}
-
 static void WrapperGetCapabilities(struct hwc2_device* device, uint32_t* out_count,
                                    int32_t* out_capabilities) {
     auto* d = ToDev(device);
@@ -1576,10 +978,8 @@ static void HotplugTrampoline(hwc2_callback_data_t cb_data, hwc2_display_t displ
         fn = dev->hotplug_fn;
         user = dev->hotplug_data;
     }
-    if (fn && display != kSecondaryDisplay)
+    if (fn)
         fn(user, display, connected);
-    if (display == kPrimaryDisplay && connected == HWC2_CONNECTION_CONNECTED)
-        ScheduleSecondaryTopology(dev);
 }
 
 static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
@@ -1595,12 +995,10 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
             case HWC2_CALLBACK_VSYNC:
                 d->vsync_data = data;
                 d->vsync_fn = reinterpret_cast<HWC2_PFN_VSYNC>(pointer);
-                EnsureVsyncThread(d);
                 break;
             case HWC2_CALLBACK_VSYNC_2_4:
                 d->vsync24_data = data;
                 d->vsync24_fn = reinterpret_cast<HWC2_PFN_VSYNC_2_4>(pointer);
-                EnsureVsyncThread(d);
                 break;
             case HWC2_CALLBACK_REFRESH:
                 d->refresh_data = data;
@@ -1626,9 +1024,6 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
                 ? d->fns.registerCallback(d->real, descriptor, d,
                                          reinterpret_cast<hwc2_function_pointer_t>(HotplugTrampoline))
                 : HWC2_ERROR_UNSUPPORTED;
-        // Also reconcile in case primary hotplug already fired.
-        if (err == HWC2_ERROR_NONE)
-            ScheduleSecondaryTopology(d);
         return err;
     }
 
@@ -1648,12 +1043,6 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
 
 static int32_t AcceptDisplayChanges(hwc2_device_t* device, hwc2_display_t display) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        std::lock_guard<std::mutex> sc(d->sec.lock);
-        for (auto& kv : d->sec.layers)
-            kv.second.changed = false;
-        return HWC2_ERROR_NONE;
-    }
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         for (auto& kv : d->zoom_layers)
@@ -1666,8 +1055,6 @@ static int32_t AcceptDisplayChanges(hwc2_device_t* device, hwc2_display_t displa
 
 static int32_t CreateLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t* out) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return SecCreateLayer(d, out);
     if (display == kPrimaryDisplay) {
         if (!out)
             return HWC2_ERROR_BAD_PARAMETER;
@@ -1684,8 +1071,6 @@ static int32_t CreateLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_l
 
 static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return SecDestroyLayer(d, layer);
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -1703,12 +1088,6 @@ static int32_t DestroyLayer(hwc2_device_t* device, hwc2_display_t display, hwc2_
 
 static int32_t GetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hwc2_config_t* out) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        if (!out)
-            return HWC2_ERROR_BAD_PARAMETER;
-        *out = kSecondaryConfig;
-        return HWC2_ERROR_NONE;
-    }
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         /* The active topology is driven by the hinge daemon.  SurfaceFlinger
@@ -1727,8 +1106,6 @@ static int32_t GetChangedCompositionTypes(hwc2_device_t* device, hwc2_display_t 
                                           uint32_t* out_count, hwc2_layer_t* out_layers,
                                           int32_t* out_types) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return SecGetChanged(d, out_count, out_layers, out_types);
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         /* ValidateDisplay is implemented by this wrapper for both logical
@@ -1766,16 +1143,6 @@ static int32_t GetChangedCompositionTypes(hwc2_device_t* device, hwc2_display_t 
 static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t display, uint32_t width,
                                       uint32_t height, int32_t format, int32_t dataspace) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        /* Independent INTERNAL panel B is CPU-posted. Accept common 32bpp linear formats. */
-        (void)width;
-        (void)height;
-        (void)dataspace;
-        if (format == HAL_PIXEL_FORMAT_RGBA_8888 || format == HAL_PIXEL_FORMAT_RGBX_8888 ||
-            format == HAL_PIXEL_FORMAT_BGRA_8888)
-            return HWC2_ERROR_NONE;
-        return HWC2_ERROR_UNSUPPORTED;
-    }
     if (display == kPrimaryDisplay) {
         /* The device C ABI currently has one explicit client-target
          * contract: linear RGBA/RGBX.  Do not advertise BGRA merely because
@@ -1803,17 +1170,6 @@ static int32_t GetClientTargetSupport(hwc2_device_t* device, hwc2_display_t disp
 static int32_t GetColorModes(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_count,
                              int32_t* out_modes) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        if (!out_modes) {
-            *out_count = 1;
-            return HWC2_ERROR_NONE;
-        }
-        if (*out_count >= 1) {
-            out_modes[0] = HAL_COLOR_MODE_NATIVE;
-            *out_count = 1;
-        }
-        return HWC2_ERROR_NONE;
-    }
     return d->fns.getColorModes ? d->fns.getColorModes(d->real, display, out_count, out_modes)
                                : HWC2_ERROR_UNSUPPORTED;
 }
@@ -1821,28 +1177,6 @@ static int32_t GetColorModes(hwc2_device_t* device, hwc2_display_t display, uint
 static int32_t GetDisplayAttribute(hwc2_device_t* device, hwc2_display_t display,
                                    hwc2_config_t config, int32_t attribute, int32_t* out) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        switch (attribute) {
-            case HWC2_ATTRIBUTE_WIDTH:
-                *out = FUJISAN_SEC_WIDTH;
-                return HWC2_ERROR_NONE;
-            case HWC2_ATTRIBUTE_HEIGHT:
-                *out = FUJISAN_SEC_HEIGHT;
-                return HWC2_ERROR_NONE;
-            case HWC2_ATTRIBUTE_VSYNC_PERIOD:
-                *out = FUJISAN_SEC_VSYNC_NS;
-                return HWC2_ERROR_NONE;
-            case HWC2_ATTRIBUTE_DPI_X:
-                *out = FUJISAN_SEC_DPI_X;
-                return HWC2_ERROR_NONE;
-            case HWC2_ATTRIBUTE_DPI_Y:
-                *out = FUJISAN_SEC_DPI_Y;
-                return HWC2_ERROR_NONE;
-            default:
-                *out = -1;
-                return HWC2_ERROR_NONE;
-        }
-    }
     if (display == kPrimaryDisplay &&
         (IsSingleConfig(config) || config == kWideConfig)) {
         switch (attribute) {
@@ -1874,21 +1208,6 @@ static int32_t GetDisplayAttribute(hwc2_device_t* device, hwc2_display_t display
 static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_count,
                                  hwc2_config_t* out_configs) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        if (!out_count)
-            return HWC2_ERROR_BAD_PARAMETER;
-        if (!out_configs) {
-            *out_count = 1;
-            return HWC2_ERROR_NONE;
-        }
-        if (*out_count < 1) {
-            *out_count = 1;
-            return HWC2_ERROR_NONE;
-        }
-        out_configs[0] = kSecondaryConfig;
-        *out_count = 1;
-        return HWC2_ERROR_NONE;
-    }
     if (display == kPrimaryDisplay) {
         /* A/B/C are modes of one physical display, but the hinge determines
          * which topology is electrically usable.  Android has no upstream
@@ -1919,20 +1238,6 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
 static int32_t GetDisplayName(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_size,
                               char* out_name) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        const char* name = "Fujisan Panel B";
-        size_t len = strlen(name) + 1;
-        if (!out_name) {
-            *out_size = static_cast<uint32_t>(len);
-            return HWC2_ERROR_NONE;
-        }
-        if (*out_size == 0)
-            return HWC2_ERROR_NONE;
-        strncpy(out_name, name, *out_size - 1);
-        out_name[*out_size - 1] = 0;
-        *out_size = static_cast<uint32_t>(strlen(out_name) + 1);
-        return HWC2_ERROR_NONE;
-    }
     return d->fns.getDisplayName ? d->fns.getDisplayName(d->real, display, out_size, out_name)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
@@ -1941,7 +1246,7 @@ static int32_t GetDisplayRequests(hwc2_device_t* device, hwc2_display_t display,
                                   int32_t* out_display_requests, uint32_t* out_num_elements,
                                   hwc2_layer_t* out_layers, int32_t* out_layer_requests) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay || display == kPrimaryDisplay) {
+    if (display == kPrimaryDisplay) {
         if (out_display_requests)
             *out_display_requests = 0;
         if (out_num_elements)
@@ -1957,11 +1262,6 @@ static int32_t GetDisplayRequests(hwc2_device_t* device, hwc2_display_t display,
 static int32_t GetDisplayCapabilities(hwc2_device_t* device, hwc2_display_t display,
                                         uint32_t* out_num, uint32_t* out_caps) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        if (out_num)
-            *out_num = 0;
-        return HWC2_ERROR_NONE;
-    }
     if (d->fns.getDisplayCapabilities)
         return d->fns.getDisplayCapabilities(d->real, display, out_num, out_caps);
     if (out_num)
@@ -1971,8 +1271,6 @@ static int32_t GetDisplayCapabilities(hwc2_device_t* device, hwc2_display_t disp
 
 static int32_t SetDisplayBrightness(hwc2_device_t* device, hwc2_display_t display, float brightness) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_UNSUPPORTED;
     /* msm8996's composer brightness values are stale after a display
      * reconfiguration and can arrive during arbitrary touch/composition
      * frames.  B is exclusively mirrored from A's actual Lights sysfs write
@@ -1982,13 +1280,11 @@ static int32_t SetDisplayBrightness(hwc2_device_t* device, hwc2_display_t displa
                : HWC2_ERROR_UNSUPPORTED;
 }
 
-/* Both built-in panels are INTERNAL. Do not implement GET_DISPLAY_IDENTIFICATION_DATA:
- * SF stays in legacy multi-display mode and keeps secondary as local:1. */
 static int32_t GetDisplayConnectionType(hwc2_device_t* device, hwc2_display_t display,
                                         uint32_t* out_type) {
     if (!out_type)
         return HWC2_ERROR_BAD_PARAMETER;
-    if (display == kPrimaryDisplay || display == kSecondaryDisplay) {
+    if (display == kPrimaryDisplay) {
         *out_type = HWC2_DISPLAY_CONNECTION_TYPE_INTERNAL;
         return HWC2_ERROR_NONE;
     }
@@ -2000,10 +1296,6 @@ static int32_t GetDisplayVsyncPeriod(hwc2_device_t* device, hwc2_display_t displ
     auto* d = ToDev(device);
     if (!out_period)
         return HWC2_ERROR_BAD_PARAMETER;
-    if (display == kSecondaryDisplay) {
-        *out_period = FUJISAN_SEC_VSYNC_NS;
-        return HWC2_ERROR_NONE;
-    }
     if (d->fns.getDisplayVsyncPeriod)
         return d->fns.getDisplayVsyncPeriod(d->real, display, out_period);
     *out_period = PrimaryVsyncPeriodNs(d, display);
@@ -2069,16 +1361,9 @@ static int32_t SetActiveConfigWithConstraints(
         return HWC2_ERROR_NONE;
     }
 
-    int32_t err;
-    if (display == kSecondaryDisplay) {
-        if (config != kSecondaryConfig)
-            return HWC2_ERROR_BAD_CONFIG;
-        err = HWC2_ERROR_NONE;
-    } else if (d->fns.setActiveConfig) {
-        err = d->fns.setActiveConfig(d->real, display, config);
-    } else {
-        err = HWC2_ERROR_UNSUPPORTED;
-    }
+    int32_t err = d->fns.setActiveConfig
+                      ? d->fns.setActiveConfig(d->real, display, config)
+                      : HWC2_ERROR_UNSUPPORTED;
     if (err != HWC2_ERROR_NONE)
         return err;
 
@@ -2096,10 +1381,6 @@ static int32_t SetActiveConfigWithConstraints(
 
 static int32_t GetDisplayType(hwc2_device_t* device, hwc2_display_t display, int32_t* out_type) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        *out_type = HWC2_DISPLAY_TYPE_PHYSICAL;
-        return HWC2_ERROR_NONE;
-    }
     return d->fns.getDisplayType ? d->fns.getDisplayType(d->real, display, out_type)
                                 : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2120,11 +1401,6 @@ static int32_t GetDozeSupport(hwc2_device_t* device, hwc2_display_t display, int
 static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_num,
                                   int32_t* types, float* max_l, float* max_avg, float* min_l) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        if (out_num)
-            *out_num = 0;
-        return HWC2_ERROR_NONE;
-    }
     return d->fns.getHdrCapabilities
                ? d->fns.getHdrCapabilities(d->real, display, out_num, types, max_l, max_avg, min_l)
                : HWC2_ERROR_UNSUPPORTED;
@@ -2133,7 +1409,7 @@ static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display,
 static int32_t GetReleaseFences(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_num,
                                 hwc2_layer_t* layers, int32_t* fences) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay || display == kPrimaryDisplay) {
+    if (display == kPrimaryDisplay) {
         if (out_num)
             *out_num = 0;
         return HWC2_ERROR_NONE;
@@ -2146,16 +1422,11 @@ static int32_t GetReleaseFences(hwc2_device_t* device, hwc2_display_t display, u
 static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
                               int32_t* out_retire_fence) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return SecPresent(d, out_retire_fence);
     if (display == kPrimaryDisplay) {
         bool zoom = WantZoomMode();
-        const bool dual_internal = DualInternalEnabled();
         buffer_handle_t target = nullptr;
         int fence = -1;
-        bool refresh_secondary = false;
         bool reprobe_primary = false;
-        bool reconfigure_secondary_topology = false;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
             d->zoom_active = zoom;
@@ -2164,32 +1435,6 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             fence = d->client_acquire_fence;
             d->client_acquire_fence = -1;
 
-            if (!d->topology_seen || d->dual_internal_active != dual_internal) {
-                d->topology_seen = true;
-                d->dual_internal_active = dual_internal;
-                reconfigure_secondary_topology = true;
-            }
-            if (dual_internal) {
-                const bool available = SecondaryPanelAvailable();
-                const int64_t now = MonotonicNs();
-                if (available != d->secondary_panel_available) {
-                    d->secondary_panel_available = available;
-                    d->secondary_panel_available_since_ns = now;
-                    d->secondary_panel_refresh_pending = available;
-                    ALOGI("independent B panel -> %s", available ? "open" : "closed");
-                }
-                /* secondary_on() unblanks first and waits 50ms before it
-                 * enables backlight.  Give MDSS a little more settling time,
-                 * then ask SurfaceFlinger for exactly one fresh B frame. */
-                if (d->secondary_panel_refresh_pending && d->secondary_attached.load() &&
-                    now - d->secondary_panel_available_since_ns >= 150000000LL) {
-                    d->secondary_panel_refresh_pending = false;
-                    refresh_secondary = true;
-                }
-            } else {
-                d->secondary_panel_available = false;
-                d->secondary_panel_refresh_pending = false;
-            }
             if (strcmp(d->last_mode, zoom ? "zoom" : "single") != 0) {
                 /* The first post-boot transition is just as much a real
                  * geometry change as later hinge moves.  It must publish a
@@ -2198,10 +1443,6 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
                 reprobe_primary = true;
                 d->mode_seen = true;
                 snprintf(d->last_mode, sizeof(d->last_mode), "%s", zoom ? "zoom" : "single");
-                /* B may have been blanked while the old logical mode was
-                 * active.  Its legacy pipe must be recreated from the first
-                 * target in the new mode, but the primary stays connected. */
-                d->secondary_overlay_reset_pending.store(true);
                 ALOGI("display mode -> %s (%s)", d->last_mode,
                       reprobe_primary ? "reprobe" : "initial");
                 if (d->refresh_fn)
@@ -2211,29 +1452,8 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             }
         }
 
-        if (reconfigure_secondary_topology) {
-            /* Dual <-> zoom must first retire/create B's physical display.
-             * Re-enumerating the primary afterwards prevents SurfaceFlinger
-             * from ever seeing the old wide target and local:1 together. */
-            if (reprobe_primary)
-                d->primary_refresh_after_topology.store(true);
-            ScheduleSecondaryTopology(d);
-        } else if (reprobe_primary) {
+        if (reprobe_primary) {
             SchedulePrimaryReprobe(d);
-        }
-
-        if (refresh_secondary) {
-            HWC2_PFN_REFRESH fn = nullptr;
-            hwc2_callback_data_t data = nullptr;
-            {
-                std::lock_guard<std::mutex> cl(d->cb_lock);
-                fn = d->refresh_fn;
-                data = d->refresh_data;
-            }
-            if (fn) {
-                ALOGI("request B redraw after hinge-open");
-                fn(data, kSecondaryDisplay);
-            }
         }
 
         if (zoom && target) {
@@ -2305,8 +1525,6 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
 
 static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hwc2_config_t config) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_BAD_DISPLAY;
     if (display == kPrimaryDisplay) {
         if (!IsSingleConfig(config) && config != kWideConfig)
             return HWC2_ERROR_BAD_CONFIG;
@@ -2333,16 +1551,6 @@ static int32_t SetActiveConfig(hwc2_device_t* device, hwc2_display_t display, hw
 static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, buffer_handle_t target,
                                int32_t acquire_fence, int32_t dataspace, hwc_region_t damage) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        std::lock_guard<std::mutex> sc(d->sec.lock);
-        if (d->sec.client_acquire_fence >= 0)
-            close(d->sec.client_acquire_fence);
-        d->sec.client_target = target;
-        d->sec.client_acquire_fence = acquire_fence;
-        (void)dataspace;
-        (void)damage;
-        return HWC2_ERROR_NONE;
-    }
     if (display == kPrimaryDisplay) {
         const bool zoom = WantZoomMode();
         if (!zoom && !DrainWideRoute(d, "SetClientTarget"))
@@ -2353,8 +1561,6 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
                 close(d->client_acquire_fence);
             d->client_target = target;
             d->client_acquire_fence = acquire_fence;
-            d->zoom_client_target = target;
-            d->zoom_acquire_fence = -1; /* ownership kept in client_acquire_fence */
             d->zoom_active = zoom;
             d->active_config = TopologyConfig();
         }
@@ -2390,16 +1596,12 @@ static int32_t SetClientTarget(hwc2_device_t* device, hwc2_display_t display, bu
 
 static int32_t SetColorMode(hwc2_device_t* device, hwc2_display_t display, int32_t mode) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return (mode == HAL_COLOR_MODE_NATIVE) ? HWC2_ERROR_NONE : HWC2_ERROR_UNSUPPORTED;
     return d->fns.setColorMode ? d->fns.setColorMode(d->real, display, mode) : HWC2_ERROR_UNSUPPORTED;
 }
 
 static int32_t SetColorTransform(hwc2_device_t* device, hwc2_display_t display, const float* m,
                                  int32_t hint) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     return d->fns.setColorTransform ? d->fns.setColorTransform(d->real, display, m, hint)
                                    : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2407,8 +1609,6 @@ static int32_t SetColorTransform(hwc2_device_t* device, hwc2_display_t display, 
 static int32_t SetCursorPosition(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                                  int32_t x, int32_t y) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         /* ValidateDisplay always makes primary cursor layers CLIENT, so the
          * cursor pixels are already included in the client target submitted
@@ -2427,8 +1627,6 @@ static int32_t SetCursorPosition(hwc2_device_t* device, hwc2_display_t display, 
 static int32_t SetLayerBlendMode(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                                  int32_t mode) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2445,11 +1643,6 @@ static int32_t SetLayerBlendMode(hwc2_device_t* device, hwc2_display_t display, 
 static int32_t SetLayerBuffer(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                               buffer_handle_t buffer, int32_t acquire_fence) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        if (acquire_fence >= 0)
-            close(acquire_fence);
-        return HWC2_ERROR_NONE;
-    }
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2475,8 +1668,6 @@ static int32_t SetLayerBuffer(hwc2_device_t* device, hwc2_display_t display, hwc
 static int32_t SetLayerColor(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                              hwc_color_t color) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2495,15 +1686,6 @@ static int32_t SetLayerColor(hwc2_device_t* device, hwc2_display_t display, hwc2
 static int32_t SetLayerCompositionType(hwc2_device_t* device, hwc2_display_t display,
                                        hwc2_layer_t layer, int32_t type) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        std::lock_guard<std::mutex> sc(d->sec.lock);
-        auto it = d->sec.layers.find(layer);
-        if (it == d->sec.layers.end())
-            return HWC2_ERROR_BAD_LAYER;
-        it->second.requested = type;
-        d->sec.validated = false;
-        return HWC2_ERROR_NONE;
-    }
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2522,8 +1704,6 @@ static int32_t SetLayerCompositionType(hwc2_device_t* device, hwc2_display_t dis
 static int32_t SetLayerDataspace(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                                  int32_t dataspace) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2542,8 +1722,6 @@ static int32_t SetLayerDataspace(hwc2_device_t* device, hwc2_display_t display, 
 static int32_t SetLayerDisplayFrame(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                                     hwc_rect_t frame) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2562,8 +1740,6 @@ static int32_t SetLayerDisplayFrame(hwc2_device_t* device, hwc2_display_t displa
 static int32_t SetLayerPlaneAlpha(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                                   float alpha) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2582,8 +1758,6 @@ static int32_t SetLayerPlaneAlpha(hwc2_device_t* device, hwc2_display_t display,
 static int32_t SetLayerSidebandStream(hwc2_device_t* device, hwc2_display_t display,
                                       hwc2_layer_t layer, const native_handle_t* stream) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2603,8 +1777,6 @@ static int32_t SetLayerSidebandStream(hwc2_device_t* device, hwc2_display_t disp
 static int32_t SetLayerSourceCrop(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                                   hwc_frect_t crop) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2623,8 +1795,6 @@ static int32_t SetLayerSourceCrop(hwc2_device_t* device, hwc2_display_t display,
 static int32_t SetLayerSurfaceDamage(hwc2_device_t* device, hwc2_display_t display,
                                      hwc2_layer_t layer, hwc_region_t damage) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     return display == kPrimaryDisplay
                ? HWC2_ERROR_NONE
                : (d->fns.setLayerSurfaceDamage
@@ -2635,8 +1805,6 @@ static int32_t SetLayerSurfaceDamage(hwc2_device_t* device, hwc2_display_t displ
 static int32_t SetLayerTransform(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                                  int32_t transform) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2655,8 +1823,6 @@ static int32_t SetLayerTransform(hwc2_device_t* device, hwc2_display_t display, 
 static int32_t SetLayerVisibleRegion(hwc2_device_t* device, hwc2_display_t display,
                                      hwc2_layer_t layer, hwc_region_t visible) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     return display == kPrimaryDisplay
                ? HWC2_ERROR_NONE
                : (d->fns.setLayerVisibleRegion
@@ -2667,8 +1833,6 @@ static int32_t SetLayerVisibleRegion(hwc2_device_t* device, hwc2_display_t displ
 static int32_t SetLayerZOrder(hwc2_device_t* device, hwc2_display_t display, hwc2_layer_t layer,
                               uint32_t z) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return HWC2_ERROR_NONE;
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         auto it = d->zoom_layers.find(layer);
@@ -2687,28 +1851,12 @@ static int32_t SetLayerZOrder(hwc2_device_t* device, hwc2_display_t display, hwc
 static int32_t SetOutputBuffer(hwc2_device_t* device, hwc2_display_t display, buffer_handle_t buffer,
                                int32_t release_fence) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        if (release_fence >= 0)
-            close(release_fence);
-        return HWC2_ERROR_NONE;
-    }
     return d->fns.setOutputBuffer ? d->fns.setOutputBuffer(d->real, display, buffer, release_fence)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
 
 static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32_t mode) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        bool on = (mode == HWC2_POWER_MODE_ON);
-        {
-            std::lock_guard<std::mutex> sc(d->sec.lock);
-            d->sec.power_on = on;
-        }
-        /* Do not touch fb1 rails here.  The logical B display stays ON from
-         * Android's perspective, while fujisan_halld is the sole authority
-         * for physical power according to the hinge. */
-        return HWC2_ERROR_NONE;
-    }
     int32_t ret = d->fns.setPowerMode ? d->fns.setPowerMode(d->real, display, mode)
                                       : HWC2_ERROR_UNSUPPORTED;
     if (display == kPrimaryDisplay) {
@@ -2723,12 +1871,6 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
 
 static int32_t SetVsyncEnabled(hwc2_device_t* device, hwc2_display_t display, int32_t enabled) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay) {
-        std::lock_guard<std::mutex> sc(d->sec.lock);
-        d->sec.vsync_on = (enabled == HWC2_VSYNC_ENABLE);
-        EnsureVsyncThread(d);
-        return HWC2_ERROR_NONE;
-    }
     return d->fns.setVsyncEnabled ? d->fns.setVsyncEnabled(d->real, display, enabled)
                                  : HWC2_ERROR_UNSUPPORTED;
 }
@@ -2736,8 +1878,6 @@ static int32_t SetVsyncEnabled(hwc2_device_t* device, hwc2_display_t display, in
 static int32_t ValidateDisplay(hwc2_device_t* device, hwc2_display_t display, uint32_t* out_types,
                                uint32_t* out_requests) {
     auto* d = ToDev(device);
-    if (display == kSecondaryDisplay)
-        return SecValidate(d, out_types, out_requests);
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
         /* The native fb0 topology is dual-CTL in both logical configs.  Keep
@@ -2934,11 +2074,7 @@ static int HwcClose(hw_device_t* dev) {
     d->primary_panel_thread_run.store(false);
     if (d->primary_panel_thread)
         pthread_join(d->primary_panel_thread, nullptr);
-    d->vsync_thread_run.store(false);
-    if (d->vsync_thread)
-        pthread_join(d->vsync_thread, nullptr);
     CloseWideFramebuffer(d);
-    CloseFb1(d);
     if (d->real && d->real->common.close)
         d->real->common.close(reinterpret_cast<hw_device_t*>(d->real));
     if (d->real_so)
