@@ -225,8 +225,6 @@ struct Device {
     int wide_drain_fence = -1;
     uint32_t wide_submit_count = 0;
     uint32_t single_submit_count = 0;
-    char last_mode[16] = "single";
-    bool mode_seen = false;
 
     std::map<hwc2_layer_t, ZoomLayer> zoom_layers;
     hwc2_layer_t next_primary_layer = 1;
@@ -812,16 +810,12 @@ static bool SubmitSingleClientTarget(Device* d, buffer_handle_t handle, int acqu
     return true;
 }
 
-static void RequestPrimaryRefresh(Device* d) {
-    HWC2_PFN_REFRESH fn = nullptr;
-    hwc2_callback_data_t data = nullptr;
-    {
-        std::lock_guard<std::mutex> cl(d->cb_lock);
-        fn = d->refresh_fn;
-        data = d->refresh_data;
-    }
-    if (fn)
-        fn(data, kPrimaryDisplay);
+/* A primary CONNECTED event is SurfaceFlinger's public HWC2 mechanism for
+ * reloading a physical panel's config table.  It is deliberately dispatched
+ * outside PresentDisplay, because SF synchronously queries HWC while handling
+ * it. */
+static void RequestPrimaryReconfigure(Device* d) {
+    SchedulePrimaryReprobe(d);
 }
 
 struct DisplayModePropertySnapshot {
@@ -867,8 +861,8 @@ static void* DisplayModeWatchThreadMain(void* arg) {
         if (strcmp(last_mode, snapshot.value) == 0)
             continue;
         snprintf(last_mode, sizeof(last_mode), "%s", snapshot.value);
-        ALOGI("display_mode property -> %s; requesting primary frame", snapshot.value);
-        RequestPrimaryRefresh(d);
+        ALOGI("display_mode property -> %s; reconfiguring primary", snapshot.value);
+        RequestPrimaryReconfigure(d);
     }
     d->display_mode_thread_run.store(false);
     return nullptr;
@@ -912,8 +906,8 @@ static void* PrimaryPanelWatchThreadMain(void* arg) {
         if (strcmp(last_primary, snapshot.value) == 0)
             continue;
         snprintf(last_primary, sizeof(last_primary), "%s", snapshot.value);
-        ALOGI("active_primary -> %s; requesting primary frame", snapshot.value);
-        RequestPrimaryRefresh(d);
+        ALOGI("active_primary -> %s; reconfiguring primary", snapshot.value);
+        RequestPrimaryReconfigure(d);
     }
     d->primary_panel_thread_run.store(false);
     return nullptr;
@@ -1209,25 +1203,27 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
                                  hwc2_config_t* out_configs) {
     auto* d = ToDev(device);
     if (display == kPrimaryDisplay) {
-        /* A/B/C are modes of one physical display, but the hinge determines
-         * which topology is electrically usable.  Android has no upstream
-         * posture-to-mode policy: advertising all three makes SurfaceFlinger
-         * correctly retain its former 1080 mode after an unfold and hand C an
-         * invalid 1080 client target.  Re-enumerating just the available
-         * HWC config on the normal connected callback is the standard dynamic
-         * panel path and lets SurfaceFlinger recreate its render surface at
-         * the active topology's dimensions. */
-        const hwc2_config_t active = TopologyConfig();
+        /* HWC config IDs, not resolution, identify display modes in the
+         * public HWC2 contract.  A and B intentionally remain separate
+         * 1080x1920 modes: they select different physical scanout topology.
+         * C selects the 2160x1915 paired topology. */
+        constexpr hwc2_config_t kConfigs[] = {
+            kPanelAConfig,
+            kPanelBConfig,
+            kWideConfig,
+        };
+        constexpr uint32_t kConfigCount = 3;
         if (!out_configs) {
-            *out_count = 1;
+            *out_count = kConfigCount;
             return HWC2_ERROR_NONE;
         }
-        if (*out_count < 1) {
-            *out_count = 1;
+        if (*out_count < kConfigCount) {
+            *out_count = kConfigCount;
             return HWC2_ERROR_NONE;
         }
-        out_configs[0] = active;
-        *out_count = 1;
+        for (uint32_t i = 0; i < kConfigCount; ++i)
+            out_configs[i] = kConfigs[i];
+        *out_count = kConfigCount;
         return HWC2_ERROR_NONE;
     }
     return d->fns.getDisplayConfigs
@@ -1426,7 +1422,6 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
         bool zoom = WantZoomMode();
         buffer_handle_t target = nullptr;
         int fence = -1;
-        bool reprobe_primary = false;
         {
             std::lock_guard<std::mutex> zl(d->zoom_lock);
             d->zoom_active = zoom;
@@ -1435,25 +1430,6 @@ static int32_t PresentDisplay(hwc2_device_t* device, hwc2_display_t display,
             fence = d->client_acquire_fence;
             d->client_acquire_fence = -1;
 
-            if (strcmp(d->last_mode, zoom ? "zoom" : "single") != 0) {
-                /* The first post-boot transition is just as much a real
-                 * geometry change as later hinge moves.  It must publish a
-                 * fresh config rather than leaving SystemUI on boot's 1080px
-                 * contract. */
-                reprobe_primary = true;
-                d->mode_seen = true;
-                snprintf(d->last_mode, sizeof(d->last_mode), "%s", zoom ? "zoom" : "single");
-                ALOGI("display mode -> %s (%s)", d->last_mode,
-                      reprobe_primary ? "reprobe" : "initial");
-                if (d->refresh_fn)
-                    d->refresh_fn(d->refresh_data, kPrimaryDisplay);
-            } else if (!d->mode_seen) {
-                d->mode_seen = true;
-            }
-        }
-
-        if (reprobe_primary) {
-            SchedulePrimaryReprobe(d);
         }
 
         if (zoom && target) {
