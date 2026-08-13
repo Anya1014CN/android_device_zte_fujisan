@@ -3059,6 +3059,12 @@ static int32_t SetLayerBuffer(hwc2_device_t* device, hwc2_display_t display, hwc
         if (it->second.acquire_fence >= 0)
             close(it->second.acquire_fence);
         it->second.acquire_fence = acquire_fence >= 0 ? dup(acquire_fence) : -1;
+        /* Every primary layer is composited by SurfaceFlinger into the one
+         * client target.  Do not let the wrapped CAF composer import a second
+         * layer buffer or program an SSPP outside the paired MDSS commit. */
+        if (acquire_fence >= 0)
+            close(acquire_fence);
+        return HWC2_ERROR_NONE;
     }
     return d->fns.setLayerBuffer
                ? d->fns.setLayerBuffer(d->real, display, layer, buffer, acquire_fence)
