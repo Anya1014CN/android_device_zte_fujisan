@@ -240,15 +240,14 @@ PRODUCT_PACKAGES += \
 
 # Use the msm8996 CAF V4L2 OMX implementation with the standard AOSP OMX
 # service.  The kernel already exposes the Venus VIDC decoder/encoder nodes;
-# these source-built libraries provide the missing userspace registration for
-# all hardware codecs (AVC, HEVC, VP8/9, MPEG-2/4, H.263, VC-1 and DivX).
-# Do not rely on incompatible Oreo video codec blobs.
+# these source-built libraries provide the missing AVC hardware encoder path.
+# Keep VDEC disabled until its separate display-config dependency is brought
+# up; do not rely on incompatible Oreo video codec blobs.
 PRODUCT_PACKAGES += \
     android.hardware.media.omx@1.0 \
     android.hidl.memory@1.0 \
     libminijail \
     libOmxCore \
-    libOmxVdec \
     libOmxVenc \
     libstagefrighthw \
     libhypv_intercept \

@@ -1,6 +1,7 @@
 # Qualcomm V4L2 OMX extension for the AOSP mediacodec seccomp baseline.
 # This is the standard CAF policy required by the msm8996 Venus backend.
 pselect6: 1
+eventfd: 1
 eventfd2: 1
 sendto: 1
 recvfrom: 1
