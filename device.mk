@@ -72,6 +72,7 @@ PRODUCT_SYSTEM_PROPERTIES += \
 PRODUCT_PACKAGES += \
     fujisan_halld \
     FujisanCameraPanel \
+    FujisanFlashlight \
     FujisanPrimaryPanel \
     android.hardware.vibrator-service.legacy \
     vibrator.default \
@@ -91,7 +92,6 @@ PRODUCT_PACKAGES += \
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_PACKAGES += \
-    FujisanFlashlight \
     FujisanWindowInfoProbe \
     FujisanRotationOverlay \
     androidx.window.sidecar \
@@ -354,7 +354,8 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc
 
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/system/etc/default-permissions/com.zte.fujisan.camerapanel.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/default-permissions/com.zte.fujisan.camerapanel.xml
+    $(LOCAL_PATH)/system/etc/default-permissions/com.zte.fujisan.camerapanel.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/default-permissions/com.zte.fujisan.camerapanel.xml \
+    $(LOCAL_PATH)/system/etc/permissions/privapp-permissions-com.zte.fujisan.flashlight.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/privapp-permissions-com.zte.fujisan.flashlight.xml
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_COPY_FILES += \
