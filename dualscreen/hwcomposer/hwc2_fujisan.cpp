@@ -910,37 +910,6 @@ static void LoadRealFns(Device* d) {
 #undef LOAD
 }
 
-/* Read-only probe: determine whether the Qualcomm composer owns fb1 itself. */
-static void ProbeRealSecondary(Device* d) {
-    if (!d->fns.getDisplayConfigs)
-        return;
-
-    uint32_t count = 0;
-    int32_t err = d->fns.getDisplayConfigs(d->real, kSecondaryDisplay, &count, nullptr);
-    ALOGI("real display 1 probe: getConfigs err=%d count=%u", err, count);
-    if (err != HWC2_ERROR_NONE || count == 0)
-        return;
-
-    std::vector<hwc2_config_t> configs(count);
-    uint32_t returned = count;
-    err = d->fns.getDisplayConfigs(d->real, kSecondaryDisplay, &returned, configs.data());
-    ALOGI("real display 1 probe: fill err=%d count=%u first=%u", err, returned,
-          returned ? configs[0] : 0);
-    if (err != HWC2_ERROR_NONE || returned == 0)
-        return;
-
-    if (d->fns.getDisplayType) {
-        int32_t type = -1;
-        int32_t type_err = d->fns.getDisplayType(d->real, kSecondaryDisplay, &type);
-        ALOGI("real display 1 probe: type err=%d type=%d", type_err, type);
-    }
-    if (d->fns.getActiveConfig) {
-        hwc2_config_t active = 0;
-        int32_t active_err = d->fns.getActiveConfig(d->real, kSecondaryDisplay, &active);
-        ALOGI("real display 1 probe: active err=%d config=%u", active_err, active);
-    }
-}
-
 static int32_t SecCreateLayer(Device* d, hwc2_layer_t* out_layer) {
     std::lock_guard<std::mutex> sc(d->sec.lock);
     hwc2_layer_t id = d->sec.next_layer++;
@@ -3539,7 +3508,6 @@ static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw
         return err;
     }
     LoadRealFns(d);
-    ProbeRealSecondary(d);
 
     d->base.common.tag = HARDWARE_DEVICE_TAG;
     d->base.common.version = HWC_DEVICE_API_VERSION_2_0;
