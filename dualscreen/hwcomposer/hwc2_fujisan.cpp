@@ -809,8 +809,20 @@ static bool SubmitSingleClientTarget(Device* d, buffer_handle_t handle, int acqu
  * reloading a physical panel's config table.  It is deliberately dispatched
  * outside PresentDisplay, because SF synchronously queries HWC while handling
  * it. */
-static void RequestPrimaryReconfigure(Device* d) {
+static void RequestPrimaryGeometryReconfigure(Device* d) {
     SchedulePrimaryReprobe(d);
+}
+
+static void RequestPrimaryFrame(Device* d) {
+    HWC2_PFN_REFRESH fn = nullptr;
+    hwc2_callback_data_t data = nullptr;
+    {
+        std::lock_guard<std::mutex> cl(d->cb_lock);
+        fn = d->refresh_fn;
+        data = d->refresh_data;
+    }
+    if (fn)
+        fn(data, kPrimaryDisplay);
 }
 
 struct DisplayModePropertySnapshot {
@@ -856,8 +868,8 @@ static void* DisplayModeWatchThreadMain(void* arg) {
         if (strcmp(last_mode, snapshot.value) == 0)
             continue;
         snprintf(last_mode, sizeof(last_mode), "%s", snapshot.value);
-        ALOGI("display_mode property -> %s; reconfiguring primary", snapshot.value);
-        RequestPrimaryReconfigure(d);
+        ALOGI("display_mode property -> %s; reconfiguring primary geometry", snapshot.value);
+        RequestPrimaryGeometryReconfigure(d);
     }
     d->display_mode_thread_run.store(false);
     return nullptr;
@@ -901,8 +913,11 @@ static void* PrimaryPanelWatchThreadMain(void* arg) {
         if (strcmp(last_primary, snapshot.value) == 0)
             continue;
         snprintf(last_primary, sizeof(last_primary), "%s", snapshot.value);
-        ALOGI("active_primary -> %s; reconfiguring primary", snapshot.value);
-        RequestPrimaryReconfigure(d);
+        /* A/B share geometry.  A refresh produces the next client target and
+         * lets the kernel consume its A/B atomic flag; a connected callback
+         * would needlessly make SurfaceFlinger rebuild the display. */
+        ALOGI("active_primary -> %s; refreshing primary frame", snapshot.value);
+        RequestPrimaryFrame(d);
     }
     d->primary_panel_thread_run.store(false);
     return nullptr;
