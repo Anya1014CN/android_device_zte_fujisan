@@ -294,7 +294,6 @@ struct Device {
     struct fb_var_screeninfo vinfo {};
     struct fb_fix_screeninfo finfo {};
     uint32_t sec_overlay_id = MSMFB_NEW_REQUEST;
-    uint32_t pri_overlay_id = MSMFB_NEW_REQUEST;
     /* The legacy MDP overlay stores its source geometry and pixel format at
      * OVERLAY_SET time.  SurfaceFlinger may first submit a 1080-wide target
      * while changing to zoom, then replace it with the 2160-wide target. */
@@ -312,11 +311,6 @@ struct Device {
     buffer_handle_t zoom_client_target = nullptr; /* alias while zoom */
     int32_t zoom_acquire_fence = -1;
     bool disable_secondary = true; /* dual INTERNAL off for hinge/zoom path */
-    int fb0_fd = -1;
-    void* fb0_map = MAP_FAILED;
-    size_t fb0_map_size = 0;
-    struct fb_var_screeninfo vinfo0 {};
-    struct fb_fix_screeninfo finfo0 {};
     /* Wide is submitted through the standard atomic ABI on fb0.  Do not use
      * the legacy fb1 overlay route: the Fujisan kernel expands this one C
      * target into both physical CTLs. */
@@ -516,38 +510,6 @@ static void CloseFb1(Device* d) {
         close(d->fb_fd);
         d->fb_fd = -1;
     }
-}
-
-static bool OpenFb0(Device* d) {
-    if (d->fb0_fd >= 0)
-        return true;
-    d->fb0_fd = open("/dev/graphics/fb0", O_RDWR | O_CLOEXEC);
-    if (d->fb0_fd < 0) {
-        ALOGE("open fb0 failed: %s", strerror(errno));
-        return false;
-    }
-    if (ioctl(d->fb0_fd, FBIOGET_VSCREENINFO, &d->vinfo0) < 0 ||
-        ioctl(d->fb0_fd, FBIOGET_FSCREENINFO, &d->finfo0) < 0) {
-        ALOGE("fb0 get screeninfo failed: %s", strerror(errno));
-        close(d->fb0_fd);
-        d->fb0_fd = -1;
-        return false;
-    }
-    d->fb0_map_size = d->finfo0.smem_len;
-    if (d->fb0_map_size == 0) {
-        d->fb0_map_size = (size_t)d->vinfo0.xres_virtual * d->vinfo0.yres_virtual *
-                          (d->vinfo0.bits_per_pixel / 8);
-    }
-    d->fb0_map = mmap(nullptr, d->fb0_map_size, PROT_READ | PROT_WRITE, MAP_SHARED, d->fb0_fd, 0);
-    if (d->fb0_map == MAP_FAILED) {
-        ALOGE("fb0 mmap failed: %s", strerror(errno));
-        close(d->fb0_fd);
-        d->fb0_fd = -1;
-        return false;
-    }
-    ALOGI("fb0 mapped %ux%u line=%u smem=%zu", d->vinfo0.xres, d->vinfo0.yres,
-          d->finfo0.line_length, d->fb0_map_size);
-    return true;
 }
 
 static bool OpenWideFramebuffer(Device* d) {
@@ -1528,24 +1490,6 @@ static bool PostHandleOverlayToFb1(Device* d, buffer_handle_t handle) {
     if (!OpenFb1(d))
         return false;
     return PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle, 0, "fb1");
-}
-
-/* The 2160-wide client target is one dma-buf.  Import it into both real
- * panels with cropped source rectangles rather than copying to fbdev and
- * calling PAN_DISPLAY: the latter collides with MDSS/HWC base-pipe ownership. */
-static bool __attribute__((unused)) PostZoomOverlays(Device* d, buffer_handle_t handle, int fence) {
-    if (!handle)
-        return false;
-    if (fence >= 0) {
-        (void)sync_wait(fence, 1000);
-        close(fence);
-    }
-    if (!OpenFb0(d) || !OpenFb1(d))
-        return false;
-    const bool a = PostHandleOverlay(d, d->fb0_fd, &d->pri_overlay_id, handle, 0, "fb0");
-    const bool b = PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle,
-                                     FUJISAN_SEC_WIDTH, "fb1");
-    return a && b;
 }
 
 static int32_t __attribute__((unused)) SecPresent(Device* d, int32_t* out_retire) {
