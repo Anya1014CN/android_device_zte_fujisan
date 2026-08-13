@@ -17,8 +17,6 @@ on early-boot
     start fujisan_halld
 
 on boot
-    write /sys/module/zte_touch_expand/parameters/separate_inputs Y
-
     # QPNP creates blink after the LED class device, too late for ueventd.
     # The stock HIDL Light HAL runs as system.
     chown system system /sys/class/leds/red/blink
@@ -33,14 +31,3 @@ on boot
 # DCS transitions during display power changes.
 on property:sys.boot_completed=1
     restart fujisan_halld
-
-# The hall daemon publishes the physical posture on every hinge event.  Keep
-# the kernel touch topology in lockstep without polling from userspace.
-on property:vendor.fujisan.hall_status=1
-    write /sys/module/zte_touch_expand/parameters/separate_inputs Y
-
-on property:vendor.fujisan.hall_status=2
-    write /sys/module/zte_touch_expand/parameters/separate_inputs N
-
-on property:vendor.fujisan.hall_status=3
-    write /sys/module/zte_touch_expand/parameters/separate_inputs N
