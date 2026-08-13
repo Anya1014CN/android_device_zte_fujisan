@@ -7,8 +7,6 @@
  */
 #define LOG_TAG "HwcFujisan"
 
-#include <android/hardware/graphics/common/1.0/types.h>
-#include <android/hardware/graphics/mapper/2.0/IMapper.h>
 #include <cutils/native_handle.h>
 #include <hardware/hardware.h>
 #include <hardware/hwcomposer2.h>
@@ -19,9 +17,6 @@
 /* From CAF gralloc_priv.h / gr_priv_handle.h (msm8996). */
 #ifndef GRALLOC_MODULE_PERFORM_GET_CUSTOM_STRIDE_FROM_HANDLE
 #define GRALLOC_MODULE_PERFORM_GET_CUSTOM_STRIDE_FROM_HANDLE 3
-#endif
-#ifndef GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS
-#define GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS 10
 #endif
 #ifndef PRIV_FLAGS_UBWC_ALIGNED
 #define PRIV_FLAGS_UBWC_ALIGNED 0x08000000
@@ -88,12 +83,6 @@ static constexpr int kFujisanGrallocMagic = 'gmsm';
 #ifndef MDP_COMMIT_FUJISAN_SINGLE_B
 #define MDP_COMMIT_FUJISAN_SINGLE_B 0x10000000
 #endif
-
-using android::hardware::hidl_handle;
-using android::hardware::graphics::common::V1_0::BufferUsage;
-using android::hardware::graphics::mapper::V2_0::Error;
-using android::hardware::graphics::mapper::V2_0::IMapper;
-using android::sp;
 
 #ifndef FUJISAN_SEC_WIDTH
 #define FUJISAN_SEC_WIDTH 1080
@@ -314,8 +303,6 @@ struct Device {
     uint32_t sec_overlay_src_format = 0;
     int sec_overlay_crop_x = -1;
     uint32_t sec_overlay_crop_width = 0;
-    sp<IMapper> mapper;
-
     /* ZOOM (open) virtual large screen on primary display id 0. */
     std::mutex zoom_lock;
     bool zoom_active = false;
@@ -457,19 +444,6 @@ static void SetDisplayPowerProp(bool on) {
 
 static Device* ToDev(hwc2_device_t* d) {
     return reinterpret_cast<Device*>(d);
-}
-
-static int KickFb(int fd, struct fb_var_screeninfo* vinfo) {
-    /* Non-blocking: wait_for_finish deadlocks composer when posting fb1 from Present. */
-    MdpDisplayCommit commit;
-    memset(&commit, 0, sizeof(commit));
-    commit.wait_for_finish = 0;
-    commit.var = *vinfo;
-    commit.var.activate = FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
-    if (ioctl(fd, MSMFB_DISPLAY_COMMIT, &commit) == 0)
-        return 0;
-    vinfo->activate = FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
-    return ioctl(fd, FBIOPAN_DISPLAY, vinfo);
 }
 
 static bool OpenFb1(Device* d) {
@@ -1400,91 +1374,6 @@ static void EnsurePrimaryPanelWatchThread(Device* d) {
     }
 }
 
-static void* TryGrallocRgbDataAddress(buffer_handle_t handle) {
-    const hw_module_t* module = nullptr;
-    if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module) != 0 || !module)
-        return nullptr;
-    const auto* g = reinterpret_cast<const gralloc_module_t*>(module);
-    if (!g->perform)
-        return nullptr;
-    void* rgb = nullptr;
-    if (g->perform(const_cast<gralloc_module_t*>(g), GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS,
-                   handle, &rgb) == 0 &&
-        rgb != nullptr)
-        return rgb;
-    return nullptr;
-}
-
-static bool MapperLockCpu(Device* d, buffer_handle_t handle, int w, int h, void** out_vaddr) {
-    if (d->mapper == nullptr)
-        d->mapper = IMapper::getService();
-    if (d->mapper == nullptr)
-        return false;
-
-    const uint64_t usages[] = {
-            static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN),
-            static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN) |
-                    static_cast<uint64_t>(BufferUsage::GPU_TEXTURE),
-            static_cast<uint64_t>(BufferUsage::CPU_READ_RARELY),
-    };
-    const IMapper::Rect rects[] = {
-            IMapper::Rect{0, 0, w, h},
-    };
-
-    for (uint64_t usage : usages) {
-        for (const auto& rect : rects) {
-            void* vaddr = nullptr;
-            Error err = Error::NONE;
-            d->mapper->lock(const_cast<native_handle_t*>(handle), usage, rect, hidl_handle(),
-                            [&](const auto e, void* ptr) {
-                                err = e;
-                                vaddr = ptr;
-                            });
-            if (err == Error::NONE && vaddr != nullptr) {
-                *out_vaddr = vaddr;
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-static void __attribute__((unused)) CopyRgbaToFb(Device* d, const uint8_t* src, int stride_px,
-                                                 int w, int h, int format) {
-    const size_t src_stride_bytes = static_cast<size_t>(stride_px) * 4;
-    const size_t dst_stride_bytes =
-            d->finfo.line_length ? d->finfo.line_length : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
-    const size_t copy_w = static_cast<size_t>(w) * 4;
-    auto* dst = static_cast<uint8_t*>(d->fb_map);
-
-    /* mdss fb often scans out as BGRA8888 (red offset 16). SF client target is RGBA. */
-    const bool fb_bgra = (d->vinfo.bits_per_pixel == 32 && d->vinfo.red.offset == 16);
-    const bool src_rgba = (format == HAL_PIXEL_FORMAT_RGBA_8888 ||
-                           format == HAL_PIXEL_FORMAT_RGBX_8888 || format == 1);
-    const bool src_bgra = (format == HAL_PIXEL_FORMAT_BGRA_8888 || format == 5);
-    const bool swizzle = fb_bgra ? src_rgba : src_bgra;
-
-    for (int y = 0; y < h; y++) {
-        const uint8_t* srow = src + static_cast<size_t>(y) * src_stride_bytes;
-        uint8_t* drow = dst + static_cast<size_t>(y) * dst_stride_bytes;
-        if (!swizzle) {
-            memcpy(drow, srow, copy_w);
-        } else {
-            for (int x = 0; x < w; x++) {
-                const uint8_t* sp = srow + static_cast<size_t>(x) * 4;
-                uint8_t* dp = drow + static_cast<size_t>(x) * 4;
-                dp[0] = sp[2];
-                dp[1] = sp[1];
-                dp[2] = sp[0];
-                dp[3] = sp[3];
-            }
-        }
-        if (dst_stride_bytes > copy_w)
-            memset(drow + copy_w, 0, dst_stride_bytes - copy_w);
-    }
-    msync(d->fb_map, d->fb_map_size, MS_SYNC);
-}
-
 /*
  * fb1 is a real MDSS panel.  Its contents must be submitted as an MDP overlay
  * using the client target dma-buf.  Writing its fbdev mmap then pan_display
@@ -1657,90 +1546,6 @@ static bool __attribute__((unused)) PostZoomOverlays(Device* d, buffer_handle_t 
     const bool b = PostHandleOverlay(d, d->fb_fd, &d->sec_overlay_id, handle,
                                      FUJISAN_SEC_WIDTH, "fb1");
     return a && b;
-}
-
-/* Split the wide client target: left -> fb0, right -> fb1; the kernel applies
- * the five-row physical-panel offset for B. */
-static bool __attribute__((unused)) CopyZoomSplit(Device* d, buffer_handle_t handle, int fence) {
-    if (!handle)
-        return false;
-    if (fence >= 0) {
-        (void)sync_wait(fence, 1000);
-        close(fence);
-    }
-    if (!OpenFb0(d) || !OpenFb1(d) || d->fb0_map == MAP_FAILED || d->fb_map == MAP_FAILED)
-        return false;
-
-    int stride_px = kZoomWidth;
-    int w = kZoomWidth;
-    int h = FUJISAN_SEC_HEIGHT;
-    int format = HAL_PIXEL_FORMAT_RGBA_8888;
-    int flags = 0;
-    GetGrallocStridePx(handle, &stride_px, &w, &h, &format, &flags);
-    if (h > FUJISAN_SEC_HEIGHT)
-        h = FUJISAN_SEC_HEIGHT;
-    if (stride_px < w)
-        stride_px = w;
-
-    void* vaddr = TryGrallocRgbDataAddress(handle);
-    bool locked = false;
-    if (vaddr == nullptr) {
-        locked = MapperLockCpu(d, handle, stride_px, h, &vaddr);
-        if (!locked)
-            locked = MapperLockCpu(d, handle, w, h, &vaddr);
-    }
-    if (vaddr == nullptr) {
-        ALOGE("zoom split: no CPU base %dx%d stride=%d flags=0x%x", w, h, stride_px, flags);
-        return false;
-    }
-
-    const uint8_t* src = static_cast<const uint8_t*>(vaddr);
-    const size_t src_stride = static_cast<size_t>(stride_px) * 4;
-    const size_t dst0_stride = d->finfo0.line_length ? d->finfo0.line_length
-                                                     : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
-    const size_t dst1_stride = d->finfo.line_length ? d->finfo.line_length
-                                                    : static_cast<size_t>(FUJISAN_SEC_WIDTH) * 4;
-    auto* dst0 = static_cast<uint8_t*>(d->fb0_map);
-    auto* dst1 = static_cast<uint8_t*>(d->fb_map);
-    const int left_w = FUJISAN_SEC_WIDTH;
-    const int right_w = FUJISAN_SEC_WIDTH;
-    const int src_right_x = (w >= kZoomWidth) ? FUJISAN_SEC_WIDTH : 0; /* if only 1080, mirror */
-
-    for (int y = 0; y < h; y++) {
-        const uint8_t* srow = src + static_cast<size_t>(y) * src_stride;
-        uint8_t* d0 = dst0 + static_cast<size_t>(y) * dst0_stride;
-        uint8_t* d1 = dst1 + static_cast<size_t>(y) * dst1_stride;
-        memcpy(d0, srow, static_cast<size_t>(left_w) * 4);
-        if (w >= kZoomWidth) {
-            memcpy(d1, srow + static_cast<size_t>(src_right_x) * 4, static_cast<size_t>(right_w) * 4);
-        } else {
-            memcpy(d1, srow, static_cast<size_t>(right_w) * 4);
-        }
-    }
-    msync(d->fb0_map, d->fb0_map_size, MS_SYNC);
-    msync(d->fb_map, d->fb_map_size, MS_SYNC);
-
-    if (locked && d->mapper != nullptr) {
-        Error err = Error::NONE;
-        d->mapper->unlock(const_cast<native_handle_t*>(handle),
-                          [&](const auto e, const auto&) { err = e; });
-        (void)err;
-    }
-
-    d->vinfo0.xoffset = 0;
-    d->vinfo0.yoffset = 0;
-    d->vinfo0.activate = FB_ACTIVATE_VBL;
-    KickFb(d->fb0_fd, &d->vinfo0);
-    d->vinfo.xoffset = 0;
-    d->vinfo.yoffset = 0;
-    d->vinfo.activate = FB_ACTIVATE_VBL;
-    KickFb(d->fb_fd, &d->vinfo);
-    ioctl(d->fb0_fd, FBIOBLANK, FB_BLANK_UNBLANK);
-    ioctl(d->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
-    static int once = 0;
-    if (once++ < 8)
-        ALOGI("zoom split post src=%dx%d stride=%d", w, h, stride_px);
-    return true;
 }
 
 static int32_t __attribute__((unused)) SecPresent(Device* d, int32_t* out_retire) {
