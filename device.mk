@@ -346,6 +346,11 @@ PRODUCT_COPY_FILES += \
     frameworks/av/media/libstagefright/data/media_codecs_google_telephony.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_telephony.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml
 
+# AK4962 loads its DSP images through request_firmware(), whose standard
+# Android vendor search path is /vendor/firmware. Keep the OEM images in
+# their extracted location as well for legacy users of /vendor/etc/firmware.
+PRODUCT_COPY_FILES += $(call find-copy-subdir-files,*,vendor/zte/fujisan/proprietary/vendor/etc/firmware,$(TARGET_COPY_OUT_VENDOR)/firmware)
+
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.dualscreen.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.dualscreen.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \

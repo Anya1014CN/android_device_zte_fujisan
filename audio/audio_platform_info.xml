@@ -33,9 +33,9 @@
         <device name="SND_DEVICE_OUT_SPEAKER" bit_width="24"/>
     </bit_width_configs>
     <config_params>
+        <param key="snd_card_name" value="msm8996-ak4962-snd-card"/>
         <!-- In the below value string, first parameter indicates size -->
         <!-- followed by perf lock options                             -->
         <param key="perf_lock_opts" value="4, 0x101, 0x704, 0x20F, 0x1E01"/>
-        </config_params>
+    </config_params>
 </audio_platform_info>
-
