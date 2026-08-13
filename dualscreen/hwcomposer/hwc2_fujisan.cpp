@@ -299,11 +299,6 @@ static void NoteZoomPresent(Device* d, int width, int height, int stride) {
     d->zoom_present_count = 0;
 }
 
-static void SetDisplayPowerProp(bool on) {
-    property_set("vendor.fujisan.display_power", on ? "1" : "0");
-}
-
-
 static Device* ToDev(hwc2_device_t* d) {
     return reinterpret_cast<Device*>(d);
 }
@@ -1835,13 +1830,6 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
     auto* d = ToDev(device);
     int32_t ret = d->fns.setPowerMode ? d->fns.setPowerMode(d->real, display, mode)
                                       : HWC2_ERROR_UNSUPPORTED;
-    if (display == kPrimaryDisplay) {
-        const bool on = (mode == HWC2_POWER_MODE_ON);
-        SetDisplayPowerProp(on);
-        /* mdss_fb owns the paired backlight and DCS lifecycle.  Do not
-         * inject a separate B=0 write here: it races the framework's fade
-         * and makes the secondary panel flash on wake. */
-    }
     return ret;
 }
 
