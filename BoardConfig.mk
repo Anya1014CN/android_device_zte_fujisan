@@ -63,6 +63,7 @@ BOARD_KERNEL_IMAGE_NAME := Image.gz-dtb
 TARGET_KERNEL_ARCH := arm64
 TARGET_KERNEL_HEADER_ARCH := arm64
 TARGET_KERNEL_SOURCE := kernel/zte/msm8996
+TARGET_KERNEL_VERSION := 4.4
 TARGET_KERNEL_CONFIG := lineageos_fujisan_defconfig
 # The legacy bootloader verifies an AOSP BootSignature DER trailer rather than
 # an AVB footer. Keep that device-specific post-processing outside AOSP.
