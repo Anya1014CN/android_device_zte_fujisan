@@ -65,10 +65,7 @@ PRODUCT_SYSTEM_PROPERTIES += \
 
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
-    fujisan_halld \
-    FujisanCameraPanel \
     FujisanFlashlight \
-    FujisanPrimaryPanel \
     android.hardware.vibrator-service.legacy \
     vibrator.default \
     android.hardware.wifi-service \
@@ -117,12 +114,6 @@ PRODUCT_PACKAGES += \
     liboverlay \
     libqdMetaData.system
 endif
-
-# Fujisan's hinge topology is implemented by this device-side HWC2 wrapper.
-# The wrapper loads the OEM msm8996 HWC internally; keep it independent from
-# the deferred camera/radio hardware group.
-PRODUCT_PACKAGES += \
-    hwcomposer.fujisan
 
 # The side fingerprint sensor is present during every boot. Keep the standard
 # HIDL interface and service outside the deferred hardware group.
@@ -343,7 +334,6 @@ PRODUCT_COPY_FILES += \
     frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml
 
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/init.fujisan.btaddr.sh \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc
