@@ -100,4 +100,3 @@ persist.vendor.fujisan.primary_force=0
 persist.vendor.fujisan.dual_internal=0
 vendor.fujisan.display_power=1
 vendor.fujisan.active_primary=a
-ro.feature.target_dual_display=1

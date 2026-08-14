@@ -2,7 +2,6 @@
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <bool name="config_automatic_brightness_available">true</bool>
 
-
     <!-- The PMI8994 RGB LED is wired through the standard lights HAL. -->
     <bool name="config_intrusiveNotificationLed">true</bool>
 
@@ -69,26 +68,15 @@
     </array>
 
     <!--
-      The two 1080x1920 panels form one 2160x1920 logical display when open.
-      This is an actual physical gap, not a display cutout.  The WindowManager
-      Jetpack extension rotates this natural-orientation rectangle with the
-      display, so portrait has a vertical central hinge and landscape has a
-      horizontal central hinge.
-
-      State 0 is folded and deliberately maps to UNKNOWN, which suppresses the
-      feature while only panel A is active.  State 1 is the opened/flat posture.
+      Single-panel fallback: do not publish a hinge or posture mapping.
+      AndroidX WindowManager reports display features to applications even when
+      HWC exposes only 1080x1920; the old virtual A+B hinge therefore made
+      adaptive layouts select a two-pane/expanded presentation on this phone.
     -->
-    <string name="config_display_features" translatable="false">hinge-[1079,0,1081,1920]</string>
-    <string-array name="config_device_state_postures" translatable="false">
-        <item>0:-1</item>
-        <item>1:3</item>
-    </string-array>
 
-    <!-- The platform already supports split screen; make the large unfolded
-         display an always-eligible multi-window and freeform target. -->
-    <bool name="config_freeformWindowManagement">true</bool>
-    <integer name="config_supportsNonResizableMultiWindow">1</integer>
-    <integer name="config_respectsActivityMinWidthHeightMultiWindow">-1</integer>
+    <!-- This is a conventional single-display phone; retain the platform
+         default multi-window policy instead of advertising large-screen
+         freeform capabilities. -->
 
     <!-- Use the public NTP pool for framework time synchronization. -->
     <string name="config_ntpServer" translatable="false">pool.ntp.org</string>

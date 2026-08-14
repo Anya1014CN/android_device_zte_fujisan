@@ -39,15 +39,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     sys.usb.rndis.func.name=rndis_bam \
 
 # product/system_ext defaults ship persist.sys.usb.config=none; override them.
-# Settings ships its 12L two-pane implementation but leaves it behind a
-# feature flag on phone products. Extended mode is a 2160x1920 logical display
-# (720dp wide at the device density), so opt into that existing code without a
-# Settings fork.
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.usb.config=adb \
     persist.sys.usb.config.extra=none \
     sys.usb.configfs=1 \
-    persist.sys.fflag.override.settings_support_large_screen=true \
 
 PRODUCT_SYSTEM_EXT_PROPERTIES += \
     persist.sys.usb.config=adb \
@@ -84,6 +79,7 @@ PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-impl \
     libbt-vendor \
     FujisanNetworkStackOverlay \
+    FujisanSinglePanelOverlay \
     android.hardware.usb@1.0-service \
     android.hardware.sensors@1.0-impl \
     android.hardware.sensors@1.0-service \

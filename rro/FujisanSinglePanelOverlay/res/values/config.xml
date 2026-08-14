@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Override all large-screen declarations left by the A+B topology. -->
+    <integer name="config_stableDeviceDisplayWidth">1080</integer>
+    <integer name="config_stableDeviceDisplayHeight">1920</integer>
+    <string name="config_display_features" translatable="false"></string>
+    <string-array name="config_device_state_postures" />
+    <bool name="config_freeformWindowManagement">false</bool>
+    <integer name="config_supportsNonResizableMultiWindow">0</integer>
+    <integer name="config_respectsActivityMinWidthHeightMultiWindow">0</integer>
+    <bool name="config_reverseDefaultRotation">false</bool>
+</resources>
