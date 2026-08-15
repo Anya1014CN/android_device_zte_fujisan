@@ -66,6 +66,7 @@ PRODUCT_SYSTEM_PROPERTIES += \
 # Use gestural navigation by default.
 PRODUCT_PACKAGES += \
     fujisan_halld \
+    FujisanCameraPanel \
     FujisanFlashlight \
     FujisanPrimaryPanel \
     android.hardware.vibrator-service.legacy \
