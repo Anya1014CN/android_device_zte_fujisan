@@ -3,6 +3,11 @@
 # node permissions required by SurfaceFlinger/Adreno on this legacy kernel.
 # Wide C consumes a linear client target.  These are read by CAF gralloc
 # before it creates SurfaceFlinger's framebuffer pool.
+on early-init
+    # Legacy Adreno may report a reusable window buffer before its contents
+    # survive client composition.  Keep HWUI on full redraws.
+    setprop debug.hwui.use_buffer_age false
+
 on early-boot
     chmod 0666 /dev/kgsl-3d0
     chown system system /dev/kgsl-3d0
