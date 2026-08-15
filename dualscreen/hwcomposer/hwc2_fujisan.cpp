@@ -1219,27 +1219,25 @@ static int32_t GetDisplayConfigs(hwc2_device_t* device, hwc2_display_t display, 
                                  hwc2_config_t* out_configs) {
     auto* d = ToDev(device);
     if (display == kPrimaryDisplay) {
-        /* HWC config IDs, not resolution, identify display modes in the
-         * public HWC2 contract.  A and B intentionally remain separate
-         * 1080x1920 modes: they select different physical scanout topology.
-         * C selects the 2160x1915 paired topology. */
-        constexpr hwc2_config_t kConfigs[] = {
-            kPanelAConfig,
-            kPanelBConfig,
-            kWideConfig,
-        };
-        constexpr uint32_t kConfigCount = 3;
+        /* A/B/C are modes of one physical display, but the hinge determines
+         * which topology is electrically usable.  Android has no upstream
+         * posture-to-mode policy: advertising all three makes SurfaceFlinger
+         * correctly retain its former 1080 mode after an unfold and hand C an
+         * invalid 1080 client target.  Re-enumerating just the available
+         * HWC config on the normal connected callback is the standard dynamic
+         * panel path and lets SurfaceFlinger recreate its render surface at
+         * the active topology's dimensions. */
+        const hwc2_config_t active = TopologyConfig();
         if (!out_configs) {
-            *out_count = kConfigCount;
+            *out_count = 1;
             return HWC2_ERROR_NONE;
         }
-        if (*out_count < kConfigCount) {
-            *out_count = kConfigCount;
+        if (*out_count < 1) {
+            *out_count = 1;
             return HWC2_ERROR_NONE;
         }
-        for (uint32_t i = 0; i < kConfigCount; ++i)
-            out_configs[i] = kConfigs[i];
-        *out_count = kConfigCount;
+        out_configs[0] = active;
+        *out_count = 1;
         return HWC2_ERROR_NONE;
     }
     return d->fns.getDisplayConfigs
