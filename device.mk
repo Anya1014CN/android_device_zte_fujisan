@@ -139,6 +139,17 @@ PRODUCT_PACKAGES += \
     libmmjpeg_interface \
     vendor.qti.hardware.camera.device@1.0
 
+# The legacy RIL service is installed on every build and LD_PRELOADs this
+# device-side ABI shim. Its QCRIL blob also requires the standard AOSP SQLite
+# vendor variant, which intentionally has no ICU/APEX dependency, and the
+# Lineage legacy-Protobuf compatibility library. Keep these dependencies
+# outside the deferred hardware group so init can start rild during radio
+# bring-up.
+PRODUCT_PACKAGES += \
+    libril-compat \
+    libsqlite.vendor \
+    libprotobuf-cpp-full-vendorcompat
+
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 # The OEM image provides the modem-facing location stack. Add only the
 # framework-facing GNSS HIDL bridge; libloc_core and libgps.utils stay OEM.
@@ -147,13 +158,6 @@ PRODUCT_PACKAGES += \
     libgnsspps \
     android.hardware.gnss@1.0-impl-qti \
     android.hardware.gnss@1.0-service-qti
-
-# The Oreo Qualcomm data stack consumes its private xmllib parser ABI while
-# loading netmgr_config.xml.  Use the matching OEM parser blob; the AOSP
-# libxml2 API is not ABI-compatible with this legacy Qualcomm surface.
-PRODUCT_PACKAGES += \
-    libril-compat \
-    libprotobuf-cpp-full-vendorcompat
 
 endif
 
