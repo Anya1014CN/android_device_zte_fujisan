@@ -139,16 +139,18 @@ PRODUCT_PACKAGES += \
     libmmjpeg_interface \
     vendor.qti.hardware.camera.device@1.0
 
-# The legacy RIL service is installed on every build and LD_PRELOADs this
-# device-side ABI shim. Its QCRIL blob also requires the standard AOSP SQLite
-# vendor variant, which intentionally has no ICU/APEX dependency, and the
-# Lineage legacy-Protobuf compatibility library. Keep these dependencies
-# outside the deferred hardware group so init can start rild during radio
-# bring-up.
+# The legacy radio stack is installed on every build. Its QCRIL blob requires
+# the standard AOSP SQLite vendor variant (without an ICU/APEX dependency),
+# the Lineage legacy-Protobuf compatibility library, and the Android 13
+# libutils ABI used by the OEM Peripheral Manager service. Keep these
+# dependencies outside the deferred hardware group so init can bring up the
+# modem before framework telephony starts.
 PRODUCT_PACKAGES += \
     libril-compat \
+    libperipheral_client \
     libsqlite.vendor \
-    libprotobuf-cpp-full-vendorcompat
+    libprotobuf-cpp-full-vendorcompat \
+    libutils-v33
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 # The OEM image provides the modem-facing location stack. Add only the
