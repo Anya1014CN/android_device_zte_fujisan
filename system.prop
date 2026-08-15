@@ -46,10 +46,13 @@ wifi.interface=wlan0
 
 debug.gralloc.enable_fb_ubwc=0
 debug.gralloc.gfx_ubwc_disable=1
+# The legacy Adreno EGL reports reusable window buffers before their contents
+# are preserved on Fujisan's client-composition route.  Disable buffer-age
+# partial redraw so HWUI renders complete frames.
+debug.hwui.use_buffer_age=false
 debug.sf.disable_hwc=0
 debug.sf.enable_hwc_vds=0
 debug.sf.hw=1
-debug.sf.latch_unsignaled=1
 debug.sf.recomputecrop=0
 persist.hwc.enable_vds=0
 vendor.display.enable_default_color_mode=1
@@ -83,9 +86,10 @@ dalvik.vm.heapstartsize=16m
 dalvik.vm.heapgrowthlimit=256m
 dalvik.vm.heapsize=512m
 
-# Use the OEM MSM8996 HWC2 HAL.  It is the only display implementation
-# compatible with this device's legacy MDSS/KGSL ABI.
-ro.hardware.hwcomposer=msm8996
+# Keep all primary layers in one complete client target before the OEM HWC
+# scans it out.  The wrapper retains the original dual-DSI paths for later
+# A+B recovery while the folded configuration exposes A only.
+ro.hardware.hwcomposer=fujisan
 
 # Fujisan hinge / dual-LCD posture (stock-compatible semantics)
 # hall_status: 1=A closed, 2=B open, 3=C closed(B face)

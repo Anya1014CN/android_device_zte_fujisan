@@ -977,8 +977,14 @@ static int32_t AcceptDisplayChanges(hwc2_device_t* device, hwc2_display_t displa
     auto* d = ToDev(device);
     if (display == kPrimaryDisplay) {
         std::lock_guard<std::mutex> zl(d->zoom_lock);
-        for (auto& kv : d->zoom_layers)
+        for (auto& kv : d->zoom_layers) {
+            /* HWC2 requires accepted ValidateDisplay changes to become the
+             * next composition state.  Leaving the requested DEVICE type
+             * here makes every following frame spuriously report HAS_CHANGES
+             * and can skip the fresh client target on partial redraws. */
+            kv.second.requested = kv.second.validated;
             kv.second.changed = false;
+        }
         return HWC2_ERROR_NONE;
     }
     return d->fns.acceptDisplayChanges ? d->fns.acceptDisplayChanges(d->real, display)

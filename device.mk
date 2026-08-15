@@ -94,6 +94,7 @@ endif
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
     libtinyxml \
+    hwcomposer.fujisan \
     android.hardware.security.keymint-service \
     android.hardware.graphics.allocator@2.0-impl \
     android.hardware.graphics.allocator@2.0-service \
