@@ -255,14 +255,13 @@ PRODUCT_PACKAGES += \
     android.hardware.cas.native@1.0
 
 # The vendor manifest requires the legacy DRM 1.0 default factories.  The
-# standard AOSP passthrough service supplies that instance and loads the
-# source-built ClearKey plugin already installed under vendor/mediadrm.  Keep
-# the AOSP ClearKey service for its explicit modern instance; do not use an
-# Oreo Widevine service or blob on Android 12.
+# standard AOSP passthrough service supplies that instance.  Android 16's
+# AOSP ClearKey implementation is AIDL and publishes its own VINTF fragment;
+# do not use an Oreo Widevine service or blob.
 PRODUCT_PACKAGES += \
     android.hardware.drm@1.0-impl \
     android.hardware.drm@1.0-service \
-    android.hardware.drm@1.4-service.clearkey
+    android.hardware.drm-service.clearkey
 
 # The stock RIL links against legacy radio HIDL interfaces from the vendor
 # namespace.
