@@ -222,13 +222,22 @@ static void publish_topology() {
     snprintf(hall_value, sizeof(hall_value), "%d", hall);
     set_property_if_changed("vendor.fujisan.hall_status", hall_value);
 
-    /* Single-A fallback: never advertise B or the synthetic A+B topology.
-     * Keep the hall status informational for diagnostics only; the kernel remains
-     * responsible for physical scanout and panel power. */
-    set_property_if_changed("vendor.fujisan.device_state", "closed_a");
-    set_property_if_changed("vendor.fujisan.display_mode", "single");
-    set_property_if_changed("vendor.fujisan.active_primary", "a");
-    ALOGI("hall=%d topology=single primary=a", hall);
+    char boot_completed[PROPERTY_VALUE_MAX] = "0";
+    property_get("sys.boot_completed", boot_completed, "0");
+    char preferred[PROPERTY_VALUE_MAX] = "a";
+    property_get("persist.vendor.fujisan.primary_panel", preferred, "a");
+    char force[PROPERTY_VALUE_MAX] = "0";
+    property_get("persist.vendor.fujisan.primary_force", force, "0");
+
+    const bool boot_done = boot_completed[0] == '1';
+    const bool wide = boot_done && (hall == 2 || hall == 3);
+    const bool primary_b = !wide && boot_done && force[0] == '1' && preferred[0] == 'b';
+    set_property_if_changed("vendor.fujisan.device_state",
+                            wide ? "open" : (boot_done ? "closed_a" : "boot_single"));
+    set_property_if_changed("vendor.fujisan.display_mode", wide ? "zoom" : "single");
+    set_property_if_changed("vendor.fujisan.active_primary", primary_b ? "b" : "a");
+    ALOGI("hall=%d topology=%s primary=%c", hall, wide ? "C" : "single",
+          primary_b ? 'b' : 'a');
 }
 
 int main() {
