@@ -1,5 +1,5 @@
 runtime_resource_overlay {
-    name: "FujisanRotationOverlay",
+    name: "FujisanFoldFeatureOverlay",
     certificate: "platform",
     resource_dirs: ["res"],
     product_specific: true,

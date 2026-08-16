@@ -1,5 +1,5 @@
 runtime_resource_overlay {
-    name: "FujisanSinglePanelOverlay",
+    name: "FujisanLargeScreenWindowOverlay",
     certificate: "platform",
     resource_dirs: ["res"],
     product_specific: true,

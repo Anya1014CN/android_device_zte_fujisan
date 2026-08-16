@@ -46,16 +46,6 @@
     <!-- Do not mirror local secondary displays onto default. -->
     <bool name="config_localDisplaysMirrorContent">false</bool>
 
-    <!-- Lid (mxm1120 SW_LID) drives fold posture via DeviceState. -->
-    <bool name="config_lidControlsDisplayFold">true</bool>
-    <integer-array name="config_foldedDeviceStates">
-        <item>0</item>
-    </integer-array>
-    <integer-array name="config_openDeviceStates">
-        <item>1</item>
-    </integer-array>
-    <integer-array name="config_halfFoldedDeviceStates" />
-
     <!-- Legacy FPC1020 side fingerprint sensor; the HIDL HAL has no location API. -->
     <string-array name="config_biometric_sensors" translatable="false">
         <item>0:2:15</item>

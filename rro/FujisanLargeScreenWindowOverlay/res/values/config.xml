@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Enable non-resizable tasks only at sw600dp+; preserve phone behavior when folded. -->
+    <integer name="config_supportsNonResizableMultiWindow">0</integer>
+    <!-- Never force a split or future freeform task below its declared minimum size. -->
+    <integer name="config_respectsActivityMinWidthHeightMultiWindow">1</integer>
+    <!-- Capability is declared for later P2 work; do not expose freeform UI yet. -->
+    <bool name="config_freeformWindowManagement">false</bool>
+</resources>

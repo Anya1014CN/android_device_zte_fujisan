@@ -83,20 +83,16 @@ PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-impl \
     libbt-vendor \
     FujisanNetworkStackOverlay \
-    FujisanSinglePanelOverlay \
+    FujisanFoldFeatureOverlay \
+    FujisanLargeScreenWindowOverlay \
+    FujisanWindowInfoProbe \
+    androidx.window.sidecar \
+    androidx.window.extensions \
     android.hardware.usb@1.0-service \
     android.hardware.sensors@1.0-impl \
     android.hardware.sensors@1.0-service \
     libpower.vendor \
     NavigationBarModeGesturalOverlay
-
-ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
-PRODUCT_PACKAGES += \
-    FujisanWindowInfoProbe \
-    FujisanRotationOverlay \
-    androidx.window.sidecar \
-    androidx.window.extensions
-endif
 
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
@@ -383,12 +379,12 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/etc/default-permissions/com.zte.fujisan.camerapanel.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/default-permissions/com.zte.fujisan.camerapanel.xml \
-    $(LOCAL_PATH)/system/etc/permissions/privapp-permissions-com.zte.fujisan.flashlight.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/privapp-permissions-com.zte.fujisan.flashlight.xml
+    $(LOCAL_PATH)/system/etc/permissions/privapp-permissions-com.zte.fujisan.flashlight.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/privapp-permissions-com.zte.fujisan.flashlight.xml \
+    $(LOCAL_PATH)/configs/permissions/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.freeform_window_management.xml \
+    $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/configs/permissions/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.freeform_window_management.xml \
-    $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml \
     $(LOCAL_PATH)/rootdir/etc/seccomp_policy/mediacodec.policy:$(TARGET_COPY_OUT_VENDOR)/etc/seccomp_policy/mediacodec.policy \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/bt_firmware/.placeholder \
     $(LOCAL_PATH)/system/etc/permissions/android.hardware.fingerprint.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/android.hardware.fingerprint.xml
