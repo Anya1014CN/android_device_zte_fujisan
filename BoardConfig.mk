@@ -153,9 +153,9 @@ TARGET_RIL_VARIANT := caf
 ENABLE_VENDOR_RIL_SERVICE := true
 
 # Wi-Fi
-# QCACLD is built into the 4.4 kernel, but its built-in init is deliberately
-# deferred until libwifi-hal selects a firmware mode through this parameter.
-# These are the standard msm8996 qcwcn declarations used by AOSP/LineageOS.
+# QCACLD is built in and enters low power when the last interface is removed.
+# Use the current qcwcn HAL driver-state contract so it writes fwpath every
+# time it recreates a client interface (including after airplane mode).
 BOARD_WLAN_DEVICE := qcwcn
 BOARD_WPA_SUPPLICANT_DRIVER := NL80211
 WIFI_HIDL_UNIFIED_SUPPLICANT_SERVICE_RC_ENTRY := true
@@ -163,10 +163,9 @@ WIFI_HIDL_UNIFIED_SUPPLICANT_SERVICE_RC_ENTRY := true
 # single-STA V3 mode up front, as done by the LineageOS msm8996 common tree,
 # so the AIDL Wi-Fi HAL keeps the configured mode after reloading that matrix.
 WIFI_HAL_INTERFACE_COMBINATIONS := {{{STA}, 1}}
-WIFI_DRIVER_FW_PATH_PARAM := "/sys/module/wlan/parameters/fwpath"
-WIFI_DRIVER_FW_PATH_STA := "sta"
-WIFI_DRIVER_FW_PATH_AP := "ap"
-WIFI_DRIVER_FW_PATH_P2P := "p2p"
+WIFI_DRIVER_STATE_CTRL_PARAM := "/sys/module/wlan/parameters/fwpath"
+WIFI_DRIVER_STATE_ON := ""
+WIFI_DRIVER_STATE_OFF := ""
 
 # Recovery
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/rootdir/etc/fstab.qcom
