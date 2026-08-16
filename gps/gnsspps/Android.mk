@@ -1,6 +1,7 @@
 ifneq ($(BOARD_VENDOR_QCOM_GPS_LOC_API_HARDWARE),)
 LOCAL_PATH := $(call my-dir)
 
+ifneq ($(FUJISAN_USE_OEM_GNSS_RUNTIME),true)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE := libgnsspps
@@ -27,6 +28,7 @@ LOCAL_HEADER_LIBRARIES := \
     libloc_pla_headers
 LOCAL_CFLAGS += $(GNSS_CFLAGS)
 include $(BUILD_SHARED_LIBRARY)
+endif # FUJISAN_USE_OEM_GNSS_RUNTIME
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libgnsspps_headers

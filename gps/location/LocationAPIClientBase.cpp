@@ -364,7 +364,9 @@ int32_t LocationAPIClientBase::locAPIGetBatchSize()
         {
             {"BATCH_SIZE", &mBatchSize, nullptr, 'n'},
         };
-        UTIL_READ_CONF(LOC_PATH_FLP_CONF, flp_conf_param_table);
+        // OEM libgps.utils keeps the configuration reader ABI but does not
+        // export the legacy path global used by the source implementation.
+        UTIL_READ_CONF(LOC_PATH_FLP_CONF_STR, flp_conf_param_table);
         if (mBatchSize < 0) {
             // set mBatchSize to 0 if we got an illegal value from config file
             mBatchSize = 0;

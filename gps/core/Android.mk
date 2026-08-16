@@ -3,6 +3,7 @@ ifneq ($(BUILD_TINY_ANDROID),true)
 
 LOCAL_PATH := $(call my-dir)
 
+ifneq ($(FUJISAN_USE_OEM_GNSS_RUNTIME),true)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE := libloc_core
@@ -51,6 +52,7 @@ LOCAL_HEADER_LIBRARIES := \
 LOCAL_CFLAGS += $(GNSS_CFLAGS)
 
 include $(BUILD_SHARED_LIBRARY)
+endif # FUJISAN_USE_OEM_GNSS_RUNTIME
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libloc_core_headers

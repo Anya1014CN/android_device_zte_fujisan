@@ -185,16 +185,13 @@ PRODUCT_PACKAGES += \
     libion.vendor \
     libwpa_client
 
-ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
-# The OEM image provides the modem-facing location stack. Add only the
-# framework-facing GNSS HIDL bridge; libloc_core and libgps.utils stay OEM.
+# The OEM service needs a standard GNSS 1.0 passthrough implementation.
+# Build that narrow HIDL bridge and its API client from source; the modem-facing
+# runtime is provided by the matching OEM blobs declared in the vendor tree.
 PRODUCT_PACKAGES += \
-    libgnss \
-    libgnsspps \
+    android.hardware.gnss@1.0 \
     android.hardware.gnss@1.0-impl-qti \
-    android.hardware.gnss@1.0-service-qti
-
-endif
+    liblocation_api
 
 # Oreo vendor blobs depend on the vendor variants of the legacy HIDL runtime.
 # LineageOS supplies the ABI shim for the removed Bn constructor maps.

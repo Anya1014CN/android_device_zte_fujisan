@@ -146,8 +146,11 @@ OVERRIDE_RS_DRIVER := libRSDriver_adreno.so
 # GPS / radio
 TARGET_NO_RPC := true
 USE_DEVICE_SPECIFIC_GPS := true
+# The standard HIDL bridge remains source-built, while its two ABI-sensitive
+# Qualcomm runtime libraries come from the OEM stack paired with this modem.
 BOARD_VENDOR_QCOM_GPS_LOC_API_HARDWARE := default
 BOARD_VENDOR_QCOM_LOC_PDK_FEATURE_SET := true
+FUJISAN_USE_OEM_GNSS_RUNTIME := true
 TARGET_RIL_VARIANT := caf
 # The device supplies its own dual-SIM RIL services in vendor init.
 ENABLE_VENDOR_RIL_SERVICE := true
