@@ -39,6 +39,9 @@ TARGET_2ND_CPU_VARIANT := kryo
 TARGET_COPY_OUT_VENDOR := system/vendor
 TARGET_SYSTEM_PROP += $(DEVICE_PATH)/system.prop
 
+# File capabilities required by the imported Qualcomm IMS daemons.
+TARGET_FS_CONFIG_GEN := $(DEVICE_PATH)/config.fs
+
 # Audio: use the source-built CAF msm8996 ALSA HAL.  The Fujisan card is an
 # AK4962 SLIMbus codec, so the generic AOSP in-memory primary HAL cannot
 # drive its mixer routes or capture paths.

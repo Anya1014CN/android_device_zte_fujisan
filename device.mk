@@ -59,6 +59,8 @@ PRODUCT_VENDOR_PROPERTIES += \
     vendor.gralloc.enable_fb_ubwc=0 \
     persist.vendor.radio.hw_mbn_update=1 \
     persist.vendor.radio.sw_mbn_update=1 \
+    persist.dbg.volte_avail_ovr=1 \
+    persist.dbg.vt_avail_ovr=1 \
     ro.vendor.fujisan.enable_legacy_radio=0
 
 PRODUCT_SYSTEM_PROPERTIES += \
@@ -165,6 +167,23 @@ PRODUCT_PACKAGES += \
     libxml2 \
     libprotobuf-cpp-full-vendorcompat \
     libutils-v33
+
+# The Qualcomm IMS APK uses this public Qualcomm Java shared library for
+# carrier-configuration handling.  LineageOS's MSM8996 reference device ships
+# the same Android 16 compatible sources alongside the proprietary IMS APK.
+PRODUCT_PACKAGES += \
+    ims-ext-common \
+    ims_ext_common.xml \
+    qti-telephony-utils \
+    qti_telephony_utils.xml \
+    qti-telephony-hidl-wrapper \
+    qti_telephony_hidl_wrapper.xml
+
+# The matching Qualcomm IMS daemons link these standard libraries.  This is
+# the same source-built pair selected by the public MSM8996 reference tree.
+PRODUCT_PACKAGES += \
+    libion.vendor \
+    libwpa_client
 
 ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 # The OEM image provides the modem-facing location stack. Add only the
@@ -316,6 +335,8 @@ PRODUCT_PRODUCT_PROPERTIES += \
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/cgroups.json:$(TARGET_COPY_OUT_VENDOR)/etc/cgroups.json \
+    $(LOCAL_PATH)/configs/android.hardware.telephony.ims.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.telephony.ims.xml \
+    $(LOCAL_PATH)/system_ext/etc/permissions/privapp-permissions-org.codeaurora.ims.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/permissions/privapp-permissions-org.codeaurora.ims.xml \
     system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \

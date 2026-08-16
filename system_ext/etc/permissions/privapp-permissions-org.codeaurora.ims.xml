@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Privileged permissions required by the platform-signed Qualcomm IMS service. -->
+<permissions>
+    <privapp-permissions package="org.codeaurora.ims">
+        <permission name="android.permission.READ_PRECISE_PHONE_STATE" />
+        <permission name="android.permission.SUBSTITUTE_NOTIFICATION_APP_NAME" />
+    </privapp-permissions>
+</permissions>

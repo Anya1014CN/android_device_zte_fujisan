@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Select the Qualcomm IMS implementation installed by the device vendor
+     package. This matches the public MSM8996 device configuration used by
+     Xiaomi's maintained reference tree.
+-->
+<resources>
+    <string name="config_ims_mmtel_package" translatable="false">org.codeaurora.ims</string>
+    <string name="config_ims_rcs_package" translatable="false">org.codeaurora.ims</string>
+</resources>

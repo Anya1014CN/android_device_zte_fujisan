@@ -2,6 +2,10 @@
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <bool name="config_automatic_brightness_available">true</bool>
 
+    <!-- The imported QTI IMS stack provides MMTEL over LTE. -->
+    <bool name="config_device_volte_available">true</bool>
+    <bool name="config_carrier_volte_available">true</bool>
+
     <!-- The PMI8994 RGB LED is wired through the standard lights HAL. -->
     <bool name="config_intrusiveNotificationLed">true</bool>
 
