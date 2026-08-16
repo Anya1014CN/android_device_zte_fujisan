@@ -57,6 +57,8 @@ PRODUCT_VENDOR_PROPERTIES += \
     bluetooth.le.disable_apcf_extended_features=1 \
     vendor.gralloc.disable_ubwc=1 \
     vendor.gralloc.enable_fb_ubwc=0 \
+    persist.vendor.radio.hw_mbn_update=1 \
+    persist.vendor.radio.sw_mbn_update=1 \
     ro.vendor.fujisan.enable_legacy_radio=0
 
 PRODUCT_SYSTEM_PROPERTIES += \
