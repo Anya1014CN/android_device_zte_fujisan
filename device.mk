@@ -85,6 +85,8 @@ PRODUCT_PACKAGES += \
     FujisanNetworkStackOverlay \
     FujisanFoldFeatureOverlay \
     FujisanLargeScreenWindowOverlay \
+    FujisanFreeformOverlay \
+    FujisanDesktopOverlay \
     FujisanWindowInfoProbe \
     androidx.window.sidecar \
     androidx.window.extensions \

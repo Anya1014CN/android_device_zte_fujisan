@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      LineageOS 23.2 ships Android 16's complete desktop Shell, window
+      decoration and Launcher overview entry point. Fujisan has a large
+      internal display, so expose that existing product path without a
+      device-private desktop implementation.
+    -->
+    <bool name="config_canInternalDisplayHostDesktops">true</bool>
+    <bool name="config_isDesktopModeSupported">true</bool>
+    <bool name="config_isDesktopModeDevOptionSupported">true</bool>
+    <bool name="config_dragToMaximizeInDesktopMode">true</bool>
+    <bool name="config_showHomeBehindDesktop">true</bool>
+</resources>

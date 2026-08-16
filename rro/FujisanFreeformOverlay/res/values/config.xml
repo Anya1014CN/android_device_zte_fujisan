@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The device already advertises Android's standard freeform capability and
+      ships the matching AOSP WindowManager Shell components. Enable the
+      Framework policy independently from desktop mode.
+    -->
+    <bool name="config_freeformWindowManagement">true</bool>
+</resources>
