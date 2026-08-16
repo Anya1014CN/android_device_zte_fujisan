@@ -15,7 +15,11 @@
   limitations under the License.
 -->
 <resources>
-    <!-- The unfolded logical display is two equal panels separated by its
-         vertical hinge. Keep Settings' upstream embedded panes on either side. -->
+    <!--
+      Settings registers follow-up embedding rules from the already-narrow
+      primary pane. Keep the ratio available in that configuration as well as
+      the initial full-display configuration. The upstream 600dp split gate
+      remains responsible for limiting two-pane mode to large screens.
+    -->
     <item name="config_activity_embed_split_ratio" format="float" type="dimen">0.5</item>
 </resources>
