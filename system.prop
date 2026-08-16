@@ -102,3 +102,8 @@ persist.vendor.fujisan.primary_force=0
 persist.vendor.fujisan.dual_internal=0
 vendor.fujisan.display_power=1
 vendor.fujisan.active_primary=a
+
+# Settings owns its activity-embedding implementation.  Enable the standard
+# large-screen path so the unfolded display receives its upstream two-pane
+# homepage; the device overlay supplies the hinge-aligned split ratio.
+persist.settings.large_screen_opt.enabled=true
