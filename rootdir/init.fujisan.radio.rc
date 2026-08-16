@@ -1,0 +1,7 @@
+# The imported QCRIL implements the standard HIDL Radio 1.4 service directly.
+# Keep the former Oreo rild and its experimental facade out of the service
+# manager; the device has one physical SIM slot.
+on early-boot
+    stop ril-daemon
+    stop fujisan-radio-hidl-alias
+    start vendor.qcrild

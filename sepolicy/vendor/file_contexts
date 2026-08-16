@@ -4,4 +4,5 @@
 /system/vendor/bin/hw/vendor\.lineage\.livedisplay-service\.fujisan u:object_r:hal_lineage_livedisplay_sysfs_exec:s0
 /vendor/bin/hw/android\.hardware\.vibrator-service\.legacy u:object_r:hal_vibrator_default_exec:s0
 /system/vendor/bin/hw/android\.hardware\.vibrator-service\.legacy u:object_r:hal_vibrator_default_exec:s0
+/vendor/bin/hw/qcrild                     u:object_r:rild_exec:s0
 /dev/socket/fujisan_primary         u:object_r:fujisan_halld_socket:s0
