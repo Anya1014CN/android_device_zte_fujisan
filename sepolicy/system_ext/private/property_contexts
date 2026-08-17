@@ -4,3 +4,6 @@ sys.only.secondarylcd.on u:object_r:fujisan_sensor_prop:s0
 sys.listeners.registered u:object_r:fujisan_tee_listener_prop:s0
 persist.camera.gyro.disable u:object_r:fujisan_camera_gyro_prop:s0 exact bool
 persist.sys.tskin u:object_r:fujisan_thermal_skin_prop:s0 exact
+debug.prerotation.disable u:object_r:fujisan_display_legacy_prop:s0 exact
+sys.disable_ext_animation u:object_r:fujisan_display_legacy_prop:s0 exact
+ro.graphics.memory u:object_r:fujisan_display_legacy_prop:s0 exact

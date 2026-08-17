@@ -1,0 +1,2 @@
+# Legacy display support libraries are shared by allocator and HWC.
+get_prop(hal_graphics_allocator_default, fujisan_display_legacy_prop)
