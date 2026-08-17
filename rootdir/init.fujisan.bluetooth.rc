@@ -44,6 +44,18 @@ on property:wc_transport.hci_filter_status=0
 on property:wc_transport.hci_filter_status=-1
     setprop vendor.wc_transport.hci_filter_status -1
 
+on property:bluetooth.startbtsnoop=true
+    start btsnoop
+
+on property:bluetooth.startbtsnoop=false
+    stop btsnoop
+
+on property:bluetooth.startbtlogger=true
+    start bt_logger
+
+on property:bluetooth.startbtlogger=false
+    stop bt_logger
+
 service fujisan-btaddr /system/bin/sh /system/bin/init.fujisan.btaddr.sh
     class core
     user root

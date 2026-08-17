@@ -27,3 +27,9 @@ on property:init.svc.vendor.wifi_hal_legacy=running
     chmod 0660 /sys/module/wlan/parameters/fwpath
     write /sys/module/wlan/parameters/fwpath sta
     setprop wlan.driver.status ok
+
+# init.svc.* is a private framework property, so the legacy hostapd cleanup
+# trigger must live in system init rather than vendor init.
+on property:init.svc.wpa_supplicant=stopped
+    stop dhcpcd
+    stop hostapd

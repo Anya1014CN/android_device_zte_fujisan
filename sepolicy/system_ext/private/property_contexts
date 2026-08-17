@@ -2,3 +2,4 @@
 qcom.bluetooth.soc u:object_r:bluetooth_prop:s0
 sys.only.secondarylcd.on u:object_r:fujisan_sensor_prop:s0
 sys.listeners.registered u:object_r:fujisan_tee_listener_prop:s0
+persist.camera.gyro.disable u:object_r:fujisan_camera_gyro_prop:s0 exact bool
