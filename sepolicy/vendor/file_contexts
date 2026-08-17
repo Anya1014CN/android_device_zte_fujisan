@@ -6,3 +6,5 @@
 /system/vendor/bin/hw/android\.hardware\.vibrator-service\.legacy u:object_r:hal_vibrator_default_exec:s0
 /vendor/bin/hw/qcrild                     u:object_r:rild_exec:s0
 /dev/socket/fujisan_primary         u:object_r:fujisan_halld_socket:s0
+/cache/time(/.*)? u:object_r:vendor_time_data_file:s0
+/data/time(/.*)? u:object_r:vendor_time_data_file:s0
