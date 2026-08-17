@@ -1,0 +1,2 @@
+# Legacy fujisan time daemon reads the OEM alarm-boot flag.
+get_prop(time_daemon, vendor_alarm_boot_prop)
