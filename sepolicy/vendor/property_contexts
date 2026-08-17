@@ -1,1 +1,3 @@
 wc_transport. u:object_r:vendor_bluetooth_prop:s0
+persist.vendor.crash.cnt u:object_r:fujisan_crash_prop:s0 exact int
+persist.vendor.crash.detect u:object_r:fujisan_crash_prop:s0 exact bool

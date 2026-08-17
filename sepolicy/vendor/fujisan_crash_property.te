@@ -1,0 +1,5 @@
+# Persistent crash counters are owned exclusively by the legacy QCOM init
+# shell.  Keep them separate from vendor_default_prop.
+vendor_internal_prop(fujisan_crash_prop)
+
+set_prop(qti_init_shell, fujisan_crash_prop)
