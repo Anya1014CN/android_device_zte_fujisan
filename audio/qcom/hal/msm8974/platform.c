@@ -1824,9 +1824,7 @@ void *platform_init(struct audio_device *adev)
     my_data->fluence_in_voice_comm = false;
     my_data->fluence_in_voice_rec = false;
 
-    if (property_get("ro.vendor.audio.sdk.fluencetype", value, NULL) == 0) {
-        property_get("ro.qc.sdk.audio.fluencetype", value, "none");
-    }
+    property_get("ro.vendor.audio.sdk.fluencetype", value, "none");
     if (!strcmp("fluencepro", value)) {
         my_data->fluence_type = FLUENCE_PRO_ENABLE;
     } else if (!strcmp("fluence", value) || (dual_mic_config)) {
