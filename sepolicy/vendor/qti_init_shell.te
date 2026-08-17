@@ -1,0 +1,4 @@
+# QCOM legacy init scripts maintain these persistent radio and sensor files.
+allow qti_init_shell sensors_persist_file:file w_file_perms;
+allow qti_init_shell vendor_radio_data_file:dir create_dir_perms;
+allow qti_init_shell vendor_radio_data_file:file create_file_perms;
