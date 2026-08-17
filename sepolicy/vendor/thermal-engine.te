@@ -1,1 +1,2 @@
 allow thermal-engine sysfs:dir r_dir_perms;
+get_prop(thermal-engine, fujisan_thermal_skin_prop)
