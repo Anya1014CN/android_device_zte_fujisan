@@ -1,0 +1,2 @@
+# The legacy QCOM gatekeeper service reads the TEE listener state.
+get_prop(hal_gatekeeper_default, fujisan_tee_listener_prop)
