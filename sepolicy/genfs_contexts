@@ -5,4 +5,9 @@ genfscon proc /panel_hue_1_switch u:object_r:proc_panel_hue:s0
 
 # The QPNP RGB LEDs live under the physical SPMI path rather than /class/leds.
 genfscon sysfs /devices/soc/400f000.qcom,spmi/spmi-0/spmi0-03/400f000.qcom,spmi:qcom,pmi8994@3:qcom,leds@d000/leds u:object_r:sysfs_leds:s0
+# The legacy QCOM health HAL policy grants hal_health access to this type.
+genfscon sysfs /devices/soc/400f000.qcom,spmi/spmi-0/spmi0-02/400f000.qcom,spmi:qcom,pmi8994@2:bcl@4200/power_supply u:object_r:sysfs_battery_supply:s0
+genfscon sysfs /devices/soc/400f000.qcom,spmi/spmi-0/spmi0-02/400f000.qcom,spmi:qcom,pmi8994@2:qcom,fg/power_supply u:object_r:sysfs_battery_supply:s0
+genfscon sysfs /devices/soc/400f000.qcom,spmi/spmi-0/spmi0-02/400f000.qcom,spmi:qcom,pmi8994@2:qcom,qpnp-smbcharger/power_supply u:object_r:sysfs_battery_supply:s0
+genfscon sysfs /devices/soc/75b5000.i2c/i2c-7/7-001d/power_supply u:object_r:sysfs_battery_supply:s0
 genfscon sysfs /devices/soc/6a00000.ssusb/mode u:object_r:sysfs_usb:s0
