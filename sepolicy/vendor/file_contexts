@@ -8,3 +8,4 @@
 /dev/socket/fujisan_primary         u:object_r:fujisan_halld_socket:s0
 /cache/time(/.*)? u:object_r:vendor_time_data_file:s0
 /data/time(/.*)? u:object_r:vendor_time_data_file:s0
+/data/vendor/misc/audio/acdbdata/delta(/.*)? u:object_r:acdbdelta_vendor_data_file:s0
