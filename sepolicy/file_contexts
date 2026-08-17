@@ -2,6 +2,8 @@
 /firmware(/.*)?                                                    u:object_r:firmware_file:s0
 /persist(/.*)?                                                     u:object_r:persist_file:s0
 /persist/sensors(/.*)?                                             u:object_r:sensors_persist_file:s0
+/persist/\.bt_nv\.bin                                              u:object_r:persist_bluetooth_file:s0
+/persist/wifimac\.dat                                              u:object_r:wifi_data_file:s0
 
 # Legacy devices mount ODM content below /system/vendor/odm.  Retain the
 # canonical AOSP labels for the individual SELinux configuration files.
