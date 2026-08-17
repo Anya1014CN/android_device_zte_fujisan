@@ -1,0 +1,2 @@
+# Framework and the legacy vendor time daemon share this legacy boot-state key.
+get_prop(system_server, fujisan_alarm_boot_prop)
