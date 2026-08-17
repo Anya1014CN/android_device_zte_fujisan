@@ -18,5 +18,4 @@ if [ -n "${addr}" ]; then
     printf '%s\n' "${addr}" > "${OUT_FILE}"
     chown bluetooth:bluetooth "${OUT_FILE}"
     chmod 0660 "${OUT_FILE}"
-    setprop persist.service.bdroid.bdaddr "${addr}"
 fi

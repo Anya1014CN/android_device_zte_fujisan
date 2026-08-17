@@ -8,6 +8,7 @@
 /(vendor|system/vendor)/bin/wcnss_filter                            u:object_r:fujisan_wcnss_filter_exec:s0
 /(vendor|system/vendor)/bin/init\.qcom\.crashdata\.sh             u:object_r:qti_init_shell_exec:s0
 /(vendor|system/vendor)/bin/usbconfig                                u:object_r:qti_init_shell_exec:s0
+/(vendor|system/vendor)/bin/init\.fujisan\.btaddr\.sh              u:object_r:qti_init_shell_exec:s0
 /dev/m1120                                                          u:object_r:fujisan_m1120_device:s0
 /data/system/fingerprint(/.*)?                                      u:object_r:fingerprintd_data_file:s0
 

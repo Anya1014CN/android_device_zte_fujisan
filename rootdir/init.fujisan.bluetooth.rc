@@ -56,7 +56,7 @@ on property:bluetooth.startbtlogger=true
 on property:bluetooth.startbtlogger=false
     stop bt_logger
 
-service fujisan-btaddr /system/bin/sh /system/bin/init.fujisan.btaddr.sh
+service fujisan-btaddr /vendor/bin/sh /vendor/bin/init.fujisan.btaddr.sh
     class core
     user root
     group root bluetooth
