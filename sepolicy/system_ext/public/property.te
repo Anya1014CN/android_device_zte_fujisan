@@ -1,1 +1,2 @@
 system_public_prop(fujisan_sensor_prop)
+system_public_prop(fujisan_tee_listener_prop)
