@@ -1,5 +1,6 @@
 typeattribute vendor_init data_between_core_and_vendor_violators;
 set_prop(vendor_init, fujisan_camera_gyro_prop)
+set_prop(vendor_init, fujisan_display_prop)
 
 # Legacy vendor rc initializes these framework-owned and Qualcomm data dirs.
 allow vendor_init {

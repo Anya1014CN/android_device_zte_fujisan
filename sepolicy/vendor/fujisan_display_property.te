@@ -1,0 +1,2 @@
+# Shared state published by fujisan_halld and consumed by HWC/system APKs.
+vendor_public_prop(fujisan_display_prop)

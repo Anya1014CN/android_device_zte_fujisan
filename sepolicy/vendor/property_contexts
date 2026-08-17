@@ -1,4 +1,6 @@
 wc_transport. u:object_r:vendor_bluetooth_prop:s0
+vendor.fujisan. u:object_r:fujisan_display_prop:s0
+persist.vendor.fujisan. u:object_r:fujisan_display_prop:s0
 camera. u:object_r:camera_prop:s0
 persist.camera. u:object_r:camera_prop:s0
 persist.cam.pp. u:object_r:camera_prop:s0

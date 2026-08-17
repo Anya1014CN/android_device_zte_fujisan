@@ -15,5 +15,5 @@ allow fujisan_halld sysfs:file rw_file_perms;
 allow fujisan_halld sysfs_devices_system_cpu:file rw_file_perms;
 allow fujisan_halld self:unix_stream_socket { accept create getopt listen read setopt write };
 get_prop(fujisan_halld, boot_status_prop)
-set_prop(fujisan_halld, vendor_default_prop)
-get_prop(fujisan_halld, vendor_default_prop)
+set_prop(fujisan_halld, fujisan_display_prop)
+get_prop(fujisan_halld, fujisan_display_prop)
