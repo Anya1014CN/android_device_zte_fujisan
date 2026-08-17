@@ -1,3 +1,16 @@
 wc_transport. u:object_r:vendor_bluetooth_prop:s0
+camera. u:object_r:camera_prop:s0
+persist.camera. u:object_r:camera_prop:s0
+persist.cam.pp. u:object_r:camera_prop:s0
+persist.capture. u:object_r:camera_prop:s0
+persist.denoise. u:object_r:camera_prop:s0
+persist.dual. u:object_r:camera_prop:s0
+persist.display.mode u:object_r:camera_prop:s0 exact
+persist.enable.max.pending.buf u:object_r:camera_prop:s0 exact
+persist.fv. u:object_r:camera_prop:s0
+persist.imglib. u:object_r:camera_prop:s0
+persist.partial.skip u:object_r:camera_prop:s0 exact
+persist.tnr. u:object_r:camera_prop:s0
+ro.camera. u:object_r:camera_prop:s0
 persist.vendor.crash.cnt u:object_r:fujisan_crash_prop:s0 exact int
 persist.vendor.crash.detect u:object_r:fujisan_crash_prop:s0 exact bool
