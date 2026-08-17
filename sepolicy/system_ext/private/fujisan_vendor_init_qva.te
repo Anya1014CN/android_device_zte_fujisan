@@ -1,0 +1,5 @@
+# Qualcomm QVA declares these legacy data types in system_ext private policy.
+# Vendor init creates and fixes ownership/mode on the corresponding OEM paths.
+allow vendor_init vendor_dpmd_data_file:dir { search getattr setattr };
+allow vendor_init vendor_seemp_data_file:dir getattr;
+allow vendor_init vendor_qvrd_data_file:dir getattr;
