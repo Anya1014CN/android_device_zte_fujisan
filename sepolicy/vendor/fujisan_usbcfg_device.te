@@ -1,0 +1,2 @@
+# USB configuration is stored in the fujisan ztecfg partition.
+type fujisan_usbcfg_block_device, dev_type;

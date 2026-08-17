@@ -2,3 +2,5 @@
 allow qti_init_shell sensors_persist_file:file w_file_perms;
 allow qti_init_shell vendor_radio_data_file:dir create_dir_perms;
 allow qti_init_shell vendor_radio_data_file:file create_file_perms;
+allow qti_init_shell proc_overcommit_memory:file r_file_perms;
+allow qti_init_shell fujisan_usbcfg_block_device:blk_file r_file_perms;
