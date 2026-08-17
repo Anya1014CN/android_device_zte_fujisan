@@ -3,3 +3,14 @@ app_domain(fujisan_primarypanel_app)
 
 allow fujisan_primarypanel_app fujisan_halld:unix_stream_socket connectto;
 allow fujisan_primarypanel_app fujisan_halld_socket:sock_file write;
+
+# These system APKs use the same framework services that AOSP grants to
+# platform_app; retain a narrow, observed subset for the dedicated domain.
+allow fujisan_primarypanel_app {
+  activity_service
+  activity_task_service
+  device_state_service
+  cameraserver_service
+  netstats_service
+  content_capture_service
+}:service_manager find;
