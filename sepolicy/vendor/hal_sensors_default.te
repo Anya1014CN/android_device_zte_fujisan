@@ -1,0 +1,5 @@
+get_prop(hal_sensors_default, fujisan_sensor_prop)
+
+# ZTE's secondary-panel Hall switch is exposed through this dedicated node.
+allow hal_sensors_default fujisan_m1120_device:chr_file rw_file_perms;
+allowxperm hal_sensors_default fujisan_m1120_device:chr_file ioctl { 0x8000 0x8008 0x800a 0x800f };

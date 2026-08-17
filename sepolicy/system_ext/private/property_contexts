@@ -1,2 +1,3 @@
 # Legacy Qualcomm Bluetooth transport configuration consumed by wcnss_filter.
 qcom.bluetooth.soc u:object_r:bluetooth_prop:s0
+sys.only.secondarylcd.on u:object_r:fujisan_sensor_prop:s0
