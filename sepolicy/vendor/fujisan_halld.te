@@ -10,9 +10,10 @@ allow fujisan_halld sysfs_graphics:dir search;
 allow fujisan_halld sysfs_graphics:file rw_file_perms;
 allow fujisan_halld sysfs_leds:dir search;
 allow fujisan_halld sysfs_leds:file rw_file_perms;
-allow fujisan_halld sysfs:dir search;
+allow fujisan_halld sysfs:dir r_dir_perms;
 allow fujisan_halld sysfs:file rw_file_perms;
 allow fujisan_halld sysfs_devices_system_cpu:file rw_file_perms;
 allow fujisan_halld self:unix_stream_socket { accept create getopt listen read setopt write };
+get_prop(fujisan_halld, boot_status_prop)
 set_prop(fujisan_halld, vendor_default_prop)
 get_prop(fujisan_halld, vendor_default_prop)
