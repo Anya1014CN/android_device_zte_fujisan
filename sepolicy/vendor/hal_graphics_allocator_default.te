@@ -1,0 +1,2 @@
+# The legacy gralloc stack reads the AOSP graphics memory configuration.
+get_prop(hal_graphics_allocator_default, graphics_config_prop)
