@@ -1,9 +1,5 @@
 LOCAL_PATH := device/zte/fujisan
 
-# P1 builds only the services needed to reach a single-screen Android userspace.
-# Re-enable a deferred hardware group only while working on that subsystem.
-FUJISAN_ENABLE_DEFERRED_HARDWARE ?= false
-
 $(call inherit-product, $(SRC_TARGET_DIR)/product/product_launched_with_n_mr1.mk)
 $(call inherit-product, vendor/zte/fujisan/fujisan-vendor.mk)
 
@@ -107,29 +103,14 @@ PRODUCT_PACKAGES += \
     android.hardware.graphics.mapper@2.0-impl \
     vendor.qti.hardware.memtrack-service
 
-# LineageOS 23.2 no longer ships the MSM8996 CAF display project.  The
-# matching HWC/gralloc implementation is an OEM closed component and must be
-# reinstated only after its linker/VINTF audit during the single-panel stage.
-ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
-PRODUCT_PACKAGES += \
-    bugreports_root_dir \
-    copybit.msm8996 \
-    gralloc.msm8996 \
-    hwcomposer.msm8996 \
-    libdisplayconfig \
-    liboverlay \
-    libqdMetaData.system
-endif
-
-# The side fingerprint sensor is present during every boot. Keep the standard
-# HIDL interface and service outside the deferred hardware group.
+# The side fingerprint sensor is present during every boot.
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     android.hardware.biometrics.fingerprint@2.1-service \
     android.hidl.base@1.0
 
-# Camera is independent of the deferred display/radio bring-up.  The OEM
-# msm8996 HAL is loaded by the standard AOSP legacy camera provider.
+# The OEM msm8996 camera HAL is loaded by the standard AOSP legacy camera
+# provider.
 PRODUCT_PACKAGES += \
     android.hardware.camera.provider@2.4-impl:32 \
     android.hardware.camera.provider@2.4-service \
@@ -145,8 +126,8 @@ PRODUCT_PACKAGES += \
 # the standard AOSP SQLite vendor variant (without an ICU/APEX dependency),
 # the Lineage legacy-Protobuf compatibility library, and the Android 13
 # libutils ABI used by the OEM Peripheral Manager service. Keep these
-# dependencies outside the deferred hardware group so init can bring up the
-# modem before framework telephony starts.
+# dependencies so init can bring up the modem before framework telephony
+# starts.
 PRODUCT_PACKAGES += \
     libril-compat \
     libperipheral_client \
@@ -202,9 +183,8 @@ PRODUCT_PACKAGES += \
     libhwbinder.vendor
 
 # AudioService blocks system_server startup until this standard HIDL service
-# registers, so it is a P0 service rather than deferred hardware.  The CAF
-# msm8996 primary HAL is maintained in this device tree; the Oreo binary links
-# against removed framework-private libraries.
+# registers. The CAF msm8996 primary HAL is maintained in this device tree;
+# the Oreo binary links against removed framework-private libraries.
 
 PRODUCT_PACKAGES += \
     android.hardware.audio@6.0-impl \
@@ -256,9 +236,7 @@ PRODUCT_PACKAGES += \
     android.hardware.gatekeeper@1.0-impl:64 \
     android.hardware.gatekeeper@1.0-service
 
-# Keymaster remains deferred: its legacy OEM implementation requires a
-# separate linker and interface audit.
-ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
+# The legacy OEM Keymaster implementation requires its matching HIDL runtime.
 PRODUCT_PACKAGES += \
     android.hardware.keymaster@4.0-service \
     libhidltransport
@@ -275,7 +253,6 @@ PRODUCT_PACKAGES += \
     libOmxCore \
     libOmxVenc \
     libstagefrighthw \
-    libhypv_intercept \
     libgpustats \
     libc2d30-a5xx \
     libc2d30_bltlib
@@ -308,7 +285,6 @@ PRODUCT_PACKAGES += \
     librmnetctl \
     libxml2 \
     libprotobuf-cpp-full
-endif
 
 # Android 12L requires health@2.1.  Use the AOSP default implementation
 # instead of the stock health@1.0 prebuilt.
@@ -385,14 +361,11 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/permissions/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.freeform_window_management.xml \
     $(LOCAL_PATH)/configs/devicestate/device_state_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/devicestate/device_state_configuration.xml
 
-ifeq ($(FUJISAN_ENABLE_DEFERRED_HARDWARE),true)
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/etc/seccomp_policy/mediacodec.policy:$(TARGET_COPY_OUT_VENDOR)/etc/seccomp_policy/mediacodec.policy \
     $(LOCAL_PATH)/rootdir/bt_firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/bt_firmware/.placeholder
-endif
 
-# PackageManager must always advertise the physical fingerprint sensor; the
-# sensor is not part of the deferred hardware group.
+# PackageManager must always advertise the physical fingerprint sensor.
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system/etc/permissions/android.hardware.fingerprint.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/android.hardware.fingerprint.xml
 
