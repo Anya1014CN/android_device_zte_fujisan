@@ -4,10 +4,10 @@
         internet,bt,custom(com.zte.fujisan.flashlight/.FujisanFlashlightTileService),custom(com.zte.fujisan.primarypanel/.PrimaryPanelTileService),dnd,alarm,airplane,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle
     </string>
     <!-- Android 16 initializes new users from this list, not the legacy
-         quick_settings_tiles_default above. Keep the primary-panel switch in
-         slot four and replace the framework flashlight TileService. -->
+         quick_settings_tiles_default above. Replace the framework flashlight
+         TileService and place the primary-panel switch immediately after it. -->
     <string name="quick_settings_tiles_new_default" translatable="false">
-        internet,bt,dnd,custom(com.zte.fujisan.primarypanel/.PrimaryPanelTileService),cast,custom(com.zte.fujisan.flashlight/.FujisanFlashlightTileService),airplane,rotation,wallet,alarm,controls,screenrecord,battery
+        internet,bt,dnd,cast,custom(com.zte.fujisan.flashlight/.FujisanFlashlightTileService),custom(com.zte.fujisan.primarypanel/.PrimaryPanelTileService),airplane,rotation,wallet,alarm,controls,screenrecord,battery
     </string>
     <string name="quick_settings_tiles_stock" translatable="false">
         internet,wifi,cell,bt,custom(com.zte.fujisan.flashlight/.FujisanFlashlightTileService),custom(com.zte.fujisan.primarypanel/.PrimaryPanelTileService),dnd,alarm,airplane,nfc,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle,location,hotspot,inversion,saver,dark,work,night,reverse,reduce_brightness,ambient_display,aod,caffeine,heads_up,reading_mode,sync,powershare,profiles,usb_tether,vpn

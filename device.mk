@@ -107,7 +107,8 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
     android.hardware.biometrics.fingerprint@2.1-service \
-    android.hidl.base@1.0
+    android.hidl.base@1.0 \
+    fujisan_fingerprint_blob_overlay
 
 # The OEM msm8996 camera HAL is loaded by the standard AOSP legacy camera
 # provider.
