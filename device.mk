@@ -180,7 +180,8 @@ PRODUCT_PACKAGES += \
     libhidlbase_shim \
     libhidlbase_fujisan_legacy_map_shim \
     libhidltransport.vendor \
-    libhwbinder.vendor
+    libhwbinder.vendor \
+    libdrm.vendor
 
 # AudioService blocks system_server startup until this standard HIDL service
 # registers. The CAF msm8996 primary HAL is maintained in this device tree;
