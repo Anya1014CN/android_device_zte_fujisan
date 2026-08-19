@@ -241,21 +241,14 @@ PRODUCT_PACKAGES += \
     android.hardware.keymaster@4.0-service \
     libhidltransport
 
-# Use the msm8996 CAF V4L2 OMX implementation with the standard AOSP OMX
-# service.  The kernel already exposes the Venus VIDC decoder/encoder nodes;
-# these source-built libraries provide the missing AVC hardware encoder path.
-# Keep VDEC disabled until its separate display-config dependency is brought
-# up; do not rely on incompatible Oreo video codec blobs.
+# The stock 32-bit OMX service lives in /vendor and resolves its VNDK
+# companion libraries from the vendor namespace.  Do not declare CAF OMX
+# modules here: the corresponding CAF media source project is not part of
+# this source manifest.
 PRODUCT_PACKAGES += \
     android.hardware.media.omx@1.0 \
     android.hidl.memory@1.0 \
-    libminijail \
-    libOmxCore \
-    libOmxVenc \
-    libstagefrighthw \
-    libgpustats \
-    libc2d30-a5xx \
-    libc2d30_bltlib
+    libminijail
 
 # The stock 32-bit CAS service is retained; keep its HIDL interface libraries
 # available in the vendor namespace.
