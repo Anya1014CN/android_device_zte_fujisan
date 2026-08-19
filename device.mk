@@ -236,11 +236,6 @@ PRODUCT_PACKAGES += \
     android.hardware.gatekeeper@1.0-impl:64 \
     android.hardware.gatekeeper@1.0-service
 
-# The legacy OEM Keymaster implementation requires its matching HIDL runtime.
-PRODUCT_PACKAGES += \
-    android.hardware.keymaster@4.0-service \
-    libhidltransport
-
 # The stock 32-bit OMX service lives in /vendor and resolves its VNDK
 # companion libraries from the vendor namespace.  Do not declare CAF OMX
 # modules here: the corresponding CAF media source project is not part of
