@@ -176,6 +176,7 @@ PRODUCT_PACKAGES += \
 # LineageOS supplies the ABI shim for the removed Bn constructor maps.
 PRODUCT_PACKAGES += \
     android.hidl.base@1.0 \
+    android.hidl.base@1.0.vendor \
     android.hidl.manager@1.0 \
     libhidlbase_shim \
     libhidlbase_fujisan_legacy_map_shim \
