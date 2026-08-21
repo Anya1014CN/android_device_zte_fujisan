@@ -24,14 +24,33 @@ public final class CameraPanelService extends Service {
     private static final String TAG = "FujisanCameraPanel";
     private static final String SOCKET_NAME = "fujisan_primary";
     private static final long PANEL_SWITCH_DELAY_MS = 1000L;
+    /*
+     * Camera apps briefly release one camera before acquiring the other.  Keep the
+     * session snapshot during that gap so a front/back switch cannot become a new
+     * session with the already-flipped panel as its restore target.
+     */
+    private static final long CAMERA_STOP_DELAY_MS = 2000L;
+    /* Give fujisan_halld time to publish active_primary after the hinge closes. */
+    private static final long FOLD_STATE_SETTLE_DELAY_MS = 300L;
 
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private final Set<String> mUnavailable = new HashSet<>();
     private final Map<String, Integer> mLensFacing = new HashMap<>();
+
+    /* Captured once for the entire camera session, never per lens switch. */
     private String mOriginalPanel;
-    private boolean mSwitchedForCamera;
+    private int mActiveFacing = -1;
+    private volatile boolean mAwaitingFold;
     private boolean mRearWideWarning;
-    private Runnable mPendingSwitch;
+    private boolean mPropertyCallbackRegistered;
+    private Runnable mPendingPanelSwitch;
+    private Runnable mPendingSessionEnd;
+    private Runnable mPendingFoldCheck;
+    private final Runnable mSystemPropertyChanged = () -> {
+        if (mAwaitingFold) {
+            mHandler.post(this::handleSystemPropertyChanged);
+        }
+    };
 
     private final CameraManager.AvailabilityCallback mAvailability =
             new CameraManager.AvailabilityCallback() {
@@ -39,12 +58,11 @@ public final class CameraPanelService extends Service {
         public void onCameraUnavailable(String cameraId) {
             final int facing = logicalFacing(cameraId);
             Log.i(TAG, "camera unavailable id=" + cameraId + " facing=" + facing);
-            if ("zoom".equals(SystemProperties.get("vendor.fujisan.display_mode", "single"))
-                    && facing == CameraCharacteristics.LENS_FACING_BACK && !mRearWideWarning) {
-                mRearWideWarning = true;
-                Toast.makeText(CameraPanelService.this, R.string.close_device,
-                        Toast.LENGTH_LONG).show();
-            }
+            /*
+             * A logical camera can temporarily make its sibling unavailable too.
+             * Only the first unavailable ID identifies a new active camera; a real
+             * lens hand-off first empties the set and is caught by the stop debounce.
+             */
             if (!mUnavailable.add(cameraId) || mUnavailable.size() != 1) {
                 return;
             }
@@ -56,7 +74,7 @@ public final class CameraPanelService extends Service {
             Log.i(TAG, "camera available id=" + cameraId);
             mUnavailable.remove(cameraId);
             if (mUnavailable.isEmpty()) {
-                handleCameraStop();
+                scheduleCameraStop();
             }
         }
     };
@@ -74,70 +92,216 @@ public final class CameraPanelService extends Service {
                 }
             }
             manager.registerAvailabilityCallback(mAvailability, mHandler);
+            if (!mPropertyCallbackRegistered) {
+                SystemProperties.addChangeCallback(mSystemPropertyChanged);
+                mPropertyCallbackRegistered = true;
+            }
         } catch (CameraAccessException | SecurityException ignored) {
             stopSelf();
         }
     }
 
-    private void handleCameraStart(String cameraId) {
-        if (mPendingSwitch != null) {
-            mHandler.removeCallbacks(mPendingSwitch);
-            mPendingSwitch = null;
+    @Override
+    public void onDestroy() {
+        mAwaitingFold = false;
+        if (mPropertyCallbackRegistered) {
+            SystemProperties.removeChangeCallback(mSystemPropertyChanged);
+            mPropertyCallbackRegistered = false;
         }
+        cancelPendingSessionEnd();
+        cancelPendingPanelSwitch();
+        cancelPendingFoldCheck();
+        super.onDestroy();
+    }
+
+    private void handleCameraStart(String cameraId) {
         final int facing = logicalFacing(cameraId);
-        final String mode = SystemProperties.get("vendor.fujisan.display_mode", "single");
+        if (!isHandledFacing(facing)) {
+            return;
+        }
+
+        cancelPendingSessionEnd();
+        beginCameraSessionIfNeeded();
+        mActiveFacing = facing;
+
+        final String mode = displayMode();
+        Log.i(TAG, "camera start id=" + cameraId + " mode=" + mode
+                + " original=" + mOriginalPanel + " facing=" + facing);
         if ("zoom".equals(mode)) {
             if (facing == CameraCharacteristics.LENS_FACING_BACK && !mRearWideWarning) {
                 mRearWideWarning = true;
                 Toast.makeText(this, R.string.close_device, Toast.LENGTH_LONG).show();
             }
+            /* The app can stay open while the user folds the device. */
+            mAwaitingFold = true;
+            handleSystemPropertyChanged();
+            return;
+        }
+
+        mAwaitingFold = false;
+        cancelPendingFoldCheck();
+        switchPanelForActiveCamera();
+    }
+
+    private void beginCameraSessionIfNeeded() {
+        if (mOriginalPanel != null) {
+            return;
+        }
+        /* active_primary is always A while unfolded; use the user's preference then. */
+        mOriginalPanel = "zoom".equals(displayMode()) ? preferredPanel() : panel();
+        Log.i(TAG, "camera session begins, original panel=" + mOriginalPanel);
+    }
+
+    private void switchPanelForActiveCamera() {
+        if (mOriginalPanel == null || !isHandledFacing(mActiveFacing)) {
+            return;
+        }
+        if ("zoom".equals(displayMode())) {
+            mAwaitingFold = true;
+            handleSystemPropertyChanged();
             return;
         }
 
         final String current = panel();
-        final String target = facing == CameraCharacteristics.LENS_FACING_BACK ? "b" : "a";
-        Log.i(TAG, "camera start id=" + cameraId + " mode=" + mode
-                + " current=" + current + " target=" + target);
+        final String target = panelForFacing(mActiveFacing);
+        cancelPendingPanelSwitch();
+        Log.i(TAG, "camera panel check current=" + current + " target=" + target
+                + " original=" + mOriginalPanel + " facing=" + mActiveFacing);
         if (current.equals(target)) {
             return;
         }
-        mOriginalPanel = current;
-        mSwitchedForCamera = true;
+
         Toast.makeText(this, R.string.flip_device, Toast.LENGTH_SHORT).show();
-        mPendingSwitch = () -> {
-            mPendingSwitch = null;
-            if (mSwitchedForCamera) {
+        mPendingPanelSwitch = () -> {
+            mPendingPanelSwitch = null;
+            if (!mUnavailable.isEmpty() && mOriginalPanel != null
+                    && "single".equals(displayMode())
+                    && target.equals(panelForFacing(mActiveFacing))) {
                 requestPanel(target);
             }
         };
-        mHandler.postDelayed(mPendingSwitch, PANEL_SWITCH_DELAY_MS);
+        mHandler.postDelayed(mPendingPanelSwitch, PANEL_SWITCH_DELAY_MS);
     }
 
-    private void handleCameraStop() {
-        mRearWideWarning = false;
-        if (!mSwitchedForCamera || mOriginalPanel == null) {
+    private void handleSystemPropertyChanged() {
+        if (!mAwaitingFold || mOriginalPanel == null || mUnavailable.isEmpty()
+                || "zoom".equals(displayMode())) {
             return;
         }
-        if (mPendingSwitch != null) {
-            mHandler.removeCallbacks(mPendingSwitch);
-            mPendingSwitch = null;
+        scheduleFoldedPanelCheck();
+    }
+
+    private void scheduleFoldedPanelCheck() {
+        if (mPendingFoldCheck != null || !mAwaitingFold) {
+            return;
+        }
+        mPendingFoldCheck = () -> {
+            mPendingFoldCheck = null;
+            if (mOriginalPanel == null || mUnavailable.isEmpty() || !mAwaitingFold) {
+                return;
+            }
+            if ("zoom".equals(displayMode())) {
+                return;
+            }
+            /* Run exactly one panel check once the folded topology has settled. */
+            mAwaitingFold = false;
+            switchPanelForActiveCamera();
+        };
+        mHandler.postDelayed(mPendingFoldCheck, FOLD_STATE_SETTLE_DELAY_MS);
+    }
+
+    private void scheduleCameraStop() {
+        if (mOriginalPanel == null || mPendingSessionEnd != null) {
+            return;
+        }
+        /* Do not execute a stale switch after the app has released its camera. */
+        cancelPendingPanelSwitch();
+        cancelPendingFoldCheck();
+        /* A lens hand-off may report an empty availability set momentarily. */
+        mPendingSessionEnd = () -> {
+            mPendingSessionEnd = null;
+            if (!mUnavailable.isEmpty()) {
+                return;
+            }
+            finishCameraSession();
+        };
+        mHandler.postDelayed(mPendingSessionEnd, CAMERA_STOP_DELAY_MS);
+    }
+
+    private void finishCameraSession() {
+        mRearWideWarning = false;
+        mAwaitingFold = false;
+        cancelPendingFoldCheck();
+        cancelPendingPanelSwitch();
+
+        if (mOriginalPanel == null) {
+            return;
         }
         final String restore = mOriginalPanel;
-        mSwitchedForCamera = false;
         mOriginalPanel = null;
+        mActiveFacing = -1;
+        Log.i(TAG, "camera session ends, restore panel=" + restore);
+
+        /* A camera session that began unfolded may end before the device is folded. */
+        if ("zoom".equals(displayMode())) {
+            Log.i(TAG, "skip panel restore while device remains unfolded");
+            return;
+        }
+        if (panel().equals(restore)) {
+            return;
+        }
         Toast.makeText(this, R.string.flip_device, Toast.LENGTH_SHORT).show();
-        mPendingSwitch = () -> {
-            mPendingSwitch = null;
-            if (mUnavailable.isEmpty()) {
+        mPendingPanelSwitch = () -> {
+            mPendingPanelSwitch = null;
+            if (mUnavailable.isEmpty() && "single".equals(displayMode())) {
                 requestPanel(restore);
             }
         };
-        mHandler.postDelayed(mPendingSwitch, 2000L);
+        mHandler.postDelayed(mPendingPanelSwitch, CAMERA_STOP_DELAY_MS);
+    }
+
+    private void cancelPendingSessionEnd() {
+        if (mPendingSessionEnd != null) {
+            mHandler.removeCallbacks(mPendingSessionEnd);
+            mPendingSessionEnd = null;
+        }
+    }
+
+    private void cancelPendingPanelSwitch() {
+        if (mPendingPanelSwitch != null) {
+            mHandler.removeCallbacks(mPendingPanelSwitch);
+            mPendingPanelSwitch = null;
+        }
+    }
+
+    private void cancelPendingFoldCheck() {
+        if (mPendingFoldCheck != null) {
+            mHandler.removeCallbacks(mPendingFoldCheck);
+            mPendingFoldCheck = null;
+        }
+    }
+
+    private String displayMode() {
+        return SystemProperties.get("vendor.fujisan.display_mode", "single");
     }
 
     private String panel() {
         return "b".equals(SystemProperties.get("vendor.fujisan.active_primary", "a"))
                 ? "b" : "a";
+    }
+
+    private String preferredPanel() {
+        return "b".equals(SystemProperties.get("persist.vendor.fujisan.primary_panel", "a"))
+                ? "b" : "a";
+    }
+
+    private static String panelForFacing(int facing) {
+        return facing == CameraCharacteristics.LENS_FACING_BACK ? "b" : "a";
+    }
+
+    private static boolean isHandledFacing(int facing) {
+        return facing == CameraCharacteristics.LENS_FACING_BACK
+                || facing == CameraCharacteristics.LENS_FACING_FRONT;
     }
 
     private void requestPanel(String target) {
