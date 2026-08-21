@@ -1,0 +1,14 @@
+# gpuMem.bpf cannot load on fujisan's legacy kernel because its tracepoint
+# eBPF program type is unavailable.  Once the platform BPF loader has finished,
+# create a compatible empty map only when no real gpuMem map was pinned.
+service fujisan-gpu-mem-bpf-compat /vendor/bin/sh /vendor/bin/init.fujisan.gpu-mem-bpf.sh
+    class core
+    user root
+    group root system
+    disabled
+    oneshot
+
+# bpf.progs_loaded guarantees bpffs is mounted; waiting for bpfloader to stop
+# prevents a compatibility map from racing the platform gpuMem.bpf loader.
+on property:bpf.progs_loaded=1 && property:init.svc.bpfloader=stopped
+    start fujisan-gpu-mem-bpf-compat

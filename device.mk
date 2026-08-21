@@ -303,6 +303,7 @@ PRODUCT_COPY_FILES += \
     system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.radio.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.radio.rc \
     $(LOCAL_PATH)/rootdir/zz-fujisan-hwc2-compat.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-hwc2-compat.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
@@ -345,6 +346,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_VENDOR)/bin/init.fujisan.btaddr.sh \
+    $(LOCAL_PATH)/rootdir/bin/init.fujisan.gpu-mem-bpf.sh:$(TARGET_COPY_OUT_VENDOR)/bin/init.fujisan.gpu-mem-bpf.sh \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc
 
 PRODUCT_COPY_FILES += \
