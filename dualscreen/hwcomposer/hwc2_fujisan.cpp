@@ -272,6 +272,12 @@ static bool PersistedPrimaryPanelIsB() {
     return force[0] == '1' && preferred[0] == 'b';
 }
 
+static bool WantWideHardwareTopology() {
+    char mode[PROPERTY_VALUE_MAX] = {};
+    property_get("vendor.fujisan.display_mode", mode, "single");
+    return strcmp(mode, "zoom") == 0;
+}
+
 static bool WantSingleBPanel() {
     if (!IsBootCompleted()) {
         /* Keep BootAnimation on the Small endpoint but honor the durable A/B
@@ -1721,7 +1727,16 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
         d->wide_power_on.store(on);
     else
         d->small_power_on.store(on);
-    const int32_t real_mode = (d->small_power_on.load() || d->wide_power_on.load())
+    /* During OPEN, LogicalDisplayMapper powers Small off before powering
+     * Wide on.  Both endpoints share fb0, and the legacy CAF OFF callback
+     * also zeros A's physical backlight.  Keep fb0 logically alive across
+     * that ordered layout transition; Wide's first atomic commit then enables
+     * the paired A+B route without leaving A dark.  In folded mode, a real
+     * screen-off still reaches the CAF composer normally. */
+    const bool keep_shared_fb_alive = !on && !IsWideDisplay(display) &&
+            WantWideHardwareTopology();
+    const int32_t real_mode = (d->small_power_on.load() || d->wide_power_on.load() ||
+                               keep_shared_fb_alive)
             ? HWC2_POWER_MODE_ON : mode;
     return d->fns.setPowerMode
             ? d->fns.setPowerMode(d->real, kPrimaryDisplay, real_mode)
