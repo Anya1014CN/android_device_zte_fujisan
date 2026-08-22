@@ -202,12 +202,7 @@ struct Device {
     HWC2_PFN_REFRESH refresh_fn = nullptr;
 
     std::mutex cb_lock;
-    /* A/B <-> C changes alter the default display geometry.  The legacy CAF
-     * composer can only report one physical mode, so the wrapper owns the
-     * framework-facing reconnect used to make SurfaceFlinger rebuild the
-     * logical display at the new dimensions. */
-    std::atomic<bool> primary_reattach_pending{false};
-    std::atomic<bool> primary_seen_connected{false};
+    std::atomic<bool> primary_reprobe_pending{false};
     pthread_t display_mode_thread{};
     std::atomic<bool> display_mode_thread_run{false};
     pthread_t primary_panel_thread{};
@@ -429,22 +424,14 @@ static int32_t WirePrimaryVsync(Device* d) {
                                    reinterpret_cast<hwc2_function_pointer_t>(PrimaryVsyncTrampoline));
 }
 
-static void SchedulePrimaryReattach(Device* d);
+static void SchedulePrimaryReprobe(Device* d);
 
-/*
- * A/B and C have different logical geometry (1080x1920 vs. 2160x1915).
- * A CONNECTED-only notification refreshes some SurfaceFlinger state, but it
- * leaves already-running WindowManager and app processes free to retain their
- * boot-time configuration.  Reattach the *logical* default display instead:
- * no service is restarted and bootanim is never started, but SurfaceFlinger
- * and DisplayManager receive the normal HWC hotplug lifecycle and recreate
- * the display at the topology currently returned by GetDisplayConfigs().
- *
- * This runs outside PresentDisplay because SurfaceFlinger synchronously calls
- * back into HWC while handling hotplug.  The mode property has already been
- * published by fujisan_halld before this worker is scheduled.
- */
-static void* PrimaryReattachThreadMain(void* arg) {
+/* SurfaceFlinger reloads a physical display's supported modes after a
+ * CONNECTED callback for an already-known HWC display.  Do that off the
+ * present path to avoid re-entering SurfaceFlinger.  The default display must
+ * remain connected: a synthetic disconnect makes the framework treat it as a
+ * lost boot display and can restart boot animation. */
+static void* PrimaryReprobeThreadMain(void* arg) {
     auto* d = reinterpret_cast<Device*>(arg);
     HWC2_PFN_HOTPLUG fn = nullptr;
     hwc2_callback_data_t data = nullptr;
@@ -453,34 +440,21 @@ static void* PrimaryReattachThreadMain(void* arg) {
         fn = d->hotplug_fn;
         data = d->hotplug_data;
     }
-
-    if (fn && d->primary_seen_connected.load()) {
-        ALOGI("reattach primary display for hinge geometry rebuild");
-        fn(data, kPrimaryDisplay, HWC2_CONNECTION_DISCONNECTED);
+    if (fn) {
+        ALOGI("reprobe primary display: in-place mode refresh");
         fn(data, kPrimaryDisplay, HWC2_CONNECTION_CONNECTED);
-    } else if (!d->primary_seen_connected.load()) {
-        /* The framework has not received the inherited CAF initial connect
-         * yet.  Let that first connect enumerate the already-current topology
-         * rather than emitting a synthetic disconnect before a display exists. */
-        ALOGI("defer primary reattach until initial primary connect");
-    } else {
-        ALOGW("cannot reattach primary display: hotplug callback unavailable");
     }
-    d->primary_reattach_pending.store(false);
+    d->primary_reprobe_pending.store(false);
     return nullptr;
 }
 
-static void SchedulePrimaryReattach(Device* d) {
-    if (!d->primary_seen_connected.load()) {
-        ALOGI("primary geometry changed before initial connection; initial connect will use it");
-        return;
-    }
-    if (d->primary_reattach_pending.exchange(true))
+static void SchedulePrimaryReprobe(Device* d) {
+    if (d->primary_reprobe_pending.exchange(true))
         return;
     pthread_t thread {};
-    if (pthread_create(&thread, nullptr, PrimaryReattachThreadMain, d) != 0) {
-        d->primary_reattach_pending.store(false);
-        ALOGE("primary reattach thread create failed");
+    if (pthread_create(&thread, nullptr, PrimaryReprobeThreadMain, d) != 0) {
+        d->primary_reprobe_pending.store(false);
+        ALOGE("primary reprobe thread create failed");
         return;
     }
     pthread_detach(thread);
@@ -854,12 +828,12 @@ static bool SubmitSingleClientTarget(Device* d, buffer_handle_t handle, int acqu
     return true;
 }
 
-/* A geometry transition must rebuild the logical default display rather than
- * merely request another frame.  It is deliberately dispatched outside
- * PresentDisplay because SurfaceFlinger synchronously queries HWC while
- * handling hotplug. */
+/* A primary CONNECTED event is SurfaceFlinger's public HWC2 mechanism for
+ * reloading a physical panel's config table.  It is deliberately dispatched
+ * outside PresentDisplay because SurfaceFlinger synchronously queries HWC
+ * while handling hotplug. */
 static void RequestPrimaryGeometryReconfigure(Device* d) {
-    SchedulePrimaryReattach(d);
+    SchedulePrimaryReprobe(d);
 }
 
 static void RequestPrimaryFrame(Device* d) {
@@ -1024,8 +998,6 @@ static void WrapperGetCapabilities(struct hwc2_device* device, uint32_t* out_cou
 static void HotplugTrampoline(hwc2_callback_data_t cb_data, hwc2_display_t display,
                               int32_t connected) {
     auto* dev = reinterpret_cast<Device*>(cb_data);
-    if (display == kPrimaryDisplay)
-        dev->primary_seen_connected.store(connected == HWC2_CONNECTION_CONNECTED);
     HWC2_PFN_HOTPLUG fn = nullptr;
     hwc2_callback_data_t user = nullptr;
     {
@@ -1074,11 +1046,6 @@ static int32_t RegisterCallback(hwc2_device_t* device, int32_t descriptor,
                 ? d->fns.registerCallback(d->real, descriptor, d,
                                          reinterpret_cast<hwc2_function_pointer_t>(HotplugTrampoline))
                 : HWC2_ERROR_UNSUPPORTED;
-        /* Geometry reattach requires a hotplug recipient.  Starting the
-         * watcher here also closes the boot-complete race where SF registers
-         * REFRESH after fujisan_halld has already published zoom. */
-        if (err == HWC2_ERROR_NONE)
-            EnsureDisplayModeWatchThread(d);
         return err;
     }
 
@@ -2148,7 +2115,7 @@ static int HwcOpen(const struct hw_module_t* module, const char* name, struct hw
     d->base.getFunction = WrapperGetFunction;
 
     *device = &d->base.common;
-    ALOGI("Fujisan HWC2 wrapper open (single/zoom hinge path, primary geometry reattach enabled)");
+    ALOGI("Fujisan HWC2 wrapper open (single/zoom hinge path, in-place primary reprobe)");
     return 0;
 }
 
