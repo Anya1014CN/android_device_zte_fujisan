@@ -1239,6 +1239,24 @@ static int32_t GetDisplayRequests(hwc2_device_t* device, hwc2_display_t display,
 static int32_t GetDisplayCapabilities(hwc2_device_t* device, hwc2_display_t display,
                                       uint32_t* out_num, uint32_t* out_caps) {
     auto* d = ToDev(device);
+    if (IsFujisanDisplay(display)) {
+        if (!out_num)
+            return HWC2_ERROR_BAD_PARAMETER;
+        if (!out_caps) {
+            *out_num = 1;
+            return HWC2_ERROR_NONE;
+        }
+        if (*out_num < 1) {
+            *out_num = 1;
+            return HWC2_ERROR_NONE;
+        }
+        /* Brightness must be advertised explicitly.  Otherwise Android 16
+         * keeps using the disabled legacy Lights route for the wrapper-owned
+         * Wide display and never invokes SetDisplayBrightness(). */
+        out_caps[0] = HWC2_DISPLAY_CAPABILITY_BRIGHTNESS;
+        *out_num = 1;
+        return HWC2_ERROR_NONE;
+    }
     if (d->fns.getDisplayCapabilities) {
         return d->fns.getDisplayCapabilities(d->real, RealDisplayFor(display), out_num, out_caps);
     }
