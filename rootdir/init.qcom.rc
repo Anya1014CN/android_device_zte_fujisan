@@ -1,6 +1,30 @@
 # Product init extras live in fujisan.*.rc.
 # USB: configfs via fujisan.usb.rc + vendor init.qcom.usb.rc
 
+# Legacy Adreno/CAF gralloc setup must happen before SurfaceFlinger creates
+# its first framebuffer pool.  This system rc is imported unconditionally.
+on early-init
+    setprop debug.hwui.use_buffer_age false
+
+on early-boot
+    chmod 0666 /dev/kgsl-3d0
+    chown system system /dev/kgsl-3d0
+    chmod 0664 /dev/ion
+    chown system system /dev/ion
+    setprop vendor.gralloc.disable_ubwc 1
+    setprop vendor.gralloc.enable_fb_ubwc 0
+
+on boot
+    setprop vendor.gralloc.disable_ubwc 1
+    setprop vendor.gralloc.enable_fb_ubwc 0
+
+# qcamerasvr is declared by the OEM vendor rc but disabled by default.  Start
+# it after /data is available so the legacy provider sees its camera state
+# directory before probing camera IDs.  start is idempotent.
+on post-fs-data
+    mkdir /data/vendor/camera 0770 camera camera
+    start qcamerasvr
+
 # Legacy property triggers must execute in system init: vendor init cannot
 # access framework-private service state or write old system properties.
 on property:init.svc.bootanim=running

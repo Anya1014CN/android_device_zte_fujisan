@@ -303,11 +303,9 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system_ext/etc/permissions/privapp-permissions-org.codeaurora.ims.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/permissions/privapp-permissions-org.codeaurora.ims.xml \
     system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.camera.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.camera.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hwcomposer.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.radio.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.radio.rc \
-    $(LOCAL_PATH)/rootdir/zz-fujisan-hwc2-compat.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-hwc2-compat.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.charger.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-charger.rc \
     $(LOCAL_PATH)/rootdir/firmware/.placeholder:$(TARGET_COPY_OUT_RAMDISK)/firmware/.placeholder \
