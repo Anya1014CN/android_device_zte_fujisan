@@ -27,6 +27,12 @@ BUILD_FINGERPRINT := ZTE/P996A26/fujisan:8.1.0/OPM1.171019.026/20190218.120220:u
 
 TARGET_VENDOR := zte
 
+# Evolution X bka enables strict PRODUCT_PACKAGES existence checks by default.
+# Fujisan uses legacy HIDL and proprietary compatibility modules, so keep the
+# product import compatible with this legacy device tree. LineageOS ignores
+# this build-time escape hatch.
+TARGET_DISABLE_EPPE := true
+
 # The physical system block device is retained as a P2 boot-metadata input.
 # Android 16 removed the old VB1 product flags; select and validate AVB only
 # after a recovery-bootable image exists.

@@ -303,6 +303,7 @@ PRODUCT_COPY_FILES += \
     system/core/libprocessgroup/profiles/task_profiles_28.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.hwcomposer.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.camera.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.camera.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.radio.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.radio.rc \
     $(LOCAL_PATH)/rootdir/zz-fujisan-hwc2-compat.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-hwc2-compat.rc \

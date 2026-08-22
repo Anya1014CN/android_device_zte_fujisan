@@ -1,0 +1,11 @@
+# The OEM camera provider requires the separately-declared Qualcomm module
+# daemon before it probes camera IDs.  The OEM service remains disabled by
+# default and its original start trigger lives below vendor/etc/init/hw; start
+# it from a top-level device rc as well so every Android 16 product layout
+# (LineageOS, Evolution X, and crDroid) has the same bring-up ordering.
+#
+# start is idempotent: if the vendor trigger already started qcamerasvr, init
+# keeps that existing service instance.
+on post-fs-data
+    mkdir /data/vendor/camera 0770 camera camera
+    start qcamerasvr
