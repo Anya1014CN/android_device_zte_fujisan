@@ -11,8 +11,23 @@ service fujisan_halld /vendor/bin/fujisan_halld
 on early-init
     setprop vendor.fujisan.display_mode single
 
-# Start early solely to publish the stable A-only boot topology.  The daemon
-# itself defers all expanded-panel work until init restarts it at boot complete.
+# Persistent properties are replayed after /data is available.  Mirror the
+# selected folded primary immediately so an A/B preference made in the prior
+# session is visible before BootAnimation's first client target.  This only
+# selects the physical single-panel route; display_mode remains single until
+# fujisan_halld applies the actual hinge posture after boot completion.
+on property:persist.vendor.fujisan.primary_panel=a
+    setprop vendor.fujisan.active_primary a
+
+on property:persist.vendor.fujisan.primary_force=0
+    setprop vendor.fujisan.active_primary a
+
+on property:persist.vendor.fujisan.primary_panel=b && property:persist.vendor.fujisan.primary_force=1
+    setprop vendor.fujisan.active_primary b
+
+# Start early solely to publish the stable single-panel boot topology.  The
+# persisted A/B primary choice may select either physical panel; expanded work
+# remains deferred until init restarts the daemon at boot completion.
 on early-boot
     start fujisan_halld
 
