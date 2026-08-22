@@ -221,6 +221,10 @@ struct Device {
     std::atomic<bool> wide_vsync_enabled{false};
     std::atomic<bool> small_power_on{true};
     std::atomic<bool> wide_power_on{false};
+    /* Last non-zero framework brightness for each logical endpoint, in the
+     * legacy 0..255 LED scale.  A/B share one physical backlight path. */
+    std::atomic<int> small_brightness{-1};
+    std::atomic<int> wide_brightness{-1};
     std::atomic<bool> shared_power_off_thread_run{false};
     std::atomic<uint64_t> shared_power_generation{0};
     pthread_t shared_power_off_thread{};
@@ -1265,12 +1269,19 @@ static int32_t GetDisplayCapabilities(hwc2_device_t* device, hwc2_display_t disp
     return HWC2_ERROR_NONE;
 }
 
-static bool WritePrimaryBacklight(float brightness) {
-    if (brightness < 0.0f)
-        brightness = 0.0f;
+static int BrightnessToLevel(float brightness) {
+    if (!(brightness >= 0.0f))
+        return -1;
     if (brightness > 1.0f)
         brightness = 1.0f;
-    const int level = static_cast<int>(brightness * 255.0f + 0.5f);
+    return static_cast<int>(brightness * 255.0f + 0.5f);
+}
+
+static bool WritePrimaryBacklightLevel(int level) {
+    if (level < 0)
+        return true;
+    if (level > 255)
+        level = 255;
     char value[16];
     snprintf(value, sizeof(value), "%d", level);
     const int fd = open("/sys/class/leds/lcd-backlight/brightness", O_WRONLY | O_CLOEXEC);
@@ -1287,15 +1298,30 @@ static bool WritePrimaryBacklight(float brightness) {
     return true;
 }
 
+static std::atomic<int>& BrightnessFor(Device* d, hwc2_display_t display) {
+    return IsWideDisplay(display) ? d->wide_brightness : d->small_brightness;
+}
+
+static bool IsEndpointPowered(Device* d, hwc2_display_t display) {
+    return IsWideDisplay(display) ? d->wide_power_on.load() : d->small_power_on.load();
+}
+
 static int32_t SetDisplayBrightness(hwc2_device_t* device, hwc2_display_t display, float brightness) {
     auto* d = ToDev(device);
     if (IsFujisanDisplay(display)) {
-        /* The legacy CAF HWC brightness callback is not reliable after
-         * LogicalDisplayMapper switches the default display to Wide.  The
-         * primary A LED node is the kernel's canonical A+B synchronization
-         * entry point, including B's DCS Display On after resume. */
-        return WritePrimaryBacklight(brightness) ? HWC2_ERROR_NONE
-                                                  : HWC2_ERROR_NO_RESOURCES;
+        const int level = BrightnessToLevel(brightness);
+        if (level < 0)
+            return HWC2_ERROR_BAD_PARAMETER;
+        /* Android sends 0 to the outgoing logical display during a layout
+         * handoff.  Do not let that inactive endpoint blank the shared A+B
+         * panel; real screen-off is handled by SetPowerMode/kernel power-off. */
+        if (level == 0)
+            return HWC2_ERROR_NONE;
+        BrightnessFor(d, display).store(level);
+        if (!IsEndpointPowered(d, display))
+            return HWC2_ERROR_NONE;
+        return WritePrimaryBacklightLevel(level) ? HWC2_ERROR_NONE
+                                                 : HWC2_ERROR_NO_RESOURCES;
     }
     return d->fns.setDisplayBrightness
             ? d->fns.setDisplayBrightness(d->real, RealDisplayFor(display), brightness)
@@ -1816,9 +1842,19 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
             ScheduleSharedPowerOff(d);
         return HWC2_ERROR_NONE;
     }
-    return d->fns.setPowerMode
+    const int32_t ret = d->fns.setPowerMode
             ? d->fns.setPowerMode(d->real, kPrimaryDisplay, HWC2_POWER_MODE_ON)
             : HWC2_ERROR_UNSUPPORTED;
+    if (ret != HWC2_ERROR_NONE)
+        return ret;
+    const int cached_level = BrightnessFor(d, display).load();
+    if (cached_level > 0) {
+        ALOGI("restore %s brightness=%d after power on",
+              IsWideDisplay(display) ? "wide" : "small", cached_level);
+        if (!WritePrimaryBacklightLevel(cached_level))
+            return HWC2_ERROR_NO_RESOURCES;
+    }
+    return HWC2_ERROR_NONE;
 }
 
 static int32_t SetVsyncEnabled(hwc2_device_t* device, hwc2_display_t display, int32_t enabled) {
