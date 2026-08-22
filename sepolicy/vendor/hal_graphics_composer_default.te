@@ -3,3 +3,8 @@ set_prop(hal_graphics_composer_default, vendor_gralloc_prop)
 get_prop(hal_graphics_composer_default, boot_status_prop)
 get_prop(hal_graphics_composer_default, graphics_config_prop)
 get_prop(hal_graphics_composer_default, fujisan_display_prop)
+
+# HWC2.4 owns the stable Small/Wide brightness callback.  The legacy kernel
+# mirrors writes to the A LED node onto B and sends B's DCS Display On command.
+allow hal_graphics_composer_default sysfs_leds:dir search;
+allow hal_graphics_composer_default sysfs_leds:file rw_file_perms;

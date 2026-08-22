@@ -1247,8 +1247,38 @@ static int32_t GetDisplayCapabilities(hwc2_device_t* device, hwc2_display_t disp
     return HWC2_ERROR_NONE;
 }
 
+static bool WritePrimaryBacklight(float brightness) {
+    if (brightness < 0.0f)
+        brightness = 0.0f;
+    if (brightness > 1.0f)
+        brightness = 1.0f;
+    const int level = static_cast<int>(brightness * 255.0f + 0.5f);
+    char value[16];
+    snprintf(value, sizeof(value), "%d", level);
+    const int fd = open("/sys/class/leds/lcd-backlight/brightness", O_WRONLY | O_CLOEXEC);
+    if (fd < 0) {
+        ALOGE("open primary backlight failed: %s", strerror(errno));
+        return false;
+    }
+    const ssize_t written = write(fd, value, strlen(value));
+    close(fd);
+    if (written != static_cast<ssize_t>(strlen(value))) {
+        ALOGE("write primary backlight=%d failed: %s", level, strerror(errno));
+        return false;
+    }
+    return true;
+}
+
 static int32_t SetDisplayBrightness(hwc2_device_t* device, hwc2_display_t display, float brightness) {
     auto* d = ToDev(device);
+    if (IsFujisanDisplay(display)) {
+        /* The legacy CAF HWC brightness callback is not reliable after
+         * LogicalDisplayMapper switches the default display to Wide.  The
+         * primary A LED node is the kernel's canonical A+B synchronization
+         * entry point, including B's DCS Display On after resume. */
+        return WritePrimaryBacklight(brightness) ? HWC2_ERROR_NONE
+                                                  : HWC2_ERROR_NO_RESOURCES;
+    }
     return d->fns.setDisplayBrightness
             ? d->fns.setDisplayBrightness(d->real, RealDisplayFor(display), brightness)
             : HWC2_ERROR_UNSUPPORTED;
