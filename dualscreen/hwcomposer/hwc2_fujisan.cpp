@@ -221,6 +221,9 @@ struct Device {
     std::atomic<bool> wide_vsync_enabled{false};
     std::atomic<bool> small_power_on{true};
     std::atomic<bool> wide_power_on{false};
+    std::atomic<bool> shared_power_off_thread_run{false};
+    std::atomic<uint64_t> shared_power_generation{0};
+    pthread_t shared_power_off_thread{};
     pthread_t primary_panel_thread{};
     std::atomic<bool> primary_panel_thread_run{false};
 
@@ -270,12 +273,6 @@ static bool PersistedPrimaryPanelIsB() {
     char force[PROPERTY_VALUE_MAX] = {};
     property_get("persist.vendor.fujisan.primary_force", force, "0");
     return force[0] == '1' && preferred[0] == 'b';
-}
-
-static bool WantWideHardwareTopology() {
-    char mode[PROPERTY_VALUE_MAX] = {};
-    property_get("vendor.fujisan.display_mode", mode, "single");
-    return strcmp(mode, "zoom") == 0;
 }
 
 static bool WantSingleBPanel() {
@@ -1712,6 +1709,44 @@ static int32_t SetOutputBuffer(hwc2_device_t* device, hwc2_display_t display, bu
             : HWC2_ERROR_UNSUPPORTED;
 }
 
+/* Small and Wide are two framework displays but one physical fb0.  The
+ * DeviceState layout powers the old endpoint off before it powers the new one
+ * on.  Forwarding that first OFF to CAF zeros both panel backlights, and the
+ * later Wide atomic commit can only re-enable B.  Defer a physical OFF long
+ * enough for the paired endpoint to claim fb0; an actual screen-off remains
+ * OFF after the grace interval. */
+static void* SharedPowerOffThreadMain(void* arg) {
+    auto* d = reinterpret_cast<Device*>(arg);
+    for (;;) {
+        const uint64_t generation = d->shared_power_generation.load();
+        usleep(1000 * 1000);
+        if (!d->shared_power_off_thread_run.load())
+            break;
+        if (generation != d->shared_power_generation.load())
+            continue;
+        if (!d->small_power_on.load() && !d->wide_power_on.load() &&
+            d->fns.setPowerMode) {
+            ALOGI("shared fb0 power off after endpoint handoff grace");
+            (void)d->fns.setPowerMode(d->real, kPrimaryDisplay, HWC2_POWER_MODE_OFF);
+        }
+        break;
+    }
+    d->shared_power_off_thread_run.store(false);
+    return nullptr;
+}
+
+static void ScheduleSharedPowerOff(Device* d) {
+    d->shared_power_generation.fetch_add(1);
+    bool expected = false;
+    if (!d->shared_power_off_thread_run.compare_exchange_strong(expected, true))
+        return;
+    if (pthread_create(&d->shared_power_off_thread, nullptr,
+                       SharedPowerOffThreadMain, d) != 0) {
+        d->shared_power_off_thread_run.store(false);
+        ALOGE("shared fb0 deferred power-off thread create failed");
+    }
+}
+
 static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32_t mode) {
     auto* d = ToDev(device);
     if (!IsFujisanDisplay(display)) {
@@ -1727,19 +1762,14 @@ static int32_t SetPowerMode(hwc2_device_t* device, hwc2_display_t display, int32
         d->wide_power_on.store(on);
     else
         d->small_power_on.store(on);
-    /* During OPEN, LogicalDisplayMapper powers Small off before powering
-     * Wide on.  Both endpoints share fb0, and the legacy CAF OFF callback
-     * also zeros A's physical backlight.  Keep fb0 logically alive across
-     * that ordered layout transition; Wide's first atomic commit then enables
-     * the paired A+B route without leaving A dark.  In folded mode, a real
-     * screen-off still reaches the CAF composer normally. */
-    const bool keep_shared_fb_alive = !on && !IsWideDisplay(display) &&
-            WantWideHardwareTopology();
-    const int32_t real_mode = (d->small_power_on.load() || d->wide_power_on.load() ||
-                               keep_shared_fb_alive)
-            ? HWC2_POWER_MODE_ON : mode;
+    d->shared_power_generation.fetch_add(1);
+    if (!on) {
+        if (!d->small_power_on.load() && !d->wide_power_on.load())
+            ScheduleSharedPowerOff(d);
+        return HWC2_ERROR_NONE;
+    }
     return d->fns.setPowerMode
-            ? d->fns.setPowerMode(d->real, kPrimaryDisplay, real_mode)
+            ? d->fns.setPowerMode(d->real, kPrimaryDisplay, HWC2_POWER_MODE_ON)
             : HWC2_ERROR_UNSUPPORTED;
 }
 
@@ -1956,6 +1986,10 @@ static int OpenRealComposer(hwc2_device_t** out_real, void** out_so) {
 
 static int HwcClose(hw_device_t* dev) {
     auto* d = reinterpret_cast<Device*>(dev);
+    d->shared_power_off_thread_run.store(false);
+    d->shared_power_generation.fetch_add(1);
+    if (d->shared_power_off_thread)
+        pthread_join(d->shared_power_off_thread, nullptr);
     d->primary_panel_thread_run.store(false);
     if (d->primary_panel_thread)
         pthread_join(d->primary_panel_thread, nullptr);
