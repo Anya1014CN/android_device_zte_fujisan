@@ -260,11 +260,10 @@ static void publish_topology() {
 
     const bool boot_done = boot_completed[0] == '1';
     const bool wide = boot_done && (hall == 2 || hall == 3);
-    /* Keep the boot geometry single-panel, but do not erase the user's folded
-     * A/B choice.  HWC consumes active_primary (and, before property replay,
-     * the persisted selection directly) to route the 1080x1920 BootAnimation
-     * target.  The wide topology remains gated on boot completion. */
-    const bool primary_b = !wide && force[0] == '1' && preferred[0] == 'b';
+    /* Keep boot on physical A regardless of the persisted folded A/B choice.
+     * Once init restarts this daemon at boot completion, the normal single-B
+     * route may be published again while folded. */
+    const bool primary_b = boot_done && !wide && force[0] == '1' && preferred[0] == 'b';
     set_property_if_changed("vendor.fujisan.device_state",
                             wide ? "open" : (boot_done ? "closed_a" : "boot_single"));
     set_property_if_changed("vendor.fujisan.display_mode", wide ? "zoom" : "single");

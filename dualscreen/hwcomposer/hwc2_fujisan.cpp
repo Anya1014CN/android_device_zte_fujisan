@@ -271,19 +271,12 @@ static bool IsBootCompleted() {
     return boot_completed[0] == '1';
 }
 
-static bool PersistedPrimaryPanelIsB() {
-    char preferred[PROPERTY_VALUE_MAX] = {};
-    property_get("persist.vendor.fujisan.primary_panel", preferred, "a");
-    char force[PROPERTY_VALUE_MAX] = {};
-    property_get("persist.vendor.fujisan.primary_force", force, "0");
-    return force[0] == '1' && preferred[0] == 'b';
-}
-
 static bool WantSingleBPanel() {
     if (!IsBootCompleted()) {
-        /* Keep BootAnimation on the Small endpoint but honor the durable A/B
-         * route selected during the prior folded session. */
-        return PersistedPrimaryPanelIsB();
+        /* BootAnimation must always use physical A.  The user's folded A/B
+         * preference is applied only after boot completion, when halld is
+         * restarted and publishes active_primary. */
+        return false;
     }
     char primary[PROPERTY_VALUE_MAX] = {};
     property_get("vendor.fujisan.active_primary", primary, "a");
