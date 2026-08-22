@@ -8,6 +8,10 @@
  */
 #define LOG_TAG "FujisanHalld"
 
+static constexpr char kPrimaryBacklightPath[] = "/sys/class/leds/lcd-backlight/brightness";
+static int g_last_nonzero_primary_brightness = 1;
+static bool g_last_wide_topology = false;
+
 #include <cutils/properties.h>
 #include <cutils/sockets.h>
 #include <dirent.h>
@@ -54,6 +58,28 @@ static void set_property_if_changed(const char* key, const char* value) {
     property_get(key, current, "");
     if (strcmp(current, value) != 0)
         property_set(key, value);
+}
+
+static void remember_primary_brightness() {
+    const int value = read_int_file(kPrimaryBacklightPath, 0);
+    if (value > 0)
+        g_last_nonzero_primary_brightness = value;
+}
+
+static void restore_primary_brightness_after_wide_handoff() {
+    char power[PROPERTY_VALUE_MAX] = "0";
+    property_get("vendor.fujisan.display_power", power, "0");
+    if (power[0] != '1')
+        return;
+
+    const int current = read_int_file(kPrimaryBacklightPath, 0);
+    if (current == 0 && g_last_nonzero_primary_brightness > 0) {
+        char value[16];
+        snprintf(value, sizeof(value), "%d", g_last_nonzero_primary_brightness);
+        write_sysfs(kPrimaryBacklightPath, value);
+        ALOGI("restored primary A backlight=%d after Wide handoff",
+              g_last_nonzero_primary_brightness);
+    }
 }
 
 /* The driver exposes its enable switch below the dynamically assigned input
@@ -217,6 +243,9 @@ static void wait_for_hinge_or_primary_request(int control_fd) {
 }
 
 static void publish_topology() {
+    /* Capture the user-selected A brightness before DisplayPowerController
+     * powers the outgoing Small logical display down. */
+    remember_primary_brightness();
     const int hall = read_hall_status();
     char hall_value[8];
     snprintf(hall_value, sizeof(hall_value), "%d", hall);
@@ -242,6 +271,16 @@ static void publish_topology() {
     set_property_if_changed("vendor.fujisan.active_primary", primary_b ? "b" : "a");
     ALOGI("hall=%d topology=%s primary=%c", hall, wide ? "C" : "single",
           primary_b ? 'b' : 'a');
+
+    if (wide && !g_last_wide_topology) {
+        /* LogicalDisplayMapper powers Small off before Wide on.  Give the
+         * framework/CAF brightness path time to finish, then restore A if it
+         * was cleared during that handoff.  The kernel already owns the
+         * paired A+B atomic route by this point. */
+        usleep(700 * 1000);
+        restore_primary_brightness_after_wide_handoff();
+    }
+    g_last_wide_topology = wide;
 }
 
 int main() {
