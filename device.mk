@@ -27,22 +27,16 @@ PRODUCT_PACKAGES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.product.first_api_level=25 \
     audio.smartpa.channel=right \
-    persist.sys.usb.config=adb \
     persist.sys.usb.config.extra=none \
-    sys.usb.config=adb \
     sys.usb.configfs=1 \
     sys.usb.controller=6a00000.dwc3 \
     sys.usb.rndis.func.name=rndis_bam \
 
-# product/system_ext defaults ship persist.sys.usb.config=none; override them.
+# Keep configfs/controller defaults, but do not force USB debugging on.
 PRODUCT_PRODUCT_PROPERTIES += \
-    persist.sys.usb.config=adb \
-    persist.sys.usb.config.extra=none \
     sys.usb.configfs=1 \
 
 PRODUCT_SYSTEM_EXT_PROPERTIES += \
-    persist.sys.usb.config=adb \
-    persist.sys.usb.config.extra=none \
     sys.usb.configfs=1 \
 
 # Keep the modern framework-side Bluetooth stack source-built. Fujisan still

@@ -55,10 +55,8 @@ debug.sf.recomputecrop=0
 persist.hwc.enable_vds=0
 vendor.display.enable_default_color_mode=1
 
-# Bring-up: keep adb enabled even if userspace restarts early.
-persist.sys.usb.config=adb
+# USB debugging is user-controlled. Keep only the configfs/controller setup.
 persist.sys.usb.config.extra=none
-sys.usb.config=adb
 sys.usb.configfs=1
 sys.usb.controller=6a00000.dwc3
 sys.usb.rndis.func.name=rndis_bam
