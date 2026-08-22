@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <!--
      Android's local-display policy reads this vendor file before the mutable
-     /data override.  B is a real, trusted internal panel (SurfaceFlinger
-     unique id local:1), so it needs its own SystemUI decorations while
-     retaining independent app content.
+     /data override.  HWC exposes a stable wrapper-owned Wide endpoint as
+     local:1; DeviceState selects it as the default only while unfolded.
 -->
 <display-settings>
     <config identifier="0" />

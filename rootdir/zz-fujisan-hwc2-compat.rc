@@ -1,12 +1,25 @@
-# Keep the AOSP HWC2.1 service and add LineageOS's public HIDL ABI shim for
-# the OEM msm8996 display configuration library.
-service vendor.hwcomposer-2-1 /vendor/bin/hw/android.hardware.graphics.composer@2.1-service
+# The vendor VINTF manifest declares Composer 2.4.  Use the AOSP 2.4
+# passthrough service so SurfaceFlinger can consume HWC2.4 optional queries,
+# notably GetDisplayConnectionType for the wrapper-owned Wide endpoint.
+service vendor.hwcomposer-2-4 /vendor/bin/hw/android.hardware.graphics.composer@2.4-service
     override
-    interface android.hardware.graphics.composer@2.1::IComposer default
+    interface android.hardware.graphics.composer@2.4::IComposer default
     class hal animation
     user system
     group graphics drmrpc
     capabilities SYS_NICE
     setenv LD_PRELOAD /vendor/lib64/libhidlbase_fujisan_legacy_map_shim.so
     onrestart restart surfaceflinger
+    task_profiles ServiceCapacityLow
+
+# The stock vendor image also imports a 2.1 service declaration named
+# hwcomposer-2-1.  Override it as disabled so only the 2.4 endpoint registers
+# the Composer/default service declared by the vendor VINTF manifest.
+service hwcomposer-2-1 /vendor/bin/hw/android.hardware.graphics.composer@2.1-service
+    override
+    disabled
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
     task_profiles ServiceCapacityLow

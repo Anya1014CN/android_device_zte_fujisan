@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--
+  Fujisan exposes two stable internal HWC endpoints:
+    address 0 = Small (1080x1920, routed to A or B by fujisan_halld/HWC)
+    address 1 = Wide  (2160x1915, paired A+B atomic topology)
+
+  They share the underlying fb0/MDSS resources and must never be enabled at
+  the same time.  LogicalDisplayMapper remaps the framework default display
+  after boot completion; HWC never disconnects either endpoint on hinge moves.
+-->
+<layouts>
+    <layout>
+        <state>0</state>
+        <display enabled="true" defaultDisplay="true">
+            <address>0</address>
+        </display>
+        <display enabled="false">
+            <address>1</address>
+        </display>
+    </layout>
+
+    <layout>
+        <state>1</state>
+        <display enabled="false">
+            <address>0</address>
+        </display>
+        <display enabled="true" defaultDisplay="true">
+            <address>1</address>
+        </display>
+    </layout>
+</layouts>
