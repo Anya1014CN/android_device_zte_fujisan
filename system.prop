@@ -95,6 +95,12 @@ ro.lmk.kill_heaviest_task=true
 ro.lmk.kill_timeout_ms=100
 ro.lmk.use_minfree_levels=true
 
+# Disable background blur to reduce RenderEngine/GPU work on the legacy
+# dual-screen composition path.
+persist.sys.sf.disable_blurs=1
+ro.sf.blurs_are_expensive=1
+ro.surface_flinger.supports_background_blur=0
+
 # Keep all primary layers in one complete client target before the OEM HWC
 # scans it out.  The wrapper retains the original dual-DSI paths for later
 # A+B recovery while the folded configuration exposes A only.
