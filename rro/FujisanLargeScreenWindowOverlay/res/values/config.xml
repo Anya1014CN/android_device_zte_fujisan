@@ -4,6 +4,15 @@
     <integer name="config_supportsNonResizableMultiWindow">0</integer>
     <!-- Never force a split or future freeform task below its declared minimum size. -->
     <integer name="config_respectsActivityMinWidthHeightMultiWindow">1</integer>
-    <!-- Capability is declared for later P2 work; do not expose freeform UI yet. -->
-    <bool name="config_freeformWindowManagement">false</bool>
+
+    <!--
+      Settings exposes the per-app aspect-ratio picker from the recents card.
+      Android 16 gates the picker backend in WindowManager behind these two
+      framework resources.  Without this opt-in the UI is reachable, but its
+      selected ratio is never staged or applied to the app's letterbox policy.
+      Keep the choice user-scoped: do not change the global fixed-orientation
+      letterbox policy for every app.
+    -->
+    <bool name="config_appCompatUserAppAspectRatioSettingsIsEnabled">true</bool>
+    <bool name="config_appCompatUserAppAspectRatioFullscreenIsEnabled">true</bool>
 </resources>
