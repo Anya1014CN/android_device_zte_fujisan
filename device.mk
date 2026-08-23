@@ -51,6 +51,7 @@ PRODUCT_VENDOR_PROPERTIES += \
     persist.vendor.radio.sw_mbn_update=1 \
     persist.dbg.volte_avail_ovr=1 \
     persist.dbg.vt_avail_ovr=1 \
+    ro.vendor.qti.config.zram=true \
     ro.vendor.fujisan.enable_legacy_radio=0
 
 PRODUCT_SYSTEM_PROPERTIES += \
