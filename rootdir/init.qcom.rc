@@ -27,9 +27,8 @@ on post-fs-data
 
 # Legacy property triggers must execute in system init: vendor init cannot
 # access framework-private service state or write old system properties.
-on property:init.svc.bootanim=running
-    write /sys/class/leds/wled/brightness 4095
-
+# Do not force the shared PMI8994 WLED on for boot animation: on Fujisan it
+# belongs to panel B and must remain off while the hall topology selects A.
 on property:init.svc.bootanim=stopped
     start usf-post-boot
 
