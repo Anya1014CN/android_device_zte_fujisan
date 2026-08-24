@@ -159,13 +159,10 @@ PRODUCT_PACKAGES += \
     libion.vendor \
     libwpa_client
 
-# The OEM service needs a standard GNSS 1.0 passthrough implementation.
-# Build that narrow HIDL bridge and its API client from source; the modem-facing
-# runtime is provided by the matching OEM blobs declared in the vendor tree.
+# The OEM GNSS service and implementation are entirely vendor-provided.  Keep
+# only the platform HIDL 1.0 interface library required by that implementation.
 PRODUCT_PACKAGES += \
-    android.hardware.gnss@1.0 \
-    android.hardware.gnss@1.0-impl-qti \
-    liblocation_api
+    android.hardware.gnss@1.0
 
 # Oreo vendor blobs depend on the vendor variants of the legacy HIDL runtime.
 # LineageOS supplies the ABI shim for the removed Bn constructor maps.
