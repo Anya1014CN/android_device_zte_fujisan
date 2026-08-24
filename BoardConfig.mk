@@ -57,6 +57,10 @@ BOARD_SUPPORTS_SOUND_TRIGGER := false
 BOARD_KERNEL_CMDLINE := console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x237 ehci-hcd.park=3 cma=32M@0-0xffffffff
 BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive
 BOARD_KERNEL_CMDLINE += watchdog_v2.enable=0
+# The eMMC advertises CMDQ, but this MSM8996 SDHCI integration fails CMDQ
+# setup with -ENOTSUPP and corrupts the fallback queue during boot. Disable
+# host CMDQ before probe so storage always uses the stable legacy queue.
+BOARD_KERNEL_CMDLINE += sdhci_msm.nocmdq=1
 BOARD_KERNEL_CMDLINE += panic=3
 BOARD_KERNEL_CMDLINE += printk.always_kmsg_dump=1
 BOARD_KERNEL_BASE := 0x80000000
