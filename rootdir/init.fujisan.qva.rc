@@ -1,0 +1,15 @@
+# QVA's legacy vendor RC creates these framework-owned /data paths from the
+# vendor_init subcontext.  Keep the paths for compatible blobs, but create
+# them from platform init so the core/vendor data boundary remains intact.
+on post-fs-data
+    # Persistent legacy data survives policy upgrades.  Apply the device's
+    # current precise labels before vendor services consume it.
+    restorecon /persist/wifimac.dat
+    restorecon_recursive /data/system/fingerprint
+
+    mkdir /data/dpm 0771 system system
+    chown system system /data/dpm
+    mkdir /data/dpm/nsrm 0771 system system
+    chown system system /data/dpm/nsrm
+    mkdir /data/misc/seemp 0700 system system
+    mkdir /data/misc/qvr 0770 system system

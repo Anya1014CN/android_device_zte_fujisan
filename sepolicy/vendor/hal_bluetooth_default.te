@@ -1,6 +1,7 @@
-# The source-built default HAL consumes legacy Bluetooth calibration files.
-allow hal_bluetooth_default vendor_bt_data_file:dir r_dir_perms;
-allow hal_bluetooth_default vendor_bt_data_file:file r_file_perms;
+# The source-built default HAL stores its firmware-version state in
+# /data/vendor/bluetooth and consumes legacy calibration files there.
+allow hal_bluetooth_default vendor_bt_data_file:dir rw_dir_perms;
+allow hal_bluetooth_default vendor_bt_data_file:file create_file_perms;
 allow hal_bluetooth_default persist_bluetooth_file:file r_file_perms;
-allow hal_bluetooth_default bluetooth_data_file:file rw_file_perms;
+allow hal_bluetooth_default mnt_vendor_file:dir search;
 allow hal_bluetooth_default fujisan_wcnss_filter:unix_stream_socket connectto;

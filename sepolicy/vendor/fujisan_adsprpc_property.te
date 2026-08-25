@@ -1,0 +1,4 @@
+# Legacy DSP RPC diagnostics use pre-Treble debug.* property names.  Keep
+# their scope vendor-owned rather than granting adsprpcd default_prop access.
+vendor_public_prop(fujisan_adsprpc_prop)
+get_prop(adsprpcd, fujisan_adsprpc_prop)

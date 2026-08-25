@@ -3,12 +3,15 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.STATUS_BAR" />
 
-    <application android:label="@string/tile_label">
+    <!-- SystemUI's Android 16 edit model requires a non-null literal app
+         label for every custom tile.  Resource-only labels on this legacy
+         privileged APK resolve to null in that path and restart SystemUI. -->
+    <application android:label="Fujisan Flashlight">
         <service
             android:name=".FujisanFlashlightTileService"
             android:exported="true"
             android:icon="@drawable/ic_flashlight"
-            android:label="@string/tile_label"
+            android:label="Flashlight"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <meta-data
                 android:name="android.service.quicksettings.TOGGLEABLE_TILE"

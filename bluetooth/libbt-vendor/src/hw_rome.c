@@ -57,7 +57,9 @@ extern "C" {
 #include <cutils/properties.h>
 #include <utils/Log.h>
 
-#define BT_VERSION_FILEPATH "/data/misc/bluedroid/bt_fw_version.txt"
+// Keep firmware-version state in vendor-owned data.  Android 16 does not
+// permit the vendor Bluetooth HAL to traverse framework /data/misc/bluedroid.
+#define BT_VERSION_FILEPATH "/data/vendor/bluetooth/bt_fw_version.txt"
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,48 @@
 wc_transport. u:object_r:vendor_bluetooth_prop:s0
+qcom.bluetooth.soc u:object_r:vendor_bluetooth_prop:s0 exact
+ro.bluetooth.emb_wp_mode u:object_r:vendor_bluetooth_prop:s0 exact
+ro.bluetooth.wipower u:object_r:vendor_bluetooth_prop:s0 exact
+persist.bluetooth.a4wp u:object_r:vendor_bluetooth_prop:s0 exact
+persist.service.bdroid.fwsnoop u:object_r:vendor_bluetooth_prop:s0 exact
+persist.service.bdroid.sibs u:object_r:vendor_bluetooth_prop:s0 exact
+persist.service.bdroid.snooplog u:object_r:vendor_bluetooth_prop:s0 exact
+persist.service.bdroid.soclog u:object_r:vendor_bluetooth_prop:s0 exact
+persist.service.bdroid.ssrlvl u:object_r:vendor_bluetooth_prop:s0 exact
+# Legacy camera blobs use these vendor-only debug knobs even though their
+# historical names predate the vendor.* namespace.
+persist.debug.fotonation.need1x u:object_r:camera_prop:s0 exact
+persist.debug.set.fixedfps u:object_r:camera_prop:s0 exact
+persist.debug.sf.showfps u:object_r:camera_prop:s0 exact
+persist.debug.camera. u:object_r:camera_prop:s0
+debug.camera. u:object_r:camera_prop:s0
+persist.sys.exif.make u:object_r:camera_prop:s0 exact
+persist.sys.exif.model u:object_r:camera_prop:s0 exact
+persist.sys.exif. u:object_r:camera_prop:s0
+persist.sys.zte.hallStatus u:object_r:camera_prop:s0 exact
+camera.cpp. u:object_r:camera_prop:s0
+camera.llvd. u:object_r:camera_prop:s0
+# Legacy audio calibration settings are consumed by the vendor HAL.  These
+# must remain exact entries: platform already owns the broad persist.audio.
+# prefix, which host_init_verifier correctly rejects as a duplicate.
+persist.audio.dualmic.config u:object_r:vendor_audio_prop:s0 exact
+persist.audio.fluence.speaker u:object_r:vendor_audio_prop:s0 exact
+persist.audio.fluence.voicecall u:object_r:vendor_audio_prop:s0 exact
+persist.audio.fluence.voicecomm u:object_r:vendor_audio_prop:s0 exact
+persist.audio.fluence.voicerec u:object_r:vendor_audio_prop:s0 exact
+persist.audio.in_mmap_delay_micros u:object_r:vendor_audio_prop:s0 exact
+persist.audio.out_mmap_delay_micros u:object_r:vendor_audio_prop:s0 exact
+# DSP RPC diagnostics are implementation-specific knobs, not default props.
+debug.testsig u:object_r:fujisan_adsprpc_prop:s0 exact
+debug.trace u:object_r:fujisan_adsprpc_prop:s0 exact
+# Legacy display blobs use these vendor-only tuning knobs.
+debug.disable_skip_validate u:object_r:fujisan_display_prop:s0 exact
+debug.egl.swapinterval u:object_r:fujisan_display_prop:s0 exact
+debug.gralloc.gfx_ubwc_disable u:object_r:fujisan_display_prop:s0 exact
+debug.gralloc.map_fb_memory u:object_r:fujisan_display_prop:s0 exact
+debug.sdm.support_writeback u:object_r:fujisan_display_prop:s0 exact
+persist.hwc.blit.comp u:object_r:fujisan_display_prop:s0 exact
+persist.metadata_dynfps.disable u:object_r:fujisan_display_prop:s0 exact
+sys.hwc_disable_hdr u:object_r:fujisan_display_prop:s0 exact
 vendor.fujisan. u:object_r:fujisan_display_prop:s0
 persist.vendor.fujisan. u:object_r:fujisan_display_prop:s0
 camera. u:object_r:camera_prop:s0

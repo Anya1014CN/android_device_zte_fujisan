@@ -294,8 +294,8 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/system_ext/etc/permissions/privapp-permissions-org.codeaurora.ims.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/permissions/privapp-permissions-org.codeaurora.ims.xml \
     $(LOCAL_PATH)/configs/task_profiles.json:$(TARGET_COPY_OUT_VENDOR)/etc/task_profiles.json \
     $(LOCAL_PATH)/rootdir/init.qcom.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.rc \
+    $(LOCAL_PATH)/rootdir/init.fujisan.qva.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.qva.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.hwcomposer.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hwcomposer.rc \
-    $(LOCAL_PATH)/rootdir/init.fujisan.bpf.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bpf.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.radio.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.radio.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.usb.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.usb.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.charger.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/zz-fujisan-charger.rc \
@@ -337,7 +337,6 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.fujisan.hall.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.fujisan.hall.rc \
     $(LOCAL_PATH)/rootdir/init.fujisan.wifi.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/init.fujisan.wifi.rc \
     $(LOCAL_PATH)/rootdir/bin/init.fujisan.btaddr.sh:$(TARGET_COPY_OUT_VENDOR)/bin/init.fujisan.btaddr.sh \
-    $(LOCAL_PATH)/rootdir/bin/init.fujisan.gpu-mem-bpf.sh:$(TARGET_COPY_OUT_VENDOR)/bin/init.fujisan.gpu-mem-bpf.sh \
     $(LOCAL_PATH)/rootdir/init.fujisan.bluetooth.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/fujisan.bluetooth.rc
 
 PRODUCT_COPY_FILES += \

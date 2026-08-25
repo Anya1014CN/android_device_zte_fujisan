@@ -170,7 +170,11 @@ static int open_primary_control_socket() {
 }
 
 static void handle_primary_request(int server_fd) {
-    const int client = accept4(server_fd, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
+    // The listening endpoint is non-blocking because it is polled beside the
+    // Hall input FD.  Keep the accepted client blocking: a local QS client can
+    // otherwise race the first read and receive an empty response before its
+    // command is available, making folded A/B switching appear to do nothing.
+    const int client = accept4(server_fd, nullptr, nullptr, SOCK_CLOEXEC);
     if (client < 0)
         return;
     struct pollfd pfd {};
@@ -181,7 +185,9 @@ static void handle_primary_request(int server_fd) {
         return;
     }
     char request[32] = {};
-    if (read(client, request, sizeof(request) - 1) <= 0) {
+    const ssize_t bytes = read(client, request, sizeof(request) - 1);
+    if (bytes <= 0) {
+        ALOGW("empty primary-panel request: %s", strerror(errno));
         close(client);
         return;
     }
@@ -209,7 +215,9 @@ static void handle_primary_request(int server_fd) {
         snprintf(response, sizeof(response), "ok %c %d\n", selected, hall);
         ALOGI("primary panel -> %c", selected);
     }
-    (void)write(client, response, strlen(response));
+    const size_t response_len = strlen(response);
+    if (write(client, response, response_len) != static_cast<ssize_t>(response_len))
+        ALOGW("primary-panel response failed: %s", strerror(errno));
     close(client);
 }
 

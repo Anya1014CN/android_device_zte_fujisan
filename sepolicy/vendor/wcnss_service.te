@@ -1,2 +1,2 @@
-# CNSS diagnostic output is stored in the framework Wi-Fi data directory.
-allow wcnss_service wifi_data_file:file rw_file_perms;
+# CNSS diagnostics must use vendor-owned storage rather than framework Wi-Fi
+# data below /data/misc/wifi.

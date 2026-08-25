@@ -1,10 +1,6 @@
 on boot
-    chown wifi wifi /sys/module/wlan/parameters/fwpath
-    chmod 0660 /sys/module/wlan/parameters/fwpath
 
 on post-fs-data
-    chown wifi wifi /sys/module/wlan/parameters/fwpath
-    chmod 0660 /sys/module/wlan/parameters/fwpath
     mkdir /data/vendor/wifi 0770 wifi wifi
     mkdir /data/vendor/wifi/wpa 0770 wifi wifi
     mkdir /data/vendor/wifi/wpa/sockets 0770 wifi wifi
@@ -23,8 +19,6 @@ on post-fs-data
     chmod 0660 /data/misc/wifi/p2p_supplicant.conf
 
 on property:init.svc.vendor.wifi_hal_legacy=running
-    chown wifi wifi /sys/module/wlan/parameters/fwpath
-    chmod 0660 /sys/module/wlan/parameters/fwpath
     write /sys/module/wlan/parameters/fwpath sta
     setprop wlan.driver.status ok
 

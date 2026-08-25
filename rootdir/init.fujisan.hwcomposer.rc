@@ -1,7 +1,7 @@
 # This vendor rc is imported after android.hardware.graphics.composer@2.4-service.rc
 # (android.* sorts before init.*).  Keep the service override with the vendor
 # binary it configures; early GPU/gralloc setup is in system init.qcom.rc.
-service vendor.hwcomposer-2-4 /vendor/bin/hw/android.hardware.graphics.composer@2.4-service
+service vendor.hwcomposer-2-4 /vendor/bin/hw/fujisan-composer-service
     override
     # IComposer@2.4 extends the 2.1, 2.2 and 2.3 HIDL interfaces.  init's
     # host verifier requires the complete inheritance chain on this service.

@@ -1,0 +1,11 @@
+# These framework-side consumers read public state exported by the fujisan
+# display controller.  Keep the vendor property public and grant only the two
+# consumers that use it during graphics bring-up.
+get_prop(surfaceflinger, fujisan_display_prop)
+get_prop(hal_graphics_allocator_default, fujisan_display_prop)
+get_prop(bootanim, fujisan_display_prop)
+get_prop(system_server, fujisan_display_prop)
+get_prop(platform_app, fujisan_display_prop)
+get_prop(priv_app, fujisan_display_prop)
+get_prop(system_app, fujisan_display_prop)
+get_prop(mediaswcodec, fujisan_display_prop)
