@@ -9,7 +9,11 @@
     <string name="quick_settings_tiles_new_default" translatable="false">
         internet,bt,dnd,cast,custom(com.zte.fujisan.flashlight/.FujisanFlashlightTileService),custom(com.zte.fujisan.primarypanel/.PrimaryPanelTileService),airplane,rotation,wallet,alarm,controls,screenrecord,battery
     </string>
+    <!-- This list is the SystemUI catalog of platform stock specs. Do not put
+         custom(...) TileServices here: custom tiles are enumerated from their
+         QS_TILE intent declarations, which supplies the required app metadata
+         (app name/icon) for Android 16's edit UI. -->
     <string name="quick_settings_tiles_stock" translatable="false">
-        internet,wifi,cell,bt,custom(com.zte.fujisan.flashlight/.FujisanFlashlightTileService),custom(com.zte.fujisan.primarypanel/.PrimaryPanelTileService),dnd,alarm,airplane,nfc,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle,location,hotspot,inversion,saver,dark,work,night,reverse,reduce_brightness,ambient_display,aod,caffeine,heads_up,reading_mode,sync,powershare,profiles,usb_tether,vpn
+        internet,wifi,cell,bt,dnd,alarm,airplane,nfc,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle,location,hotspot,inversion,saver,dark,work,night,reverse,reduce_brightness,ambient_display,aod,caffeine,heads_up,reading_mode,sync,powershare,profiles,usb_tether,vpn
     </string>
 </resources>
