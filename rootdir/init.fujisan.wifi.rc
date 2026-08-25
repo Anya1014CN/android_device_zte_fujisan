@@ -19,6 +19,11 @@ on post-fs-data
     chmod 0660 /data/misc/wifi/p2p_supplicant.conf
 
 on property:init.svc.vendor.wifi_hal_legacy=running
+    # The AIDL Wi-Fi HAL runs as AID_WIFI and switches this legacy qcacld
+    # parameter during every Wi-Fi bring-up. The kernel creates it root:root
+    # 0644, so hand only this control node to the HAL's service account.
+    chown wifi wifi /sys/module/wlan/parameters/fwpath
+    chmod 0660 /sys/module/wlan/parameters/fwpath
     write /sys/module/wlan/parameters/fwpath sta
     setprop wlan.driver.status ok
 
