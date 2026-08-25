@@ -2,4 +2,4 @@ allow init sysfs_usb:file rw_file_perms;
 
 # The legacy Wi-Fi HAL expects the firmware path to be switched to STA mode
 # after it is started. Ownership and mode are assigned by vendor ueventd.
-allow init sysfs_wlan_fwpath:file { open write };
+allow init sysfs_wlan_fwpath:file { rw_file_perms setattr };

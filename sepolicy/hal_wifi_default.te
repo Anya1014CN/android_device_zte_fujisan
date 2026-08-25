@@ -1,3 +1,8 @@
 allow hal_wifi_default rootfs:file { getattr open read };
 allow hal_wifi_default rootfs:system module_load;
 allow hal_wifi_default fujisan_wifi_mac_file:file r_file_perms;
+
+# The AIDL Wi-Fi service switches the legacy qcacld firmware mode through
+# /sys/module/wlan/parameters/fwpath before bringing up the STA interface.
+# Keep this grant constrained to the dedicated SELinux type supplied by genfs.
+allow hal_wifi_default sysfs_wlan_fwpath:file rw_file_perms;

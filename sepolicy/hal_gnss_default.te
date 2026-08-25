@@ -1,0 +1,3 @@
+# The Qualcomm GNSS HAL reads its location runtime directory under
+# /data/vendor/location after the location launcher has created it.
+allow hal_gnss_default location_data_file:dir search;

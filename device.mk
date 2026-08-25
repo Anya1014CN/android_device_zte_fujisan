@@ -162,7 +162,8 @@ PRODUCT_PACKAGES += \
 # The OEM GNSS service and implementation are entirely vendor-provided.  Keep
 # only the platform HIDL 1.0 interface library required by that implementation.
 PRODUCT_PACKAGES += \
-    android.hardware.gnss@1.0
+    android.hardware.gnss@1.0 \
+    android.hardware.gnss@1.0.vendor
 
 # Oreo vendor blobs depend on the vendor variants of the legacy HIDL runtime.
 # LineageOS supplies the ABI shim for the removed Bn constructor maps.
