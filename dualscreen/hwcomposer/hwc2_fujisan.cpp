@@ -1793,8 +1793,22 @@ static void* SharedPowerOffThreadMain(void* arg) {
             continue;
         if (!d->small_power_on.load() && !d->wide_power_on.load() &&
             d->fns.setPowerMode) {
-            ALOGI("shared fb0 power off after endpoint handoff grace");
-            (void)d->fns.setPowerMode(d->real, kPrimaryDisplay, HWC2_POWER_MODE_OFF);
+            /*
+             * A true OFF makes the legacy MDSS path tear down both command
+             * panels and adds roughly 0.85 s to every subsequent power-key
+             * wake.  Ask CAF for the standard doze state first: on command-
+             * mode panels it keeps the panel context while preserving
+             * Android's logical screen-off contract.  The OEM HWC is allowed
+             * to reject this mode; retain the full-OFF fallback for that case.
+             */
+            int32_t ret = d->fns.setPowerMode(
+                    d->real, kPrimaryDisplay, HWC2_POWER_MODE_DOZE);
+            if (ret != HWC2_ERROR_NONE) {
+                ALOGW("shared fb0 doze unsupported (%d); falling back to off", ret);
+                ret = d->fns.setPowerMode(d->real, kPrimaryDisplay, HWC2_POWER_MODE_OFF);
+            }
+            ALOGI("shared fb0 sleep after endpoint handoff grace: %s (%d)",
+                  ret == HWC2_ERROR_NONE ? "doze" : "off failed", ret);
         }
         break;
     }
