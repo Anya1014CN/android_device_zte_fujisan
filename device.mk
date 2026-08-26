@@ -98,11 +98,13 @@ PRODUCT_PACKAGES += \
     android.hardware.graphics.mapper@2.0-impl \
     vendor.qti.hardware.memtrack-service
 
-# The side fingerprint sensor is present during every boot.
-# The OEM FPC service has an Android 8-only HIDL ABI and is installed by the
-# vendor tree as the sole owner of its binary, rc file, and VINTF declaration.
+# The side fingerprint sensor is present during every boot. The vendor tree
+# provides a preferred Soong prebuilt with the same service name, so this
+# package request resolves to the OEM FPC binary rather than the AOSP default.
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1 \
+    android.hardware.biometrics.fingerprint@2.1.vendor \
+    android.hardware.biometrics.fingerprint@2.1-service \
     android.hidl.base@1.0
 
 # The OEM msm8996 camera HAL is loaded by the standard AOSP legacy camera
