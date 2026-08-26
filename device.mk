@@ -88,6 +88,7 @@ PRODUCT_PACKAGES += \
 
 PRODUCT_PACKAGES += \
     fujisan_legacy_vendor_root \
+    fujisan_recovery_init_qcom \
     libtinyxml \
     hwcomposer.fujisan \
     android.hardware.security.keymint-service \

@@ -1,0 +1,16 @@
+# Fujisan recovery-only hardware initialization.
+#
+# The msm8996 framebuffer and Synaptics controllers are kernel built-ins, but
+# the dual-screen Android userspace is intentionally absent from recovery.
+# Keep the panel selected by the bootloader awake and expose the physical
+# touch controllers as separate inputs. Recovery then uses event1 (the panel
+# currently driven by fb0) rather than the Android dual-screen aggregator.
+
+on early-init
+    wait /sys/class/graphics/fb0/blank
+    wait /sys/module/zte_touch_expand/parameters/separate_inputs
+
+on init
+    write /sys/module/zte_touch_expand/parameters/separate_inputs Y
+    write /sys/class/graphics/fb0/blank 0
+    write /sys/class/leds/lcd-backlight/brightness 200

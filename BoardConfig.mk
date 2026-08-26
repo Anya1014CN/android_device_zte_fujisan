@@ -170,9 +170,13 @@ WIFI_DRIVER_STATE_OFF := ""
 # Recovery
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/rootdir/etc/fstab.qcom
 TARGET_RECOVERY_PIXEL_FORMAT := RGBX_8888
+TARGET_RECOVERY_UI_LIB := librecovery_ui_fujisan
+# The legacy MDSS panel can remain blank after the generic recovery UI takes
+# over. Reset fb0 after minui has initialized it.
+TARGET_RECOVERY_UI_BLANK_UNBLANK_ON_INIT := true
 RECOVERY_GRAPHICS_USE_LINELENGTH := true
 
-# Keep user-installed recovery images intact when installing a non-A/B OTA.
+# Use device-specific releasetools to flash the signed recovery image from non-A/B OTAs.
 TARGET_RELEASETOOLS_EXTENSIONS := $(DEVICE_PATH)/releasetools
 BOARD_HAS_NO_SELECT_BUTTON := true
 BOARD_USES_MMCUTILS := true

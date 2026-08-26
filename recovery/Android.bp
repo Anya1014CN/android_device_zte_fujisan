@@ -1,0 +1,19 @@
+// Device-specific recovery menu and ADB behavior for Fujisan.
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_library_static {
+    name: "librecovery_ui_fujisan",
+    recovery: true,
+    srcs: ["recovery_ui.cpp"],
+    shared_libs: [
+        "libbase",
+        "librecovery_ui",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+    ],
+}
