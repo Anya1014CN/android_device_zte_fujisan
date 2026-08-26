@@ -6,3 +6,6 @@ allow hal_fingerprint_default fingerprintd_data_file:file create_file_perms;
 allow hal_fingerprint_default fingerprintd_data_file:dir rw_dir_perms;
 allow hal_fingerprint_default tee_device:chr_file rw_file_perms;
 allow hal_fingerprint_default vendor_sysfs_fps_attr:file rw_file_perms;
+
+# The legacy FPC HAL reads Android 8 default property metadata during init.
+get_prop(hal_fingerprint_default, default_prop)
