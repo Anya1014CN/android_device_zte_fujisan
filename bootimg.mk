@@ -9,6 +9,14 @@ fujisan_boot_signing_cert := $(DEVICE_PATH)/keys/verity.x509.pem
 fujisan_recovery_kernel := $(PRODUCT_OUT)/kernel-recovery
 fujisan_recovery_kernel_patcher := $(DEVICE_PATH)/releasetools/make_recovery_kernel.py
 fujisan_recovery_dtb_dir := $(DEVICE_PATH)/prebuilt-kernel/recovery-dtbs
+fujisan_add_img_to_target_files := $(DEVICE_PATH)/releasetools/add_img_to_target_files.sh
+
+# AOSP regenerates IMAGES/recovery.img from RECOVERY/ while constructing
+# target-files, which drops the legacy BootSignature trailer. Wrap that step
+# and replace the generated copy with BOOTABLE_IMAGES/recovery.img, built and
+# signed by the rule below.
+ADD_IMG_TO_TARGET_FILES := $(fujisan_add_img_to_target_files)
+$(BUILT_TARGET_FILES_DIR): $(fujisan_add_img_to_target_files)
 
 # Use the known-working TWRP DTBs only in recovery. They expose the native
 # panel-A framebuffer; the freshly built Linux Image.gz remains unchanged.
