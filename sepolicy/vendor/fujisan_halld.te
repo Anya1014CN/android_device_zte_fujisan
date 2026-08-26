@@ -1,6 +1,15 @@
 type fujisan_halld, domain;
+# The panel-control socket accepts requests from dedicated app domains that
+# carry per-app MLS categories. Mark only this narrow IPC server as trusted,
+# satisfying the unix_stream_socket connectto MLS constraint without granting
+# the app domain global MLS override privileges.
+typeattribute fujisan_halld mlstrustedsubject;
 type fujisan_halld_exec, exec_type, vendor_file_type, file_type;
 type fujisan_halld_socket, file_type;
+# This socket is the narrow IPC endpoint used by the two dedicated panel
+# control apps. Mark only the socket object MLS-trusted so app categories can
+# connect without making the application domain globally trusted.
+typeattribute fujisan_halld_socket mlstrustedobject;
 
 init_daemon_domain(fujisan_halld)
 
