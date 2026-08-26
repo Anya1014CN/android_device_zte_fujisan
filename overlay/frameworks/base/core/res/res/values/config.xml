@@ -72,6 +72,8 @@
          default multi-window policy instead of advertising large-screen
          freeform capabilities. -->
 
-    <!-- Use the public NTP pool for framework time synchronization. -->
-    <string name="config_ntpServer" translatable="false">pool.ntp.org</string>
+    <!-- Android 14+ reads config_ntpServers for network time detection. -->
+    <string-array name="config_ntpServers" translatable="false">
+        <item>ntp://pool.ntp.org</item>
+    </string-array>
 </resources>
