@@ -11,6 +11,11 @@ on early-init
     wait /sys/module/zte_touch_expand/parameters/separate_inputs
 
 on init
+    # User recovery still starts with USB set to none; these values only make
+    # the configfs gadget available when Apply update from ADB selects sideload.
+    setprop sys.usb.configfs 1
+    setprop sys.usb.controller 6a00000.dwc3
+    write /sys/devices/soc/6a00000.ssusb/mode peripheral
     write /sys/module/zte_touch_expand/parameters/separate_inputs Y
     write /sys/class/graphics/fb0/blank 0
     write /sys/class/leds/lcd-backlight/brightness 200
