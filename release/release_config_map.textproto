@@ -1,0 +1,7 @@
+description: "Fujisan-specific Android 16 release flag contributions"
+default_containers: "system"
+
+release_config {
+    name: "bp4a"
+    flag_value_files: "release_configs/bp4a.textproto"
+}

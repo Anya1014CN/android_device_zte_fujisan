@@ -1,5 +1,11 @@
 LOCAL_PATH := device/zte/fujisan
 
+# Product-specific Android 16 release configuration. The map is evaluated
+# during the initial product-config pass, before readonly RELEASE_* flags are
+# materialized.
+PRODUCT_RELEASE_CONFIG_MAPS += \
+    $(LOCAL_PATH)/release/release_config_map.textproto
+
 $(call inherit-product, $(SRC_TARGET_DIR)/product/product_launched_with_n_mr1.mk)
 $(call inherit-product, vendor/zte/fujisan/fujisan-vendor.mk)
 
